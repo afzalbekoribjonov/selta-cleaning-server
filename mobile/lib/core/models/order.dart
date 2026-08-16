@@ -1,0 +1,65 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class Order {
+  final String id;
+  final int orderNumber;
+  final String customerName;
+  final String phone;
+  final String location;
+  final String? gpsCoords;
+  final String serviceType; // 'pickup' | 'onsite'
+  final String tariff; // 'express' | 'comfort' | 'standart' | 'premium'
+  final String status;
+  final List<String> assignedTeam;
+  final num totalArea;
+  final num totalPrice;
+  final String createdBy;
+  final DateTime createdAt;
+  final DateTime? dueDate;
+
+  const Order({
+    required this.id,
+    required this.orderNumber,
+    required this.customerName,
+    required this.phone,
+    required this.location,
+    this.gpsCoords,
+    required this.serviceType,
+    required this.tariff,
+    required this.status,
+    this.assignedTeam = const [],
+    this.totalArea = 0,
+    this.totalPrice = 0,
+    required this.createdBy,
+    required this.createdAt,
+    this.dueDate,
+  });
+
+  factory Order.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data()!;
+    return Order(
+      id: doc.id,
+      orderNumber: (data['orderNumber'] as num?)?.toInt() ?? 0,
+      customerName: data['customerName']?.toString() ?? '',
+      phone: data['phone']?.toString() ?? '',
+      location: data['location']?.toString() ?? '',
+      gpsCoords: data['gpsCoords']?.toString(),
+      serviceType: data['serviceType']?.toString() ?? 'pickup',
+      tariff: data['tariff']?.toString() ?? 'standart',
+      status: data['status']?.toString() ?? 'new',
+      assignedTeam: (data['assignedTeam'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      totalArea: (data['totalArea'] as num?) ?? 0,
+      totalPrice: (data['totalPrice'] as num?) ?? 0,
+      createdBy: data['createdBy']?.toString() ?? '',
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  bool get isDone => status == 'done';
+
+  bool get isOverdue {
+    if (dueDate == null || isDone) return false;
+    return DateTime.now().isAfter(dueDate!);
+  }
+}

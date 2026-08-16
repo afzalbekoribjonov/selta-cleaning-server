@@ -6,6 +6,7 @@ import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/employee_repository.dart';
+import '../dispatcher/dispatcher_home_screen.dart';
 
 /// Har bir bo'lim uchun umumiy xodim paneli qobig'i (Faza 2 — navigatsiya
 /// skeleti). Yuqorida shaxsiy statistika banneri (talab: "har bir ishchi
@@ -36,6 +37,14 @@ class EmployeeHomeScreen extends ConsumerWidget {
           (d) => d.name == claims.department,
           orElse: () => Department.dispatcher,
         );
+
+        // Faza 3: Dispetcher o'z to'liq paneliga ega. Boshqa bo'limlar
+        // (Ishchi/Dastavchik/Sifat nazorati) hozircha quyidagi umumiy
+        // qobiqda — Faza 4'da har biri o'ziniki bilan almashadi.
+        if (department == Department.dispatcher) {
+          return const DispatcherHomeScreen();
+        }
+
         final info = kDepartmentConfig[department]!;
         final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
 

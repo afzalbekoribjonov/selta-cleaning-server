@@ -86,6 +86,56 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
 });
 
 /**
+ * Dispetcher buyurtma ma'lumotlarini tahrirlashi (talab #11) — mijoz
+ * ma'lumotlari, mo'ljal, tarif. Status bu yerdan o'zgarmaydi (faqat
+ * changeOrderStatus orqali) — tarif o'zgarsa dueDate qayta hisoblanadi.
+ */
+ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const role = req.auth!.role;
+    if (role !== "dispatcher" && role !== "admin") {
+      throw new ApiError(403, "permission-denied", "Faqat dispetcher buyurtmani tahrirlay oladi");
+    }
+
+    const { orderId, customerName, phone, location, tariff, gpsCoords } = req.body ?? {};
+    if (!orderId) throw new ApiError(400, "invalid-argument", "orderId talab qilinadi");
+    if (!customerName?.trim() || !phone?.trim() || !location?.trim()) {
+      throw new ApiError(400, "invalid-argument", "Ism, telefon va mo'ljal majburiy");
+    }
+
+    const orderRef = db.collection("orders").doc(orderId);
+    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+      const order = snap.data()!;
+
+      const update: Record<string, unknown> = {
+        customerName: customerName.trim(),
+        phone: phone.trim(),
+        location: location.trim(),
+        gpsCoords: gpsCoords ?? order.gpsCoords ?? null,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: employeeId,
+      };
+
+      if (tariff && tariff !== order.tariff) {
+        update.tariff = tariff;
+        const createdAt = order.createdAt?.toDate?.() ?? new Date();
+        update.dueDate = computeDueDate(createdAt, tariff);
+      }
+
+      tx.update(orderRef, update);
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
  * Har bir qo'lda bosiladigan status o'tishi qaysi bo'lim tomonidan
  * qilinishi mumkinligi. `qc_review -> ready` bu yerda YO'Q — u faqat
  * barcha itemlar sifat nazoratidan o'tganda submitItemQc ichida avtomatik
