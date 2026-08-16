@@ -40,9 +40,14 @@ class ApiClient {
       throw const ApiException(0, 'unavailable', "Serverga ulanib bo'lmadi");
     }
 
-    final Map<String, dynamic> decoded = response.body.isEmpty
-        ? const {}
-        : jsonDecode(response.body) as Map<String, dynamic>;
+    Map<String, dynamic> decoded;
+    try {
+      decoded = response.body.isEmpty ? const {} : jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      // Server kutilmagan (JSON bo'lmagan) javob qaytardi — masalan 404/502
+      // HTML sahifasi. Route mavjud emasligi eng ehtimoliy sabab.
+      throw ApiException(response.statusCode, 'internal', "Server kutilmagan javob qaytardi (${response.statusCode})");
+    }
 
     if (response.statusCode >= 400) {
       throw ApiException(

@@ -7,6 +7,27 @@ import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from 
 
 export const employeeAdminRouter = Router();
 
+/** Admin panelning "Xodimlar" sahifasi uchun to'liq ro'yxat (barcha bo'lim/holat). */
+employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_req, res) => {
+  try {
+    const snap = await db.collection("employees").orderBy("createdAt", "desc").get();
+    res.json({
+      employees: snap.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          fullName: data.fullName,
+          phone: data.phone,
+          department: data.department,
+          status: data.status,
+        };
+      }),
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
 /** Admin panelda "Yangi xodim" tugmasi — talab #2/#3. */
 employeeAdminRouter.post("/adminCreateEmployee", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {

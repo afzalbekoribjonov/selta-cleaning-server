@@ -9,8 +9,10 @@ import {
   Settings,
   Menu,
   X,
+  LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-context'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Boshqaruv paneli', icon: LayoutDashboard, end: true },
@@ -70,6 +72,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const { user, logout } = useAuth()
+
   return (
     <>
       <div className="flex items-center gap-2 px-6 py-6">
@@ -96,7 +100,17 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </NavLink>
         ))}
       </nav>
-      <div className="px-6 py-5 text-xs text-gray">© 2026 Selta Cleaning</div>
+      <div className="border-t border-border px-3 py-4">
+        {user && <div className="truncate px-3 pb-2 text-xs text-gray-dark">{user.email}</div>}
+        <button
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-ink/70 transition-colors hover:bg-bg hover:text-danger"
+        >
+          <LogOut size={19} />
+          Chiqish
+        </button>
+      </div>
+      <div className="px-6 pb-5 text-xs text-gray">© 2026 Selta Cleaning</div>
     </>
   )
 }
