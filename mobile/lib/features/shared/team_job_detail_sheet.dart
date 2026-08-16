@@ -7,7 +7,8 @@ import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
 import '../../core/services/orders_repository.dart';
-import '../worker/item_entry_sheet.dart';
+import '../worker/worker_order_detail_sheet.dart' show itemsEditableFor;
+import 'catalog_item_sheet.dart';
 import 'comments_section.dart';
 
 void openTeamJobDetailSheet(BuildContext context, Order order) {
@@ -144,6 +145,7 @@ class _TeamItemsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final editable = itemsEditableFor(order.status);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
@@ -154,11 +156,12 @@ class _TeamItemsCard extends StatelessWidget {
             children: [
               const Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
               const Spacer(),
-              TextButton.icon(
-                onPressed: () => openItemEntrySheet(context, order.id),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(items.isEmpty ? "Qo'shish" : "Yana qo'shish"),
-              ),
+              if (editable)
+                TextButton.icon(
+                  onPressed: () => openCatalogItemSheet(context, order.id),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text(items.isEmpty ? "Qo'shish" : "Yana qo'shish"),
+                ),
             ],
           ),
           if (items.isEmpty)
@@ -168,19 +171,27 @@ class _TeamItemsCard extends StatelessWidget {
             )
           else
             for (final item in items)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                      child: Text(item.subId(order.orderNumber), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 11.5)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-                    if (item.area > 0) Text('${item.area} m²', style: const TextStyle(color: AppColors.grayDark, fontSize: 12)),
-                  ],
+              InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: editable ? () => openCatalogItemSheet(context, order.id, existingItem: item) : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                        child: Text(item.subId(order.orderNumber), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 11.5)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                      Text("${item.price.toStringAsFixed(0)} so'm", style: const TextStyle(color: AppColors.grayDark, fontSize: 12)),
+                      if (editable) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.edit_rounded, size: 14, color: AppColors.gray),
+                      ],
+                    ],
+                  ),
                 ),
               ),
         ],

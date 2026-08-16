@@ -11,8 +11,9 @@ import '../../../core/utils/date_utils.dart';
 class OrderCard extends StatelessWidget {
   final Order order;
   final VoidCallback onTap;
+  final List<Widget>? actions;
 
-  const OrderCard({super.key, required this.order, required this.onTap});
+  const OrderCard({super.key, required this.order, required this.onTap, this.actions});
 
   @override
   Widget build(BuildContext context) {
@@ -114,9 +115,52 @@ class OrderCard extends StatelessWidget {
                             ],
                           ),
                         ],
+                        if (actions != null && actions!.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Row(children: [for (final a in actions!) ...[a, const SizedBox(width: 8)]]),
+                        ],
                       ],
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Buyurtma kartasidagi harakat tugmasi — "Qo'ng'iroq"/"Yo'lga chiqish"
+/// kabi (talab: Selta brend ranglariga mos, professional ko'rinish).
+class CardActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool filled;
+
+  const CardActionButton({super.key, required this.icon, required this.label, required this.onTap, this.filled = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: filled ? AppColors.primary : AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: filled ? Colors.white : AppColors.primary),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: filled ? Colors.white : AppColors.primary),
                 ),
               ],
             ),

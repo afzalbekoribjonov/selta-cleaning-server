@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/utils/launch_utils.dart';
 import '../../core/widgets/confirm_logout.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/team_jobs_section.dart';
@@ -99,7 +100,15 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
                     final order = filtered[i];
-                    return OrderCard(order: order, onTap: () => openDeliveryOrderDetailSheet(context, order));
+                    return OrderCard(
+                      order: order,
+                      onTap: () => openDeliveryOrderDetailSheet(context, order),
+                      actions: [
+                        CardActionButton(icon: Icons.call_rounded, label: "Qo'ng'iroq", onTap: () => callPhone(order.phone)),
+                        if (order.status == 'ready' && order.gpsCoords != null && order.gpsCoords!.isNotEmpty)
+                          CardActionButton(icon: Icons.navigation_rounded, label: "Yo'lga chiqish", filled: true, onTap: () => navigateToGps(order.gpsCoords!)),
+                      ],
+                    );
                   },
                 );
               },

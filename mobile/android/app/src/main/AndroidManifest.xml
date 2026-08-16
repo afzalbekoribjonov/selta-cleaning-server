@@ -4,6 +4,10 @@
          requestPermission() chaqiruvi ham, bildirishnomaning o'zi ham
          hech qachon ishlamaydi. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Dastavchik mijoz manzilida GPS koordinatalarini saqlashi uchun
+         (talab: "Olib ketildi"ga o'tishdan oldin majburiy GPS). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
         android:label="Selta Cleaning"
         android:name="${applicationName}"
@@ -55,6 +59,20 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- url_launcher uchun: "Qo'ng'iroq" (tel:) va "Yo'lga chiqish"
+             (geo:/Google Maps) — Android 11+ paket ko'rinishi talabi. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

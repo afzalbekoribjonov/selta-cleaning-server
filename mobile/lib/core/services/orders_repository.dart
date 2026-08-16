@@ -95,6 +95,7 @@ class OrdersRepository {
     required String toStatus,
     String? note,
     num? collectedAmount,
+    String? gpsCoords,
   }) async {
     await _api.post(
       '/changeOrderStatus',
@@ -104,6 +105,7 @@ class OrdersRepository {
         'toStatus': toStatus,
         if (note != null) 'note': note,
         if (collectedAmount != null) 'collectedAmount': collectedAmount,
+        if (gpsCoords != null) 'gpsCoords': gpsCoords,
       },
     );
   }
@@ -170,19 +172,39 @@ class OrdersRepository {
         .map((snap) => snap.docs.map(OrderItem.fromFirestore).toList());
   }
 
-  /// Ishchi mahsulotlarni belgilaydi — tartib raqamlari serverda avtomatik
-  /// beriladi (talab #3/#6).
+  /// Dastavchik yoki ishchi mahsulot(lar) qo'shadi — tartib raqamlari va
+  /// narx serverda avtomatik hisoblanadi (talab #2/#3/#6).
   Future<void> addOrderItems({
     required String orderId,
-    required List<({String name, num area, num price})> items,
+    required List<CatalogItemDraft> items,
   }) async {
     await _api.post(
       '/addOrderItems',
       idToken: await _idToken(),
       body: {
         'orderId': orderId,
-        'items': items.map((e) => {'name': e.name, 'area': e.area, 'price': e.price}).toList(),
+        'items': items.map((e) => e.toJson()).toList(),
       },
+    );
+  }
+
+  Future<void> updateOrderItem({
+    required String orderId,
+    required String itemId,
+    required CatalogItemDraft item,
+  }) async {
+    await _api.post(
+      '/updateOrderItem',
+      idToken: await _idToken(),
+      body: {'orderId': orderId, 'itemId': itemId, 'item': item.toJson()},
+    );
+  }
+
+  Future<void> deleteOrderItem({required String orderId, required String itemId}) async {
+    await _api.post(
+      '/deleteOrderItem',
+      idToken: await _idToken(),
+      body: {'orderId': orderId, 'itemId': itemId},
     );
   }
 

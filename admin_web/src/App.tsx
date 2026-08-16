@@ -8,6 +8,7 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'))
 const EmployeesPage = lazy(() => import('@/pages/EmployeesPage'))
 const PayrollPage = lazy(() => import('@/pages/PayrollPage'))
+const ProductsPage = lazy(() => import('@/pages/ProductsPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 
@@ -39,6 +40,7 @@ export default function App() {
                     <Route path="orders" element={<OrdersPage />} />
                     <Route path="employees" element={<EmployeesPage />} />
                     <Route path="payroll" element={<PayrollPage />} />
+                    <Route path="products" element={<ProductsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>

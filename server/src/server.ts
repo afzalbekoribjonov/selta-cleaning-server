@@ -5,6 +5,7 @@ import { employeeAdminRouter } from "./routes/employeeAdmin";
 import { ordersRouter } from "./routes/orders";
 import { bootstrapRouter } from "./routes/bootstrap";
 import { payrollRouter } from "./routes/payroll";
+import { productsRouter } from "./routes/products";
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use("/", employeeAdminRouter);
 app.use("/", ordersRouter);
 app.use("/", bootstrapRouter);
 app.use("/", payrollRouter);
+app.use("/", productsRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 8080;
 app.listen(port, () => {
