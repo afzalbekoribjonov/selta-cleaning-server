@@ -20,6 +20,7 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           phone: data.phone,
           department: data.department,
           status: data.status,
+          salary: data.salary ?? null,
         };
       }),
     });

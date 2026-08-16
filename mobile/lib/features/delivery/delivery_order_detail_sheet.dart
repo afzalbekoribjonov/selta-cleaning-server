@@ -37,15 +37,49 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
   bool _advancing = false;
   String? _error;
 
+  Future<num?> _promptCollectedAmount() async {
+    final controller = TextEditingController();
+    return showDialog<num>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Mijozdan qabul qilingan summa"),
+        content: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autofocus: true,
+          decoration: const InputDecoration(hintText: "Masalan: 150000 (ixtiyoriy)", suffixText: "so'm"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text("O'tkazib yuborish")),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(num.tryParse(controller.text.replaceAll(',', '.')) ?? 0),
+            child: const Text('Tasdiqlash'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _advance() async {
     final next = _nextStage[widget.order.status];
     if (next == null) return;
+
+    num? collectedAmount;
+    if (widget.order.status == 'ready') {
+      collectedAmount = await _promptCollectedAmount();
+      if (!mounted) return;
+    }
+
     setState(() {
       _advancing = true;
       _error = null;
     });
     try {
-      await ref.read(ordersRepositoryProvider).changeOrderStatus(orderId: widget.order.id, toStatus: next);
+      await ref.read(ordersRepositoryProvider).changeOrderStatus(
+            orderId: widget.order.id,
+            toStatus: next,
+            collectedAmount: collectedAmount,
+          );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       setState(() {

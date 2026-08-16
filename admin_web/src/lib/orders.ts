@@ -25,6 +25,10 @@ export interface Order {
   totalArea: number
   totalPrice: number
   createdBy: string
+  pickedUpBy?: string
+  washedBy?: string
+  deliveredBy?: string
+  collectedAmount?: number
   createdAt: Date
   dueDate: Date | null
 }
@@ -45,6 +49,10 @@ function toOrder(doc: QueryDocumentSnapshot): Order {
     totalArea: data.totalArea ?? 0,
     totalPrice: data.totalPrice ?? 0,
     createdBy: data.createdBy ?? '',
+    pickedUpBy: data.pickedUpBy ?? undefined,
+    washedBy: data.washedBy ?? undefined,
+    deliveredBy: data.deliveredBy ?? undefined,
+    collectedAmount: data.collectedAmount ?? undefined,
     createdAt: (data.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
     dueDate: (data.dueDate as Timestamp | undefined)?.toDate() ?? null,
   }

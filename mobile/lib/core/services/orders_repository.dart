@@ -90,11 +90,21 @@ class OrdersRepository {
     );
   }
 
-  Future<void> changeOrderStatus({required String orderId, required String toStatus, String? note}) async {
+  Future<void> changeOrderStatus({
+    required String orderId,
+    required String toStatus,
+    String? note,
+    num? collectedAmount,
+  }) async {
     await _api.post(
       '/changeOrderStatus',
       idToken: await _idToken(),
-      body: {'orderId': orderId, 'toStatus': toStatus, if (note != null) 'note': note},
+      body: {
+        'orderId': orderId,
+        'toStatus': toStatus,
+        if (note != null) 'note': note,
+        if (collectedAmount != null) 'collectedAmount': collectedAmount,
+      },
     );
   }
 

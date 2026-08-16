@@ -173,7 +173,7 @@ async function notifyOnTransition(orderNumber: number, orderId: string, toStatus
 
 ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res) => {
   try {
-    const { orderId, toStatus, note } = req.body ?? {};
+    const { orderId, toStatus, note, collectedAmount } = req.body ?? {};
     const role = req.auth!.role!;
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
 
@@ -209,7 +209,19 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
         }
       }
 
-      tx.update(orderRef, { status: toStatus, updatedAt: FieldValue.serverTimestamp() });
+      // Maosh hisob-kitobi uchun (talab #13) — qaysi xodim buyurtmani olib
+      // ketgani/yuvgani/yetkazgani shu holat o'tishlari orqali qayd etiladi.
+      const attributionUpdate: Record<string, unknown> = {};
+      if (toStatus === "picked_up") attributionUpdate.pickedUpBy = employeeId;
+      if (fromStatus === "washing" && toStatus === "packing") attributionUpdate.washedBy = employeeId;
+      if (toStatus === "done") {
+        attributionUpdate.deliveredBy = employeeId;
+        if (typeof collectedAmount === "number" && collectedAmount > 0) {
+          attributionUpdate.collectedAmount = collectedAmount;
+        }
+      }
+
+      tx.update(orderRef, { status: toStatus, updatedAt: FieldValue.serverTimestamp(), ...attributionUpdate });
       tx.set(orderRef.collection("statusHistory").doc(), {
         fromStatus,
         toStatus,

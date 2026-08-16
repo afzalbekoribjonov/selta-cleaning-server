@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, User } from 'lucide-react'
+import { Plus, X, User, Wallet, KeyRound, UserX } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { DEPARTMENTS } from '@/lib/departments'
+import { SALARY_METHODS } from '@/lib/salary-methods'
+import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
+import { PinResetDialog } from '@/components/employees/PinResetDialog'
 
 interface Employee {
   id: string
@@ -10,10 +13,15 @@ interface Employee {
   phone: string
   department: keyof typeof DEPARTMENTS
   status: 'active' | 'terminated'
+  salary?: { method: string; params: Record<string, number> }
 }
 
 export default function EmployeesPage() {
   const [formOpen, setFormOpen] = useState(false)
+  const [salaryTarget, setSalaryTarget] = useState<Employee | null>(null)
+  const [pinTarget, setPinTarget] = useState<Employee | null>(null)
+  const [terminateTarget, setTerminateTarget] = useState<Employee | null>(null)
+
   const query = useQuery({
     queryKey: ['employees'],
     queryFn: () => apiPost<{ employees: Employee[] }>('/adminListEmployees'),
@@ -57,14 +65,17 @@ export default function EmployeesPage() {
                   <th className="px-5 py-3 font-semibold">Ism familiya</th>
                   <th className="px-5 py-3 font-semibold">Telefon</th>
                   <th className="px-5 py-3 font-semibold">Bo'lim</th>
+                  <th className="px-5 py-3 font-semibold">Maosh usuli</th>
                   <th className="px-5 py-3 font-semibold">Holat</th>
+                  <th className="px-5 py-3 font-semibold text-right">Amallar</th>
                 </tr>
               </thead>
               <tbody>
                 {query.data.employees.map((e) => {
                   const dept = DEPARTMENTS[e.department]
+                  const terminated = e.status !== 'active'
                   return (
-                    <tr key={e.id} className="border-b border-border last:border-0">
+                    <tr key={e.id} className={`border-b border-border last:border-0 ${terminated ? 'opacity-50' : ''}`}>
                       <td className="px-5 py-3 font-semibold text-ink">{e.fullName}</td>
                       <td className="px-5 py-3 text-ink">{e.phone}</td>
                       <td className="px-5 py-3">
@@ -73,16 +84,30 @@ export default function EmployeesPage() {
                           {dept?.label ?? e.department}
                         </span>
                       </td>
+                      <td className="px-5 py-3 text-ink">
+                        {e.salary?.method ? SALARY_METHODS[e.salary.method]?.label ?? e.salary.method : (
+                          <span className="text-gray-dark">Belgilanmagan</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3">
-                        <span
-                          className={
-                            e.status === 'active'
-                              ? 'text-xs font-bold text-success'
-                              : 'text-xs font-bold text-danger'
-                          }
-                        >
-                          {e.status === 'active' ? 'Faol' : "Ishdan bo'shatilgan"}
+                        <span className={terminated ? 'text-xs font-bold text-danger' : 'text-xs font-bold text-success'}>
+                          {terminated ? "Ishdan bo'shatilgan" : 'Faol'}
                         </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        {!terminated && (
+                          <div className="flex justify-end gap-1">
+                            <IconAction title="Maosh sozlash" onClick={() => setSalaryTarget(e)}>
+                              <Wallet size={16} />
+                            </IconAction>
+                            <IconAction title="PIN o'zgartirish" onClick={() => setPinTarget(e)}>
+                              <KeyRound size={16} />
+                            </IconAction>
+                            <IconAction title="Ishdan bo'shatish" danger onClick={() => setTerminateTarget(e)}>
+                              <UserX size={16} />
+                            </IconAction>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )
@@ -94,6 +119,78 @@ export default function EmployeesPage() {
       </section>
 
       {formOpen && <NewEmployeeDialog onClose={() => setFormOpen(false)} />}
+      {salaryTarget && (
+        <SalaryConfigDialog
+          employeeId={salaryTarget.id}
+          employeeName={salaryTarget.fullName}
+          currentMethod={salaryTarget.salary?.method}
+          currentParams={salaryTarget.salary?.params}
+          onClose={() => setSalaryTarget(null)}
+        />
+      )}
+      {pinTarget && <PinResetDialog employeeId={pinTarget.id} employeeName={pinTarget.fullName} onClose={() => setPinTarget(null)} />}
+      {terminateTarget && <TerminateDialog employee={terminateTarget} onClose={() => setTerminateTarget(null)} />}
+    </div>
+  )
+}
+
+function IconAction({
+  children,
+  title,
+  danger,
+  onClick,
+}: {
+  children: React.ReactNode
+  title: string
+  danger?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      className={`rounded-lg p-2 transition-colors ${danger ? 'text-gray-dark hover:bg-danger-bg hover:text-danger' : 'text-gray-dark hover:bg-brand-primary/10 hover:text-brand-primary'}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function TerminateDialog({ employee, onClose }: { employee: Employee; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [error, setError] = useState<string | null>(null)
+
+  const mutation = useMutation({
+    mutationFn: () => apiPost('/adminTerminateEmployee', { employeeId: employee.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+      onClose()
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'Xatolik yuz berdi'),
+  })
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
+      <div className="w-full max-w-sm rounded-3xl bg-surface p-6 shadow-2xl">
+        <h2 className="text-lg font-heading font-bold text-ink">Ishdan bo'shatish</h2>
+        <p className="mt-2 text-sm text-gray-dark">
+          <strong className="text-ink">{employee.fullName}</strong> ishdan bo'shatilsinmi? Bu amalni ortga qaytarib bo'lmaydi — xodim
+          tizimga kira olmay qoladi.
+        </p>
+        {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
+        <div className="mt-5 flex gap-3">
+          <button onClick={onClose} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-bold text-ink">
+            Bekor qilish
+          </button>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+            className="flex-1 rounded-xl bg-danger py-2.5 text-sm font-bold text-white disabled:opacity-60"
+          >
+            {mutation.isPending ? '...' : "Bo'shatish"}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
