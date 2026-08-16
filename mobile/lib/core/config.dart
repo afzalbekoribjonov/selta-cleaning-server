@@ -1,8 +1,11 @@
 /// Backend server manzili (Render'da joylashgan Express server —
 /// firebase/functions/ o'rnini bosdi, Blaze rejasi shart bo'lmasligi
-/// uchun). Build paytida almashtiriladi:
-///   flutter run --dart-define=SERVER_BASE_URL=https://selta-cleaning-server.onrender.com
+/// uchun). Standart qiymat — haqiqiy production server, shuning uchun
+/// oddiy `flutter build apk` ham to'g'ri manzilga ulanadi. Faqat lokal
+/// emulyatorda serverni ham o'zingizda ishga tushirib test qilmoqchi
+/// bo'lsangina almashtiring:
+///   flutter run --dart-define=SERVER_BASE_URL=http://localhost:8080
 const String kServerBaseUrl = String.fromEnvironment(
   'SERVER_BASE_URL',
-  defaultValue: 'http://localhost:8080',
+  defaultValue: 'https://selta-cleaning-server.onrender.com',
 );
