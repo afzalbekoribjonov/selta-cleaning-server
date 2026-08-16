@@ -1,0 +1,193 @@
+import { useEffect, useState } from 'react'
+import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore'
+import { X, User, Phone, MapPin, Calendar, Clock } from 'lucide-react'
+import { db } from '@/lib/firebase'
+import { isOverdue, type Order } from '@/lib/orders'
+import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
+import { STATUS_CONFIG } from '@/lib/status-config'
+import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
+import { useEmployeesMap } from '@/hooks/useEmployeesMap'
+
+interface OrderItem {
+  id: string
+  itemNumber: number
+  name: string
+  area: number
+  price: number
+  qcStatus: string
+}
+
+interface StatusEvent {
+  id: string
+  fromStatus: string | null
+  toStatus: string
+  changedBy: string
+  changedAt: Date
+  note?: string
+}
+
+interface Comment {
+  id: string
+  authorId: string
+  authorName?: string
+  text: string
+  createdAt: Date
+}
+
+function useSubcollection<T>(orderId: string, name: string, orderField: string, mapper: (id: string, data: Record<string, unknown>) => T) {
+  const [items, setItems] = useState<T[]>([])
+  useEffect(() => {
+    const q = query(collection(db, 'orders', orderId, name), orderBy(orderField, 'asc'))
+    return onSnapshot(q, (snap) => setItems(snap.docs.map((d) => mapper(d.id, d.data()))))
+  }, [orderId, name, orderField, mapper])
+  return items
+}
+
+export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: () => void }) {
+  const employees = useEmployeesMap()
+  const overdue = isOverdue(order)
+
+  const items = useSubcollection<OrderItem>(order.id, 'items', 'itemNumber', (id, d) => ({
+    id,
+    itemNumber: (d.itemNumber as number) ?? 0,
+    name: (d.name as string) ?? '',
+    area: (d.area as number) ?? 0,
+    price: (d.price as number) ?? 0,
+    qcStatus: (d.qcStatus as string) ?? 'pending',
+  }))
+
+  const history = useSubcollection<StatusEvent>(order.id, 'statusHistory', 'changedAt', (id, d) => ({
+    id,
+    fromStatus: (d.fromStatus as string | null) ?? null,
+    toStatus: (d.toStatus as string) ?? '',
+    changedBy: (d.changedBy as string) ?? '',
+    changedAt: (d.changedAt as Timestamp | undefined)?.toDate() ?? new Date(),
+    note: d.note as string | undefined,
+  }))
+
+  const comments = useSubcollection<Comment>(order.id, 'comments', 'createdAt', (id, d) => ({
+    id,
+    authorId: (d.authorId as string) ?? '',
+    authorName: d.authorName as string | undefined,
+    text: (d.text as string) ?? '',
+    createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
+  }))
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink/40" onClick={onClose}>
+      <div className="h-full w-full max-w-lg overflow-y-auto bg-bg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-6 py-4">
+          <div>
+            <h2 className="text-lg font-heading font-extrabold text-ink">Buyurtma #{order.orderNumber}</h2>
+            <div className="mt-1 flex gap-2">
+              <StatusBadge status={order.status} />
+              <TariffBadge tariff={order.tariff} />
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 hover:bg-bg" aria-label="Yopish">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-5 p-6">
+          <section className="rounded-2xl border border-border bg-surface p-4">
+            <InfoRow icon={User} text={order.customerName || "Noma'lum mijoz"} />
+            <InfoRow icon={Phone} text={order.phone} />
+            <InfoRow icon={MapPin} text={order.location} />
+            <InfoRow
+              icon={Calendar}
+              text={order.dueDate ? `Muddat: ${formatDateUz(order.dueDate)}${overdue ? ' — kechikmoqda' : ''}` : 'Muddat belgilanmagan'}
+              danger={overdue}
+            />
+            <InfoRow icon={Clock} text={`Qabul qilindi: ${formatDateTimeUz(order.createdAt)}`} />
+            <InfoRow icon={User} text={`Xizmat turi: ${order.serviceType === 'onsite' ? 'Joyida yuvish' : 'Olib kelish'}`} />
+          </section>
+
+          <section className="rounded-2xl border border-border bg-surface p-4">
+            <h3 className="mb-3 text-sm font-extrabold text-ink">Mahsulotlar ({items.length})</h3>
+            {items.length === 0 ? (
+              <p className="text-sm text-gray-dark">Hali mahsulot belgilanmagan</p>
+            ) : (
+              <div className="space-y-2">
+                {items.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2 text-sm">
+                    <span className="rounded-md bg-brand-primary/10 px-2 py-0.5 text-xs font-bold text-brand-primary">
+                      {order.orderNumber}/{item.itemNumber}
+                    </span>
+                    <span className="flex-1 font-medium text-ink">{item.name}</span>
+                    {item.area > 0 && <span className="text-xs text-gray-dark">{item.area} m²</span>}
+                    <QcDot status={item.qcStatus} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border bg-surface p-4">
+            <h3 className="mb-3 text-sm font-extrabold text-ink">Tarix (kim, qachon o'zgartirgan)</h3>
+            {history.length === 0 ? (
+              <p className="text-sm text-gray-dark">Hali o'zgarish yo'q</p>
+            ) : (
+              <div className="space-y-3">
+                {history.map((h) => (
+                  <div key={h.id} className="flex items-start gap-2 text-sm">
+                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-primary" />
+                    <div className="flex-1">
+                      <div className="text-ink">
+                        {h.fromStatus ? (
+                          <>
+                            <span className="text-gray-dark">{STATUS_CONFIG[h.fromStatus]?.label ?? h.fromStatus}</span>
+                            {' → '}
+                          </>
+                        ) : null}
+                        <span className="font-bold">{STATUS_CONFIG[h.toStatus]?.label ?? h.toStatus}</span>
+                      </div>
+                      <div className="text-xs text-gray-dark">
+                        {employees[h.changedBy] ?? h.changedBy} · {formatDateTimeUz(h.changedAt)}
+                      </div>
+                      {h.note && <div className="mt-0.5 text-xs italic text-gray-dark">{h.note}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border bg-surface p-4">
+            <h3 className="mb-3 text-sm font-extrabold text-ink">Izohlar ({comments.length})</h3>
+            {comments.length === 0 ? (
+              <p className="text-sm text-gray-dark">Hali izoh yo'q</p>
+            ) : (
+              <div className="space-y-2">
+                {comments.map((c) => (
+                  <div key={c.id} className="rounded-xl bg-bg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-ink">{c.authorName ?? employees[c.authorId] ?? 'Xodim'}</span>
+                      <span className="text-xs text-gray-dark">{formatDateTimeUz(c.createdAt)}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-ink">{c.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InfoRow({ icon: Icon, text, danger }: { icon: typeof User; text: string; danger?: boolean }) {
+  return (
+    <div className="flex items-start gap-2.5 py-1.5">
+      <Icon size={15} className={danger ? 'text-danger' : 'text-gray'} />
+      <span className={`text-sm ${danger ? 'font-bold text-danger' : 'text-ink'}`}>{text}</span>
+    </div>
+  )
+}
+
+function QcDot({ status }: { status: string }) {
+  if (status === 'passed') return <span className="text-xs font-bold text-success">O'tdi</span>
+  if (status === 'failed') return <span className="text-xs font-bold text-danger">O'tmadi</span>
+  return <span className="text-xs text-gray">Kutilmoqda</span>
+}
