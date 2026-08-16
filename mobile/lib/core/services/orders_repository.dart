@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/order.dart';
+import '../models/order_item.dart';
 import 'api_client.dart';
 import 'auth_service.dart' show apiClientProvider;
 
@@ -26,6 +27,16 @@ class OrdersRepository {
         .limit(_pageSize)
         .snapshots()
         .map((snap) => snap.docs.map(Order.fromFirestore).toList());
+  }
+
+  /// Joyida-yuvish jamoasiga biriktirilgan buyurtmalar (talab #14) — har
+  /// qanday bo'lim xodimi o'ziga biriktirilgan ishlarni ko'rishi mumkin.
+  Stream<List<Order>> watchMyTeamOrders(String employeeId) {
+    return FirebaseFirestore.instance
+        .collection('orders')
+        .where('assignedTeam', arrayContains: employeeId)
+        .snapshots()
+        .map((snap) => snap.docs.map(Order.fromFirestore).where((o) => !o.isDone).toList());
   }
 
   Future<String> _idToken() async {
@@ -123,10 +134,68 @@ class OrdersRepository {
         .snapshots()
         .map((snap) => snap.docs.map((d) => d.data()).toList());
   }
+
+  Stream<List<OrderItem>> watchItems(String orderId) {
+    return FirebaseFirestore.instance
+        .collection('orders')
+        .doc(orderId)
+        .collection('items')
+        .orderBy('itemNumber')
+        .snapshots()
+        .map((snap) => snap.docs.map(OrderItem.fromFirestore).toList());
+  }
+
+  /// Ishchi mahsulotlarni belgilaydi — tartib raqamlari serverda avtomatik
+  /// beriladi (talab #3/#6).
+  Future<void> addOrderItems({
+    required String orderId,
+    required List<({String name, num area, num price})> items,
+  }) async {
+    await _api.post(
+      '/addOrderItems',
+      idToken: await _idToken(),
+      body: {
+        'orderId': orderId,
+        'items': items.map((e) => {'name': e.name, 'area': e.area, 'price': e.price}).toList(),
+      },
+    );
+  }
+
+  Future<void> submitItemQc({
+    required String orderId,
+    required String itemId,
+    required String qcStatus,
+    String? qcNote,
+  }) async {
+    await _api.post(
+      '/submitItemQc',
+      idToken: await _idToken(),
+      body: {
+        'orderId': orderId,
+        'itemId': itemId,
+        'qcStatus': qcStatus,
+        if (qcNote != null) 'qcNote': qcNote,
+      },
+    );
+  }
+
+  /// Dispetcher/Sifat nazorati joyida-yuvish buyurtmasiga jamoa biriktiradi
+  /// (talab #14).
+  Future<void> assignTeam({required String orderId, required List<String> employeeIds}) async {
+    await _api.post(
+      '/assignTeam',
+      idToken: await _idToken(),
+      body: {'orderId': orderId, 'employeeIds': employeeIds},
+    );
+  }
 }
 
 final ordersRepositoryProvider = Provider<OrdersRepository>((ref) => OrdersRepository(ref.watch(apiClientProvider)));
 
 final recentOrdersProvider = StreamProvider<List<Order>>((ref) {
   return ref.watch(ordersRepositoryProvider).watchRecentOrders();
+});
+
+final myTeamOrdersProvider = StreamProvider.family<List<Order>, String>((ref, employeeId) {
+  return ref.watch(ordersRepositoryProvider).watchMyTeamOrders(employeeId);
 });

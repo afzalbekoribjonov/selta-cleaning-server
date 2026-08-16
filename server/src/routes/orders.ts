@@ -3,7 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { computeDueDate, isValidTransition, type ServiceType } from "../lib/pipeline";
 import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz";
-import { notifyDepartment } from "../lib/notifications";
+import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 
 export const ordersRouter = Router();
 
@@ -200,6 +200,15 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
         throw new ApiError(403, "permission-denied", "Bu o'tish uchun ruxsatingiz yo'q");
       }
 
+      // Ishchi mahsulotlarni belgilamasdan yuvishni boshlay olmaydi (talab
+      // #3'ning tabiiy natijasi — har item o'z sub-ID'iga ega bo'lishi kerak).
+      if (fromStatus === "brought_in" && toStatus === "washing") {
+        const itemsSnap = await tx.get(orderRef.collection("items"));
+        if (itemsSnap.empty) {
+          throw new ApiError(412, "failed-precondition", "Avval mahsulotlarni belgilang");
+        }
+      }
+
       tx.update(orderRef, { status: toStatus, updatedAt: FieldValue.serverTimestamp() });
       tx.set(orderRef.collection("statusHistory").doc(), {
         fromStatus,
@@ -286,6 +295,123 @@ ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => 
       });
     } else if (qcStatus === "failed") {
       await notifyDepartment("worker", "Qayta ishlov kerak", `#${orderNumber} — mahsulot sifat nazoratidan o'tmadi`, {
+        orderId,
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Ishchi mahsulotlarni belgilaydi — har biriga tartib raqami avtomatik
+ * beriladi (talab #3/#6: "1/1, 1/2..." kabi ko'rsatish uchun asos).
+ * Mavjud itemlar sonidan davom etadi (bir necha marta chaqirilsa ham
+ * to'g'ri raqamlanadi).
+ */
+ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const role = req.auth!.role;
+    if (role !== "worker" && role !== "admin") {
+      throw new ApiError(403, "permission-denied", "Faqat ishchi mahsulot qo'sha oladi");
+    }
+
+    const { orderId, items } = req.body ?? {};
+    if (!orderId || !Array.isArray(items) || items.length === 0) {
+      throw new ApiError(400, "invalid-argument", "Kamida bitta mahsulot kerak");
+    }
+
+    const orderRef = db.collection("orders").doc(orderId);
+    const itemsRef = orderRef.collection("items");
+
+    await db.runTransaction(async (tx) => {
+      const [orderSnap, existingItemsSnap] = await Promise.all([tx.get(orderRef), tx.get(itemsRef)]);
+      if (!orderSnap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+
+      let nextNumber = existingItemsSnap.size + 1;
+      let addedArea = 0;
+      let addedPrice = 0;
+
+      for (const item of items) {
+        const area = Number(item.area) || 0;
+        const price = Number(item.price) || 0;
+        tx.set(itemsRef.doc(), {
+          itemNumber: nextNumber,
+          name: item.name?.toString()?.trim() || 'Mahsulot',
+          area,
+          price,
+          qcStatus: 'pending',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        addedArea += area;
+        addedPrice += price;
+        nextNumber++;
+      }
+
+      tx.update(orderRef, {
+        totalArea: FieldValue.increment(addedArea),
+        totalPrice: FieldValue.increment(addedPrice),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Dispetcher yoki Sifat nazorati joyida-yuvish buyurtmasiga jamoa
+ * biriktiradi (talab #14). Faqat "new" holatidagi joyida-yuvish
+ * buyurtmalariga qo'llaniladi.
+ */
+ordersRouter.post("/assignTeam", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const role = req.auth!.role;
+    if (role !== "dispatcher" && role !== "qc" && role !== "admin") {
+      throw new ApiError(403, "permission-denied", "Faqat dispetcher yoki sifat nazorati jamoa biriktira oladi");
+    }
+
+    const { orderId, employeeIds } = req.body ?? {};
+    if (!orderId || !Array.isArray(employeeIds) || employeeIds.length === 0) {
+      throw new ApiError(400, "invalid-argument", "Kamida bitta xodim tanlang");
+    }
+
+    const orderRef = db.collection("orders").doc(orderId);
+    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    let orderNumber = 0;
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+      const order = snap.data()!;
+      orderNumber = order.orderNumber;
+
+      if (order.serviceType !== "onsite") {
+        throw new ApiError(412, "failed-precondition", "Faqat joyida yuvish buyurtmalariga jamoa biriktiriladi");
+      }
+      if (order.status !== "new") {
+        throw new ApiError(412, "failed-precondition", "Jamoa faqat yangi buyurtmaga biriktiriladi");
+      }
+
+      tx.update(orderRef, {
+        assignedTeam: employeeIds,
+        status: "team_assigned",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(orderRef.collection("statusHistory").doc(), {
+        fromStatus: "new",
+        toStatus: "team_assigned",
+        changedBy: employeeId,
+        changedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    for (const empId of employeeIds as string[]) {
+      await notifyEmployee(empId, "Joyida yuvishga biriktirildingiz", `#${orderNumber} — yangi buyurtma jamoasi`, {
         orderId,
       });
     }
