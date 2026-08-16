@@ -5,7 +5,7 @@ import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
-import '../../core/services/auth_service.dart' show describeApiError;
+import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
 import '../../core/services/orders_repository.dart';
 import '../worker/item_entry_sheet.dart';
 import 'comments_section.dart';
@@ -23,6 +23,7 @@ const _nextStage = {'team_assigned': 'in_progress', 'in_progress': 'done'};
 const _actionLabel = {'team_assigned': 'Ishni boshlash', 'in_progress': 'Yakunlash'};
 
 final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
+  ref.watch(authStateProvider);
   return ref.watch(ordersRepositoryProvider).watchItems(orderId);
 });
 

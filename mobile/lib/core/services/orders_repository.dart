@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/order.dart';
 import '../models/order_item.dart';
 import 'api_client.dart';
-import 'auth_service.dart' show apiClientProvider;
+import 'auth_service.dart' show apiClientProvider, authStateProvider;
 
 /// Buyurtmalar bilan ishlash — o'qish to'g'ridan-to'g'ri Firestore orqali
 /// (real-vaqtli, firestore.rules "isSignedIn() bo'lsa o'qish mumkin"ni
@@ -236,10 +236,19 @@ class OrdersRepository {
 
 final ordersRepositoryProvider = Provider<OrdersRepository>((ref) => OrdersRepository(ref.watch(apiClientProvider)));
 
+/// `authStateProvider`ni kuzatadi — sof texnik sabab: bu Firestore
+/// `.snapshots()` oqimi auth holatidan mustaqil bo'lsa, chiqish (signOut)
+/// paytida oqim `permission-denied` bilan butunlay to'xtaydi (Firestore
+/// buni qaytadan urinib ko'rmaydi) va Riverpod shu xato holatini abadiy
+/// keshlab qoladi — keyingi PIN bilan kirishlarda ham xuddi shu xatoni
+/// ko'rsataveradi. Auth holatiga bog'lash oqimni har safar kirish/chiqishda
+/// yangidan yaratadi.
 final recentOrdersProvider = StreamProvider<List<Order>>((ref) {
+  ref.watch(authStateProvider);
   return ref.watch(ordersRepositoryProvider).watchRecentOrders();
 });
 
 final myTeamOrdersProvider = StreamProvider.family<List<Order>, String>((ref, employeeId) {
+  ref.watch(authStateProvider);
   return ref.watch(ordersRepositoryProvider).watchMyTeamOrders(employeeId);
 });

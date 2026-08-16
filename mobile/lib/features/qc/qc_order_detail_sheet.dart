@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
-import '../../core/services/auth_service.dart' show describeApiError;
+import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
 import '../../core/services/orders_repository.dart';
 import '../shared/comments_section.dart';
 
@@ -18,6 +18,7 @@ void openQcOrderDetailSheet(BuildContext context, Order order) {
 }
 
 final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
+  ref.watch(authStateProvider);
   return ref.watch(ordersRepositoryProvider).watchItems(orderId);
 });
 

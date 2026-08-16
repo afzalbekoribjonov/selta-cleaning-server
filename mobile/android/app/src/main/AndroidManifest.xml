@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Android 13+ (API 33+) push-bildirishnoma ko'rsatish uchun runtime
+         ruxsat talab qiladi — bu e'lon qilinmasa, fcm_service.dart'dagi
+         requestPermission() chaqiruvi ham, bildirishnomaning o'zi ham
+         hech qachon ishlamaydi. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="Selta Cleaning"
         android:name="${applicationName}"

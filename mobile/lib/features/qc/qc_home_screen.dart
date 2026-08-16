@@ -22,13 +22,15 @@ class QcHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
-  bool _showTeamAssign = false;
+  int _tabIndex = 0;
+  String _search = '';
 
   @override
   Widget build(BuildContext context) {
     final employeeAsync = ref.watch(currentEmployeeProvider);
     final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
     final ordersAsync = ref.watch(recentOrdersProvider);
+    final showTeamAssign = _tabIndex == 1;
 
     return Scaffold(
       appBar: AppBar(
@@ -50,16 +52,20 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
       body: Column(
         children: [
           const TeamJobsSection(),
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              children: [
-                _Chip(label: 'Tekshirish', selected: !_showTeamAssign, onTap: () => setState(() => _showTeamAssign = false)),
-                const SizedBox(width: 8),
-                _Chip(label: "Jamoa biriktirish", selected: _showTeamAssign, onTap: () => setState(() => _showTeamAssign = true)),
-              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
+              decoration: InputDecoration(
+                hintText: 'Ism, telefon yoki # bo\'yicha qidirish',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                isDense: true,
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+              ),
             ),
           ),
           Expanded(
@@ -67,15 +73,23 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, _) => Center(child: Text('Xatolik: $err')),
               data: (orders) {
-                final filtered = _showTeamAssign
+                var filtered = showTeamAssign
                     ? orders.where((o) => o.serviceType == 'onsite' && o.status == 'new').toList()
                     : orders.where((o) => o.status == 'qc_review').toList();
+
+                if (_search.isNotEmpty) {
+                  filtered = filtered.where((o) {
+                    return o.customerName.toLowerCase().contains(_search) ||
+                        o.phone.toLowerCase().contains(_search) ||
+                        o.orderNumber.toString().contains(_search);
+                  }).toList();
+                }
                 filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
                 if (filtered.isEmpty) {
                   return Center(
                     child: Text(
-                      _showTeamAssign ? 'Jamoa biriktirish kerak bo\'lgan buyurtma yo\'q' : 'Tekshirish uchun buyurtma yo\'q',
+                      showTeamAssign ? 'Jamoa biriktirish kerak bo\'lgan buyurtma yo\'q' : 'Tekshirish uchun buyurtma yo\'q',
                       style: const TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600),
                     ),
                   );
@@ -89,7 +103,7 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
                     final order = filtered[i];
                     return OrderCard(
                       order: order,
-                      onTap: () => _showTeamAssign ? openTeamAssignSheet(context, order.id) : openQcOrderDetailSheet(context, order),
+                      onTap: () => showTeamAssign ? openTeamAssignSheet(context, order.id) : openQcOrderDetailSheet(context, order),
                     );
                   },
                 );
@@ -98,31 +112,45 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: ordersAsync.when(
+        loading: () => null,
+        error: (_, __) => null,
+        data: (orders) {
+          final reviewCount = orders.where((o) => o.status == 'qc_review').length;
+          final teamCount = orders.where((o) => o.serviceType == 'onsite' && o.status == 'new').length;
+
+          return NavigationBar(
+            selectedIndex: _tabIndex,
+            onDestinationSelected: (i) => setState(() => _tabIndex = i),
+            destinations: [
+              NavigationDestination(
+                icon: _BadgedIcon(icon: Icons.fact_check_rounded, count: reviewCount),
+                label: 'Tekshirish',
+              ),
+              NavigationDestination(
+                icon: _BadgedIcon(icon: Icons.groups_rounded, count: teamCount),
+                label: 'Jamoa biriktirish',
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
 
-class _Chip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _Chip({required this.label, required this.selected, required this.onTap});
+class _BadgedIcon extends StatelessWidget {
+  final IconData icon;
+  final int count;
+  const _BadgedIcon({required this.icon, required this.count});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? AppColors.primary : AppColors.surface,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: selected ? AppColors.primary : AppColors.border)),
-          child: Text(label, style: TextStyle(color: selected ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700, fontSize: 12.5)),
-        ),
-      ),
+    if (count == 0) return Icon(icon);
+    return Badge(
+      label: Text(count > 99 ? '99+' : '$count'),
+      backgroundColor: AppColors.danger,
+      child: Icon(icon),
     );
   }
 }

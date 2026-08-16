@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
-import '../../core/services/auth_service.dart' show employeeClaimsProvider;
+import '../../core/services/auth_service.dart' show authStateProvider, employeeClaimsProvider;
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
@@ -119,6 +119,7 @@ class _CommentsSectionState extends ConsumerState<CommentsSection> {
 }
 
 final _commentsProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, orderId) {
+  ref.watch(authStateProvider);
   return ref.watch(ordersRepositoryProvider).watchComments(orderId);
 });
 

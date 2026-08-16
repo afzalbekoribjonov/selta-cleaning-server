@@ -5,7 +5,7 @@ import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
-import '../../core/services/auth_service.dart' show describeApiError;
+import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
 import '../../core/services/orders_repository.dart';
 import '../shared/comments_section.dart';
 import 'item_entry_sheet.dart';
@@ -142,6 +142,7 @@ class _WorkerOrderDetailSheetState extends ConsumerState<_WorkerOrderDetailSheet
 }
 
 final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
+  ref.watch(authStateProvider);
   return ref.watch(ordersRepositoryProvider).watchItems(orderId);
 });
 
