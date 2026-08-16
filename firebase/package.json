@@ -1,0 +1,12 @@
+{
+  "name": "selta-cleaning-firebase",
+  "private": true,
+  "devDependencies": {
+    "firebase-tools": "^13.0.0"
+  },
+  "scripts": {
+    "emulators": "firebase emulators:start",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
+    "deploy:functions": "firebase deploy --only functions"
+  }
+}

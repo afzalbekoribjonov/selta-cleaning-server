@@ -1,3 +1,5 @@
+import "./lib/globalOptions";
+
 export { listEmployeesByDepartment, loginWithPin } from "./auth/login";
 export { adminCreateEmployee, adminSetEmployeePin, adminTerminateEmployee } from "./auth/employeeAdmin";
 export { createOrder } from "./orders/createOrder";

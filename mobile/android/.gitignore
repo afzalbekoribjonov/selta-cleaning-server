@@ -11,3 +11,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Firebase config — not secret in the strict sense, but kept out of git
+# by convention; each dev/CI environment places its own copy.
+app/google-services.json

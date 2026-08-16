@@ -1,24 +1,33 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/models/employee_summary.dart';
+import '../../core/services/auth_service.dart';
 
 /// Ilova ochilganda ko'rsatiladigan brendlangan yuklanish ekrani.
 /// Talab: "malumotlar yuklanguncha haqiqiy dizayndagi loading loaderi
 /// bo'lishi" — birinchi PIN kirishda ham, keshlangan sessiya bilan
 /// avtomatik kirishda ham shu ekran ko'rsatiladi (auth holati aniqlanguncha).
-class SplashScreen extends StatefulWidget {
+///
+/// Firebase Auth sessiyasi allaqachon mavjud bo'lsa (qaror #4: qo'shimcha
+/// local-cache shart emas, Auth SDK'ning o'zi persist qiladi) — PIN so'ralmay
+/// to'g'ridan-to'g'ri xodim paneliga o'tadi; aks holda bo'lim tanlash
+/// ekraniga.
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProviderStateMixin {
   late final AnimationController _floatController;
   late final AnimationController _ringController;
+  bool _navigated = false;
 
   @override
   void initState() {
@@ -26,14 +35,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _floatController = AnimationController(vsync: this, duration: const Duration(seconds: 3))
       ..repeat(reverse: true);
     _ringController = AnimationController(vsync: this, duration: const Duration(seconds: 12))..repeat();
-
-    // TODO(auth): Firebase Auth holati tekshirilgach (currentUser bor/yo'q),
-    // shu yerdan avtomatik '/select' yoki xodim paneliga yo'naltiriladi.
-    // Hozircha (Faza 0 — kredentsialsiz) shunchaki qisqa animatsiyadan so'ng
-    // bo'lim tanlash ekraniga o'tadi.
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted) context.go('/select');
-    });
   }
 
   @override
@@ -43,8 +44,22 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     super.dispose();
   }
 
+  void _handleResolved(EmployeeClaims? claims) {
+    if (_navigated) return;
+    _navigated = true;
+    // Brendlangan loader kamida bir lahza ko'rinishi uchun kichik kechikish.
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      context.go(claims != null ? '/home' : '/select');
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<EmployeeClaims?>>(employeeClaimsProvider, (previous, next) {
+      next.whenData(_handleResolved);
+    });
+
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(

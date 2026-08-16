@@ -1,4 +1,5 @@
 # Firebase
+firebase/node_modules/
 firebase/functions/node_modules/
 firebase/functions/lib/
 firebase/.firebase/

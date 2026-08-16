@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
+import './lib/firebase' // Firebase SDK'ni ilova ochilishida ishga tushiradi
 import App from './App.tsx'
 
 const queryClient = new QueryClient()
