@@ -6,7 +6,6 @@ import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz"
 import { notifyDepartment } from "../lib/notifications";
 
 export const ordersRouter = Router();
-ordersRouter.use(withAuth);
 
 /**
  * Dispetcher "Yangi buyurtma" formasi (talab #11): Ism familiya, Telefon,
@@ -16,7 +15,7 @@ ordersRouter.use(withAuth);
  * `orderNumber` counters/orders hujjatida tranzaksion ravishda 1 dan
  * ketma-ket ajratiladi (talab #7).
  */
-ordersRouter.post("/createOrder", async (req: AuthedRequest, res) => {
+ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
     if (role !== "dispatcher" && role !== "admin") {
@@ -122,7 +121,7 @@ async function notifyOnTransition(orderNumber: number, orderId: string, toStatus
   }
 }
 
-ordersRouter.post("/changeOrderStatus", async (req: AuthedRequest, res) => {
+ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res) => {
   try {
     const { orderId, toStatus, note } = req.body ?? {};
     const role = req.auth!.role!;
@@ -175,7 +174,7 @@ ordersRouter.post("/changeOrderStatus", async (req: AuthedRequest, res) => {
  * buyurtma avtomatik "ready" holatiga o'tadi. Agar bitta item ham "failed"
  * bo'lsa, buyurtma "qc_review"da qoladi.
  */
-ordersRouter.post("/submitItemQc", async (req: AuthedRequest, res) => {
+ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
     if (role !== "qc" && role !== "admin") {

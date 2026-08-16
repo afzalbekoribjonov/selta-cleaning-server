@@ -6,10 +6,9 @@ import { hashPin, isValidFourDigitPin } from "../lib/pin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 
 export const employeeAdminRouter = Router();
-employeeAdminRouter.use(withAuth, requireAdmin);
 
 /** Admin panelda "Yangi xodim" tugmasi — talab #2/#3. */
-employeeAdminRouter.post("/adminCreateEmployee", async (req: AuthedRequest, res) => {
+employeeAdminRouter.post("/adminCreateEmployee", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
     const { fullName, phone, department, pin, salary } = req.body ?? {};
 
@@ -47,7 +46,7 @@ employeeAdminRouter.post("/adminCreateEmployee", async (req: AuthedRequest, res)
   }
 });
 
-employeeAdminRouter.post("/adminSetEmployeePin", async (req, res) => {
+employeeAdminRouter.post("/adminSetEmployeePin", withAuth, requireAdmin, async (req, res) => {
   try {
     const { employeeId, newPin } = req.body ?? {};
     if (!isValidFourDigitPin(newPin ?? "")) {
@@ -74,7 +73,7 @@ employeeAdminRouter.post("/adminSetEmployeePin", async (req, res) => {
   }
 });
 
-employeeAdminRouter.post("/adminTerminateEmployee", async (req: AuthedRequest, res) => {
+employeeAdminRouter.post("/adminTerminateEmployee", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
     const { employeeId } = req.body ?? {};
 
