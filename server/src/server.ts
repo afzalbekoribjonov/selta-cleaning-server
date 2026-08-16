@@ -3,6 +3,7 @@ import cors from "cors";
 import { authRouter } from "./routes/auth";
 import { employeeAdminRouter } from "./routes/employeeAdmin";
 import { ordersRouter } from "./routes/orders";
+import { bootstrapRouter } from "./routes/bootstrap";
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/", authRouter);
 app.use("/", employeeAdminRouter);
 app.use("/", ordersRouter);
+app.use("/", bootstrapRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 8080;
 app.listen(port, () => {
