@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/*
+ * Selta Cleaning brend token'lari — "Selta Cleaning Guidebook E.pdf"
+ * (2023 GUIDELINE) rasmiy ranglaridan olingan. Mobil ilova (mobile/lib/app/theme.dart)
+ * bilan bir xil qiymatlar — ikkala tomon ham shu bitta manbadan farqlanmasligi kerak.
+ */
+@theme {
+  --color-brand-primary: #5a148c;
+  --color-brand-primary-dark: #430f68;
+  --color-brand-secondary: #8c5ac3;
+  --color-brand-accent: #fac800;
+
+  --color-ink: #141414;
+  --color-gray: #aaa5af;
+  --color-gray-dark: #7a7482;
+  --color-border: #e7e2ed;
+  --color-surface: #ffffff;
+  --color-bg: #f6f3fa;
+
+  --color-success: #1e9e5a;
+  --color-success-bg: #e5f7ec;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fff4e0;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fdecec;
+  --color-info: #2f80d6;
+  --color-info-bg: #e8f1fc;
+
+  /* Tariflar — har biri o'z ma'nosiga ega rang (mobile/lib/app/theme.dart bilan bir xil) */
+  --color-tariff-express: #e8590c;
+  --color-tariff-express-bg: #fff0e6;
+  --color-tariff-comfort: #0e9488;
+  --color-tariff-comfort-bg: #e3f8f6;
+  --color-tariff-standart: #7a7482;
+  --color-tariff-standart-bg: #f1eff3;
+  --color-tariff-premium: #a07a00;
+  --color-tariff-premium-bg: #fef6dc;
+
+  --font-heading: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}

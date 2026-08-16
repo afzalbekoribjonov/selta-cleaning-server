@@ -1,0 +1,95 @@
+rules_version = '2';
+
+// Selta Cleaning — Firestore xavfsizlik qoidalari (Faza 1 qoralamasi)
+//
+// Asosiy tamoyil (reja: "Muhim dizayn qarorlari" #3-4): status o'tishlari,
+// xodim yaratish/PIN o'zgartirish/ishdan bo'shatish va boshqa nozik
+// operatsiyalar HECH QACHON to'g'ridan-to'g'ri klient yozuvi orqali emas,
+// balki Cloud Functions callable orqali amalga oshadi — Admin SDK qoidalarni
+// chetlab o'tadi, shuning uchun bu yerda faqat "past xavfli" yozuvlar
+// (izohlar) va o'qish ruxsatlari belgilanadi.
+//
+// Custom claims (loginWithPin / admin auth orqali token'ga yoziladi):
+//   role: 'dispatcher' | 'worker' | 'delivery' | 'qc' | 'admin'
+//   employeeId: string
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && role() == 'admin';
+    }
+
+    function employeeId() {
+      return request.auth.token.employeeId;
+    }
+
+    // --- employees -----------------------------------------------------
+    // Xodimning o'zi asosiy profilini o'qishi, admin esa barchasini
+    // o'qishi mumkin. PIN xesh maydoni bu hujjatda umuman saqlanmaydi —
+    // alohida `private/credentials` subhujjatida, u yerga hech qanday
+    // klient (admin ham) o'qish/yozish huquqiga ega emas (faqat Admin SDK).
+    match /employees/{employeeId} {
+      allow read: if isAdmin() || (isSignedIn() && employeeId() == employeeId);
+      allow write: if false; // faqat Cloud Functions (adminCreateEmployee va h.k.)
+
+      match /private/{doc=**} {
+        allow read, write: if false;
+      }
+
+      match /payrollRuns/{yyyyMM} {
+        allow read: if isAdmin() || (isSignedIn() && employeeId() == employeeId);
+        allow write: if false; // faqat scheduled/callable Cloud Function
+      }
+    }
+
+    // --- orders ----------------------------------------------------------
+    match /orders/{orderId} {
+      allow read: if isSignedIn();
+      allow write: if false; // yaratish/holat o'zgarishi faqat callable orqali
+
+      match /items/{itemId} {
+        allow read: if isSignedIn();
+        allow write: if false; // QC pass/fail, o'lchov kiritish — callable orqali
+      }
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        // Izoh — past xavfli, to'g'ridan-to'g'ri klient yozuviga ruxsat
+        // beriladi, lekin faqat o'z nomidan va o'zgartirib bo'lmaydigan
+        // holda (audit ishonchliligi uchun).
+        allow create: if isSignedIn()
+          && request.resource.data.authorId == employeeId()
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+
+      match /statusHistory/{eventId} {
+        allow read: if isSignedIn();
+        allow write: if false; // faqat Cloud Function trigger yozadi
+      }
+    }
+
+    // --- products / settings / counters ---------------------------------
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /settings/{doc} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /counters/{doc} {
+      allow read, write: if false; // faqat createOrder tranzaksiyasi (Admin SDK)
+    }
+  }
+}
