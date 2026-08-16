@@ -63,12 +63,20 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if isSignedIn();
         // Izoh — past xavfli, to'g'ridan-to'g'ri klient yozuviga ruxsat
-        // beriladi, lekin faqat o'z nomidan va o'zgartirib bo'lmaydigan
-        // holda (audit ishonchliligi uchun).
+        // beriladi, lekin faqat o'z nomidan.
         allow create: if isSignedIn()
           && request.resource.data.authorId == employeeId()
           && request.resource.data.createdAt == request.time;
-        allow update, delete: if false;
+        // Muallif o'z izohini tahrirlashi mumkin — faqat matn va
+        // `editedAt` o'zgaradi, muallif/yaratilgan vaqt o'zgarmasdir
+        // (audit ishonchliligi saqlanadi).
+        allow update: if isSignedIn()
+          && resource.data.authorId == employeeId()
+          && request.resource.data.authorId == resource.data.authorId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'editedAt'])
+          && request.resource.data.editedAt == request.time;
+        allow delete: if false;
       }
 
       match /statusHistory/{eventId} {

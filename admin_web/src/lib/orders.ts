@@ -29,6 +29,9 @@ export interface Order {
   washedBy?: string
   deliveredBy?: string
   collectedAmount?: number
+  hasFailedItem?: boolean
+  qcRating?: number
+  qcRatingNote?: string
   createdAt: Date
   dueDate: Date | null
 }
@@ -53,6 +56,9 @@ function toOrder(doc: QueryDocumentSnapshot): Order {
     washedBy: data.washedBy ?? undefined,
     deliveredBy: data.deliveredBy ?? undefined,
     collectedAmount: data.collectedAmount ?? undefined,
+    hasFailedItem: data.hasFailedItem ?? undefined,
+    qcRating: data.qcRating ?? undefined,
+    qcRatingNote: data.qcRatingNote ?? undefined,
     createdAt: (data.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
     dueDate: (data.dueDate as Timestamp | undefined)?.toDate() ?? null,
   }

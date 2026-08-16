@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore'
-import { X, User, Phone, MapPin, Calendar, Clock } from 'lucide-react'
+import { X, User, Phone, MapPin, Calendar, Clock, Star } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { isOverdue, type Order } from '@/lib/orders'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
@@ -124,6 +124,22 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
               </div>
             )}
           </section>
+
+          {order.qcRating && (
+            <section className="rounded-2xl border border-border bg-surface p-4">
+              <h3 className="mb-3 text-sm font-extrabold text-ink">Sifat nazorati bahosi</h3>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Star
+                    key={i}
+                    size={16}
+                    className={i < order.qcRating! ? 'fill-brand-accent text-brand-accent' : 'text-border'}
+                  />
+                ))}
+              </div>
+              {order.qcRatingNote && <p className="mt-2 text-sm text-ink">{order.qcRatingNote}</p>}
+            </section>
+          )}
 
           <section className="rounded-2xl border border-border bg-surface p-4">
             <h3 className="mb-3 text-sm font-extrabold text-ink">Tarix (kim, qachon o'zgartirgan)</h3>

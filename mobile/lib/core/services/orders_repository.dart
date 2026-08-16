@@ -125,6 +125,21 @@ class OrdersRepository {
     });
   }
 
+  /// Faqat izoh muallifi o'zgartira oladi (firestore.rules bilan
+  /// tasdiqlanadi) — matn va `editedAt` dan boshqa maydon o'zgarmaydi.
+  Future<void> editComment({
+    required String orderId,
+    required String commentId,
+    required String text,
+  }) {
+    return FirebaseFirestore.instance
+        .collection('orders')
+        .doc(orderId)
+        .collection('comments')
+        .doc(commentId)
+        .update({'text': text, 'editedAt': FieldValue.serverTimestamp()});
+  }
+
   Stream<List<Map<String, dynamic>>> watchComments(String orderId) {
     return FirebaseFirestore.instance
         .collection('orders')
@@ -185,6 +200,25 @@ class OrdersRepository {
         'itemId': itemId,
         'qcStatus': qcStatus,
         if (qcNote != null) 'qcNote': qcNote,
+      },
+    );
+  }
+
+  /// Sifat nazorati butun buyurtmaga umumiy baho (1-5) qo'yadi — har bir
+  /// mahsulotning pass/fail holatidan tashqari, upakovka/umumiy sifatni
+  /// baholash uchun.
+  Future<void> submitOrderQcRating({
+    required String orderId,
+    required int rating,
+    String? note,
+  }) async {
+    await _api.post(
+      '/submitOrderQcRating',
+      idToken: await _idToken(),
+      body: {
+        'orderId': orderId,
+        'rating': rating,
+        if (note != null) 'note': note,
       },
     );
   }

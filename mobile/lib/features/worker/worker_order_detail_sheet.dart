@@ -107,16 +107,27 @@ class _WorkerOrderDetailSheetState extends ConsumerState<_WorkerOrderDetailSheet
                       Text(_error!, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 10),
                     ],
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _advancing ? null : () => _advance(itemsAsync.value?.length ?? 0),
-                        style: FilledButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(vertical: 16)),
-                        child: _advancing
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                            : Text(_actionLabel[order.status]!.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800)),
+                    if (_nextStage.containsKey(order.status))
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _advancing ? null : () => _advance(itemsAsync.value?.length ?? 0),
+                          style: FilledButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(vertical: 16)),
+                          child: _advancing
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                              : Text(_actionLabel[order.status]!.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800)),
+                        ),
+                      )
+                    else if (order.status == 'qc_review')
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14)),
+                        child: const Text(
+                          "Qizil belgili mahsulot(lar)ni qayta ishlang — Sifat nazorati ularni qayta tekshiradi.",
+                          style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700, fontSize: 12.5),
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 20),
                     CommentsSection(orderId: order.id),
                   ],
@@ -171,18 +182,36 @@ class _ItemsCard extends StatelessWidget {
   }
 
   Widget _itemRow(OrderItem item) {
+    final failed = item.qcStatus == 'failed';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: Text(item.subId(order.orderNumber), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 11.5)),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                child: Text(item.subId(order.orderNumber), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 11.5)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+              if (item.area > 0) Text('${item.area} m²', style: const TextStyle(color: AppColors.grayDark, fontSize: 12)),
+              if (failed) ...[
+                const SizedBox(width: 6),
+                const Icon(Icons.error_rounded, color: AppColors.danger, size: 16),
+              ],
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-          if (item.area > 0) Text('${item.area} m²', style: const TextStyle(color: AppColors.grayDark, fontSize: 12)),
+          if (failed)
+            Padding(
+              padding: const EdgeInsets.only(left: 8, top: 3),
+              child: Text(
+                item.qcNote?.isNotEmpty == true ? "Sifat nazorati rad etdi: ${item.qcNote}" : "Sifat nazorati rad etdi — qayta ishlov kerak",
+                style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
         ],
       ),
     );

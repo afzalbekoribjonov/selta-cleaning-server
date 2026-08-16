@@ -56,14 +56,24 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
-              _FilterChip(label: 'Barchasi', selected: _tariffFilter == null, onTap: () => setState(() => _tariffFilter = null)),
+              _FilterChip(
+                label: 'Barchasi',
+                selected: _tariffFilter == null && !_overdueOnly,
+                onTap: () => setState(() {
+                  _tariffFilter = null;
+                  _overdueOnly = false;
+                }),
+              ),
               const SizedBox(width: 8),
               for (final t in kTariffConfigKeys) ...[
                 _FilterChip(
                   label: kTariffConfig[t]!.label,
                   selected: _tariffFilter == t,
                   color: kTariffConfig[t]!.color,
-                  onTap: () => setState(() => _tariffFilter = _tariffFilter == t ? null : t),
+                  onTap: () => setState(() {
+                    _tariffFilter = _tariffFilter == t ? null : t;
+                    _overdueOnly = false;
+                  }),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -72,7 +82,10 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
                 selected: _overdueOnly,
                 color: AppColors.danger,
                 icon: Icons.warning_rounded,
-                onTap: () => setState(() => _overdueOnly = !_overdueOnly),
+                onTap: () => setState(() {
+                  _overdueOnly = !_overdueOnly;
+                  if (_overdueOnly) _tariffFilter = null;
+                }),
               ),
             ],
           ),

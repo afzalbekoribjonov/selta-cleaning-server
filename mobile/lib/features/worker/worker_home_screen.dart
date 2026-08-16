@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/constants.dart';
-import '../../core/services/auth_service.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/widgets/confirm_logout.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/team_jobs_section.dart';
 import 'worker_order_detail_sheet.dart';
 
 const _workerStages = ['brought_in', 'washing', 'packing'];
+const _returnedStage = 'returned';
 
 /// Ishchi paneli — talab: brought_in -> washing -> packing -> qc_review
 /// pipeline'ini boshqaradi. Faqat "Olib kelish" xizmat turidagi
@@ -43,10 +43,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () async {
-              await ref.read(authServiceProvider).logout();
-              if (context.mounted) context.go('/select');
-            },
+            onPressed: () => confirmLogout(context, ref),
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Chiqish',
           ),
@@ -70,6 +67,12 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
                   ),
                   const SizedBox(width: 8),
                 ],
+                _StageChip(
+                  label: 'Qaytarilgan',
+                  selected: _stage == _returnedStage,
+                  color: AppColors.danger,
+                  onTap: () => setState(() => _stage = _returnedStage),
+                ),
               ],
             ),
           ),
@@ -78,12 +81,17 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, _) => Center(child: Text('Xatolik: $err')),
               data: (orders) {
-                final filtered = orders.where((o) => o.serviceType == 'pickup' && o.status == _stage).toList()
+                final filtered = orders
+                    .where((o) => o.serviceType == 'pickup' && (_stage == _returnedStage ? (o.status == 'qc_review' && o.hasFailedItem) : o.status == _stage))
+                    .toList()
                   ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
                 if (filtered.isEmpty) {
-                  return const Center(
-                    child: Text('Bu bosqichda buyurtma yo\'q', style: TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600)),
+                  return Center(
+                    child: Text(
+                      _stage == _returnedStage ? 'Qaytarilgan mahsulot yo\'q' : 'Bu bosqichda buyurtma yo\'q',
+                      style: const TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600),
+                    ),
                   );
                 }
 

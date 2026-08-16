@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
-import '../../core/services/auth_service.dart';
 import '../../core/services/employee_repository.dart';
+import '../../core/widgets/confirm_logout.dart';
 import 'active_orders_tab.dart';
 import 'new_order_tab.dart';
 
@@ -37,10 +36,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () async {
-              await ref.read(authServiceProvider).logout();
-              if (context.mounted) context.go('/select');
-            },
+            onPressed: () => confirmLogout(context, ref),
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Chiqish',
           ),

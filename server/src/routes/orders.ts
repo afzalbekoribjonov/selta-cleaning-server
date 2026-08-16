@@ -260,6 +260,8 @@ ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => 
 
     let becameReady = false;
     let orderNumber = 0;
+    let anyFailed = false;
+    let washedBy: string | undefined;
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, itemSnap, itemsSnap] = await Promise.all([
@@ -273,6 +275,7 @@ ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => 
 
       const order = orderSnap.data()!;
       orderNumber = order.orderNumber;
+      washedBy = order.washedBy as string | undefined;
       if (order.status !== "qc_review") {
         throw new ApiError(412, "failed-precondition", "Buyurtma sifat nazorati bosqichida emas");
       }
@@ -284,13 +287,13 @@ ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => 
         qcAt: FieldValue.serverTimestamp(),
       });
 
-      const allPassed = itemsSnap.docs.every((doc) =>
-        doc.id === itemId ? qcStatus === "passed" : doc.data().qcStatus === "passed",
-      );
+      const finalStatuses = itemsSnap.docs.map((doc) => (doc.id === itemId ? qcStatus : doc.data().qcStatus));
+      const allPassed = finalStatuses.every((s) => s === "passed");
+      anyFailed = finalStatuses.some((s) => s === "failed");
 
       if (allPassed) {
         becameReady = true;
-        tx.update(orderRef, { status: "ready", updatedAt: FieldValue.serverTimestamp() });
+        tx.update(orderRef, { status: "ready", hasFailedItem: false, updatedAt: FieldValue.serverTimestamp() });
         tx.set(orderRef.collection("statusHistory").doc(), {
           fromStatus: "qc_review",
           toStatus: "ready",
@@ -298,6 +301,8 @@ ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => 
           changedAt: FieldValue.serverTimestamp(),
           note: "Barcha mahsulotlar sifat nazoratidan o'tdi",
         });
+      } else {
+        tx.update(orderRef, { hasFailedItem: anyFailed, updatedAt: FieldValue.serverTimestamp() });
       }
     });
 
@@ -306,10 +311,52 @@ ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => 
         orderId,
       });
     } else if (qcStatus === "failed") {
-      await notifyDepartment("worker", "Qayta ishlov kerak", `#${orderNumber} — mahsulot sifat nazoratidan o'tmadi`, {
-        orderId,
-      });
+      const title = "Qayta ishlov kerak";
+      const body = `#${orderNumber} — mahsulot sifat nazoratidan o'tmadi${qcNote ? `: ${qcNote}` : ""}`;
+      if (washedBy) {
+        await notifyEmployee(washedBy, title, body, { orderId });
+      } else {
+        await notifyDepartment("worker", title, body, { orderId });
+      }
     }
+
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Sifat nazorati butun buyurtmaga umumiy baho qo'yadi (1-5) — har bir
+ * mahsulotning alohida pass/fail holatidan tashqari, upakovka/umumiy
+ * ishning sifatini baholash uchun. Istalgan payt (qc_review yoki ready
+ * bosqichida) qayta yozilishi mumkin.
+ */
+ordersRouter.post("/submitOrderQcRating", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const role = req.auth!.role;
+    if (role !== "qc" && role !== "admin") {
+      throw new ApiError(403, "permission-denied", "Faqat Sifat nazorati xodimi bu amalni bajara oladi");
+    }
+
+    const { orderId, rating, note } = req.body ?? {};
+    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+
+    const ratingNum = Number(rating);
+    if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+      throw new ApiError(400, "invalid-argument", "Baho 1 dan 5 gacha bo'lishi kerak");
+    }
+
+    const orderRef = db.collection("orders").doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+
+    await orderRef.update({
+      qcRating: ratingNum,
+      qcRatingNote: note?.toString()?.trim() || null,
+      qcRatedBy: employeeId,
+      qcRatedAt: FieldValue.serverTimestamp(),
+    });
 
     res.json({ ok: true });
   } catch (err) {

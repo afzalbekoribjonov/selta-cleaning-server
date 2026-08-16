@@ -54,6 +54,8 @@ class _CommentsSectionState extends ConsumerState<CommentsSection> {
   @override
   Widget build(BuildContext context) {
     final commentsAsync = ref.watch(_commentsProvider(widget.orderId));
+    final claimsAsync = ref.watch(employeeClaimsProvider);
+    final currentEmployeeId = claimsAsync.value?.employeeId;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -98,7 +100,16 @@ class _CommentsSectionState extends ConsumerState<CommentsSection> {
                   child: Text('Hali izoh yo\'q', style: TextStyle(color: AppColors.gray, fontSize: 13)),
                 );
               }
-              return Column(children: [for (final c in comments) _CommentTile(comment: c)]);
+              return Column(
+                children: [
+                  for (final c in comments)
+                    _CommentTile(
+                      orderId: widget.orderId,
+                      comment: c,
+                      canEdit: currentEmployeeId != null && c['authorId'] == currentEmployeeId,
+                    ),
+                ],
+              );
             },
           ),
         ],
@@ -111,17 +122,52 @@ final _commentsProvider = StreamProvider.family<List<Map<String, dynamic>>, Stri
   return ref.watch(ordersRepositoryProvider).watchComments(orderId);
 });
 
-class _CommentTile extends StatelessWidget {
+class _CommentTile extends ConsumerStatefulWidget {
+  final String orderId;
   final Map<String, dynamic> comment;
-  const _CommentTile({required this.comment});
+  final bool canEdit;
+  const _CommentTile({required this.orderId, required this.comment, required this.canEdit});
+
+  @override
+  ConsumerState<_CommentTile> createState() => _CommentTileState();
+}
+
+class _CommentTileState extends ConsumerState<_CommentTile> {
+  bool _editing = false;
+  bool _saving = false;
+  late final TextEditingController _controller = TextEditingController(text: widget.comment['text']?.toString() ?? '');
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(ordersRepositoryProvider).editComment(
+            orderId: widget.orderId,
+            commentId: widget.comment['id'].toString(),
+            text: text,
+          );
+      if (mounted) setState(() => _editing = false);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final createdAt = comment['createdAt'];
+    final createdAt = widget.comment['createdAt'];
     String timeLabel = '';
     if (createdAt != null && createdAt is Timestamp) {
       timeLabel = formatDateTimeUz(createdAt.toDate());
     }
+    final edited = widget.comment['editedAt'] != null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -131,13 +177,60 @@ class _CommentTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(comment['authorName']?.toString() ?? 'Xodim', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
+              Text(widget.comment['authorName']?.toString() ?? 'Xodim', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
               const Spacer(),
               Text(timeLabel, style: const TextStyle(fontSize: 11, color: AppColors.gray)),
+              if (widget.canEdit && !_editing) ...[
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () => setState(() => _editing = true),
+                  child: const Icon(Icons.edit_rounded, size: 15, color: AppColors.gray),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 4),
-          Text(comment['text']?.toString() ?? '', style: const TextStyle(fontSize: 13)),
+          if (_editing)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  minLines: 1,
+                  maxLines: 4,
+                  decoration: const InputDecoration(isDense: true),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _saving ? null : () => setState(() => _editing = false),
+                      child: const Text('Bekor qilish'),
+                    ),
+                    const SizedBox(width: 4),
+                    FilledButton(
+                      onPressed: _saving ? null : _save,
+                      child: _saving
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Saqlash'),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: Text(widget.comment['text']?.toString() ?? '', style: const TextStyle(fontSize: 13))),
+                if (edited) ...[
+                  const SizedBox(width: 6),
+                  const Text('(tahrirlangan)', style: TextStyle(fontSize: 11, color: AppColors.gray, fontStyle: FontStyle.italic)),
+                ],
+              ],
+            ),
         ],
       ),
     );

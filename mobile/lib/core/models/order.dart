@@ -16,6 +16,9 @@ class Order {
   final String createdBy;
   final DateTime createdAt;
   final DateTime? dueDate;
+  final bool hasFailedItem;
+  final int? qcRating;
+  final String? qcRatingNote;
 
   const Order({
     required this.id,
@@ -33,6 +36,9 @@ class Order {
     required this.createdBy,
     required this.createdAt,
     this.dueDate,
+    this.hasFailedItem = false,
+    this.qcRating,
+    this.qcRatingNote,
   });
 
   factory Order.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -53,6 +59,9 @@ class Order {
       createdBy: data['createdBy']?.toString() ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
+      hasFailedItem: data['hasFailedItem'] as bool? ?? false,
+      qcRating: (data['qcRating'] as num?)?.toInt(),
+      qcRatingNote: data['qcRatingNote']?.toString(),
     );
   }
 

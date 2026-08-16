@@ -66,6 +66,8 @@ class _QcOrderDetailSheet extends ConsumerWidget {
                       },
                     ),
                     const SizedBox(height: 20),
+                    _QcRatingCard(order: order),
+                    const SizedBox(height: 20),
                     CommentsSection(orderId: order.id),
                   ],
                 ),
@@ -74,6 +76,115 @@ class _QcOrderDetailSheet extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Sifat nazorati butun buyurtmaga umumiy baho (1-5 yulduz) va izoh
+/// qoldiradi — har bir mahsulotning alohida pass/fail holatidan tashqari,
+/// upakovka/umumiy ishning sifatini baholash uchun.
+class _QcRatingCard extends ConsumerStatefulWidget {
+  final Order order;
+  const _QcRatingCard({required this.order});
+
+  @override
+  ConsumerState<_QcRatingCard> createState() => _QcRatingCardState();
+}
+
+class _QcRatingCardState extends ConsumerState<_QcRatingCard> {
+  late int _rating = widget.order.qcRating ?? 0;
+  late final TextEditingController _noteController = TextEditingController(text: widget.order.qcRatingNote ?? '');
+  bool _saving = false;
+  bool _saved = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_rating == 0) {
+      setState(() => _error = 'Baho tanlang');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref.read(ordersRepositoryProvider).submitOrderQcRating(
+            orderId: widget.order.id,
+            rating: _rating,
+            note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+          );
+      if (mounted) setState(() => _saved = true);
+    } catch (e) {
+      setState(() => _error = describeApiError(e));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Umumiy sifat bahosi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+          const SizedBox(height: 2),
+          const Text('Upakovka va ishning umumiy sifatini baholang', style: TextStyle(fontSize: 12, color: AppColors.grayDark)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (var i = 1; i <= 5; i++)
+                InkWell(
+                  onTap: () => setState(() {
+                    _rating = i;
+                    _saved = false;
+                  }),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      i <= _rating ? Icons.star_rounded : Icons.star_border_rounded,
+                      color: AppColors.accent,
+                      size: 30,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _noteController,
+            minLines: 1,
+            maxLines: 3,
+            decoration: const InputDecoration(hintText: 'Izoh (ixtiyoriy)', isDense: true),
+            onChanged: (_) => setState(() => _saved = false),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (_error != null) Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600))),
+              if (_saved && _error == null)
+                const Expanded(
+                  child: Text("Saqlandi", style: TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+              const Spacer(),
+              FilledButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Saqlash'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
