@@ -51,7 +51,7 @@ class _PinEntryScreenState extends ConsumerState<PinEntryScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = describeFunctionsError(e);
+        _error = describeApiError(e);
         _checking = false;
         _pin = '';
       });

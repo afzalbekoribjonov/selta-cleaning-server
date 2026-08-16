@@ -22,7 +22,7 @@ class EmployeeHomeScreen extends ConsumerWidget {
 
     return claimsAsync.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, _) => Scaffold(body: Center(child: Text(describeFunctionsError(err)))),
+      error: (err, _) => Scaffold(body: Center(child: Text(describeApiError(err)))),
       data: (claims) {
         if (claims == null) {
           // Sessiya kutilmaganda tugagan bo'lsa — bo'lim tanlashga qaytarish.

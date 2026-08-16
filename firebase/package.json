@@ -6,7 +6,6 @@
   },
   "scripts": {
     "emulators": "firebase emulators:start",
-    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
-    "deploy:functions": "firebase deploy --only functions"
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes"
   }
 }

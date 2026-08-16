@@ -1,14 +1,10 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/employee_summary.dart';
+import 'api_client.dart';
 
-/// Cloud Functions `asia-southeast1`da joylashgan (Firestore bilan bir xil
-/// region) — firebase/functions/src/lib/globalOptions.ts'ga qarang.
-final firebaseFunctionsProvider = Provider<FirebaseFunctions>(
-  (ref) => FirebaseFunctions.instanceFor(region: 'asia-southeast1'),
-);
+final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
 final authStateProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();
@@ -34,14 +30,14 @@ final employeeClaimsProvider = FutureProvider<EmployeeClaims?>((ref) async {
 });
 
 class AuthService {
-  final FirebaseFunctions _functions;
+  final ApiClient _api;
 
-  AuthService(this._functions);
+  AuthService(this._api);
 
   Future<List<EmployeeSummary>> listEmployeesByDepartment(String department) async {
-    final callable = _functions.httpsCallable('listEmployeesByDepartment');
-    final result = await callable.call<List<Object?>>({'department': department});
-    return result.data
+    final result = await _api.post('/listEmployeesByDepartment', body: {'department': department});
+    final employees = result['employees'] as List<Object?>;
+    return employees
         .map((e) => EmployeeSummary.fromMap(Map<Object?, Object?>.from(e as Map)))
         .toList();
   }
@@ -51,12 +47,8 @@ class AuthService {
   /// sessiyani lokal persist qiladi (qaror #4: qo'shimcha keshlash shart
   /// emas).
   Future<void> loginWithPin({required String employeeId, required String pin}) async {
-    final callable = _functions.httpsCallable('loginWithPin');
-    final result = await callable.call<Map<String, dynamic>>({
-      'employeeId': employeeId,
-      'pin': pin,
-    });
-    final token = result.data['token'] as String;
+    final result = await _api.post('/loginWithPin', body: {'employeeId': employeeId, 'pin': pin});
+    final token = result['token'] as String;
     await FirebaseAuth.instance.signInWithCustomToken(token);
   }
 
@@ -64,28 +56,16 @@ class AuthService {
 }
 
 final authServiceProvider = Provider<AuthService>(
-  (ref) => AuthService(ref.watch(firebaseFunctionsProvider)),
+  (ref) => AuthService(ref.watch(apiClientProvider)),
 );
 
-/// firebase_functions xatolarini foydalanuvchiga tushunarli o'zbekcha
-/// xabarga aylantiradi — loginWithPin/listEmployeesByDepartment kabi
-/// callable'lar hali serverga chiqmagan bo'lsa ham (Blaze rejasi
-/// yoqilmagan), bu yerda tushunarli xabar ko'rsatiladi.
-String describeFunctionsError(Object error) {
-  if (error is FirebaseFunctionsException) {
-    switch (error.code) {
-      case 'permission-denied':
-        return error.message ?? "PIN noto'g'ri";
-      case 'resource-exhausted':
-        return error.message ?? "Juda ko'p urinish — birozdan so'ng qayta urining";
-      case 'not-found':
-        return error.message ?? 'Topilmadi';
-      case 'unavailable':
-      case 'internal':
-        return "Server hali tayyor emas — birozdan so'ng qayta urining";
-      default:
-        return error.message ?? "Noma'lum xatolik yuz berdi";
-    }
+/// Server xatolarini foydalanuvchiga tushunarli o'zbekcha xabarga
+/// aylantiradi — server hali deploy qilinmagan/uxlab yotgan bo'lsa ham
+/// (Render bepul reja) tushunarli xabar ko'rsatiladi.
+String describeApiError(Object error) {
+  if (error is ApiException) {
+    if (error.status == 0) return error.message;
+    return error.message;
   }
   return "Ulanishda xatolik yuz berdi";
 }

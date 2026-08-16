@@ -1,0 +1,17 @@
+# Render Blueprint — Render dashboard'da "New > Blueprint" orqali shu repo
+# ulanganda avtomatik o'qiladi. FIREBASE_SERVICE_ACCOUNT sir sifatida
+# (sync: false) belgilangan — Render buni sizdan qo'lda kiritishni so'raydi,
+# gitga hech qachon yozilmaydi.
+services:
+  - type: web
+    name: selta-cleaning-server
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false

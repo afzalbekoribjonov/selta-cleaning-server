@@ -33,7 +33,7 @@ class EmployeeListScreen extends ConsumerWidget {
       body: employeesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => _ErrorState(
-          message: describeFunctionsError(err),
+          message: describeApiError(err),
           onRetry: () => ref.invalidate(_employeesByDepartmentProvider(departmentName)),
         ),
         data: (employees) {
