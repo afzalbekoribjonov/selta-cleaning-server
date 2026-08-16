@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/constants.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/fcm_service.dart';
 import '../delivery/delivery_home_screen.dart';
 import '../dispatcher/dispatcher_home_screen.dart';
 import '../qc/qc_home_screen.dart';
@@ -30,6 +31,11 @@ class EmployeeHomeScreen extends ConsumerWidget {
           });
           return const Scaffold(body: SizedBox.shrink());
         }
+
+        // Xodim uchun push-bildirishnoma ro'yxatdan o'tishi — bir marta,
+        // xatolik bo'lsa ham panelni bloklamaydi (natijasi e'tiborga
+        // olinmaydi, shunchaki fon vazifasi sifatida ishga tushadi).
+        ref.watch(fcmRegistrationProvider(claims.employeeId));
 
         final department = Department.values.firstWhere(
           (d) => d.name == claims.department,

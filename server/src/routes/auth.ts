@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, auth } from "../lib/admin";
 import { verifyPin, isValidFourDigitPin } from "../lib/pin";
-import { ApiError, sendError } from "../lib/authz";
+import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz";
 import type { Department } from "../lib/pipeline";
 
 const MAX_ATTEMPTS = 5;
@@ -86,6 +86,28 @@ authRouter.post("/loginWithPin", async (req, res) => {
     });
 
     res.json({ token });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Xodim o'z qurilmasining FCM tokenini saqlaydi — server shu token orqali
+ * push-bildirishnoma yuboradi (lib/notifications.ts). Har login'da va
+ * token yangilanganda chaqiriladi.
+ */
+authRouter.post("/updateFcmToken", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const { fcmToken } = req.body ?? {};
+    if (!fcmToken?.trim()) {
+      throw new ApiError(400, "invalid-argument", "fcmToken talab qilinadi");
+    }
+    const employeeId = req.auth!.employeeId;
+    if (!employeeId) {
+      throw new ApiError(403, "permission-denied", "Xodim hisobi topilmadi");
+    }
+    await db.collection("employees").doc(employeeId).update({ fcmToken: fcmToken.trim() });
+    res.json({ ok: true });
   } catch (err) {
     sendError(res, err);
   }
