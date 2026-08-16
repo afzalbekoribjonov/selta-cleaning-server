@@ -6,6 +6,7 @@ import { SALARY_METHODS } from '@/lib/salary-methods'
 import { DEPARTMENTS } from '@/lib/departments'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
+import { Spinner } from '@/components/ui/Spinner'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -144,7 +145,7 @@ function MostActiveSection() {
         <h2 className="font-heading font-bold text-ink">Eng faol xodimlar (so'nggi buyurtmalar bo'yicha)</h2>
       </div>
       {loading ? (
-        <p className="text-sm text-gray-dark">Yuklanmoqda...</p>
+        <Spinner className="py-4" />
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <ActivityColumn title="Dispetcher — buyurtma yaratgan" rows={stats.dispatcher} employees={employees} />

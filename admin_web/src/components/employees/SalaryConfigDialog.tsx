@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { SALARY_METHODS } from '@/lib/salary-methods'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 interface Props {
   employeeId: string
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function SalaryConfigDialog({ employeeId, employeeName, currentMethod, currentParams, onClose }: Props) {
+  useEscapeClose(onClose)
   const queryClient = useQueryClient()
   const [method, setMethod] = useState(currentMethod ?? 'fixed')
   const [params, setParams] = useState<Record<string, string>>(() => {

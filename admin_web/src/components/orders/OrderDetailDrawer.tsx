@@ -7,6 +7,7 @@ import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
 import { STATUS_CONFIG } from '@/lib/status-config'
 import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 interface OrderItem {
   id: string
@@ -44,6 +45,7 @@ function useSubcollection<T>(orderId: string, name: string, orderField: string, 
 }
 
 export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: () => void }) {
+  useEscapeClose(onClose)
   const employees = useEmployeesMap()
   const overdue = isOverdue(order)
 

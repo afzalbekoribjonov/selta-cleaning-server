@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ClipboardList, Clock, TrendingUp, AlertTriangle } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
+import { Spinner } from '@/components/ui/Spinner'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
 import { isOverdue, type Order } from '@/lib/orders'
 import { formatDateUz } from '@/lib/date-utils'
@@ -58,7 +59,7 @@ export default function DashboardPage() {
           <span className="text-xs text-gray-dark">{stats.activeCount} ta</span>
         </div>
         {loading ? (
-          <p className="p-6 text-sm text-gray-dark">Yuklanmoqda...</p>
+          <Spinner className="p-8" />
         ) : activeSorted.length === 0 ? (
           <p className="p-10 text-center text-sm text-gray-dark">Hozircha faol buyurtma yo'q</p>
         ) : (

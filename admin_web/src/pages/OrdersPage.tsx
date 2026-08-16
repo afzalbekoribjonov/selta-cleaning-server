@@ -4,6 +4,7 @@ import { useRecentOrders } from '@/hooks/useRecentOrders'
 import { fetchOrdersPage, isOverdue, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
 import { STATUS_CONFIG, TARIFF_CONFIG } from '@/lib/status-config'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
+import { Spinner } from '@/components/ui/Spinner'
 import { formatDateUz } from '@/lib/date-utils'
 import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
 
@@ -132,7 +133,7 @@ export default function OrdersPage() {
 
       <section className="rounded-2xl border border-border bg-surface shadow-sm">
         {(view === 'active' ? loading : allOrders.length === 0 && loadingMore) ? (
-          <p className="p-6 text-sm text-gray-dark">Yuklanmoqda...</p>
+          <Spinner className="p-8" />
         ) : filtered.length === 0 ? (
           <p className="p-10 text-center text-sm text-gray-dark">Buyurtmalar topilmadi</p>
         ) : (

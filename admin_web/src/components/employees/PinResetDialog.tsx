@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 export function PinResetDialog({
   employeeId,
@@ -12,6 +13,7 @@ export function PinResetDialog({
   employeeName: string
   onClose: () => void
 }) {
+  useEscapeClose(onClose)
   const [newPin, setNewPin] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)

@@ -6,6 +6,8 @@ import { DEPARTMENTS } from '@/lib/departments'
 import { SALARY_METHODS } from '@/lib/salary-methods'
 import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
 import { PinResetDialog } from '@/components/employees/PinResetDialog'
+import { Spinner } from '@/components/ui/Spinner'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 interface Employee {
   id: string
@@ -44,7 +46,7 @@ export default function EmployeesPage() {
       </div>
 
       <section className="rounded-2xl border border-border bg-surface shadow-sm">
-        {query.isLoading && <p className="p-6 text-sm text-gray-dark">Yuklanmoqda...</p>}
+        {query.isLoading && <Spinner className="p-8" />}
         {query.isError && (
           <p className="p-6 text-sm font-semibold text-danger">
             {query.error instanceof ApiError ? query.error.message : 'Xatolik yuz berdi'}
@@ -157,6 +159,7 @@ function IconAction({
 }
 
 function TerminateDialog({ employee, onClose }: { employee: Employee; onClose: () => void }) {
+  useEscapeClose(onClose)
   const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
 
@@ -196,6 +199,7 @@ function TerminateDialog({ employee, onClose }: { employee: Employee; onClose: (
 }
 
 function NewEmployeeDialog({ onClose }: { onClose: () => void }) {
+  useEscapeClose(onClose)
   const queryClient = useQueryClient()
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')

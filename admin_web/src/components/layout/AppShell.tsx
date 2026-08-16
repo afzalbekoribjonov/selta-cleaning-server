@@ -5,7 +5,6 @@ import {
   ClipboardList,
   Users,
   Wallet,
-  Package,
   Settings,
   Menu,
   X,
@@ -19,7 +18,6 @@ const NAV_ITEMS = [
   { to: '/orders', label: 'Buyurtmalar', icon: ClipboardList },
   { to: '/employees', label: 'Xodimlar', icon: Users },
   { to: '/payroll', label: 'Maosh va statistika', icon: Wallet },
-  { to: '/products', label: 'Mahsulotlar', icon: Package },
   { to: '/settings', label: 'Sozlamalar', icon: Settings },
 ]
 
