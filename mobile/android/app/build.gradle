@@ -25,7 +25,9 @@ android {
         applicationId = "uz.selta.selta_cleaning"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // cloud_firestore requires minSdk 23 (Android 6.0+) — negligible device
+        // coverage loss for a 2026 business app.
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

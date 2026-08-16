@@ -4,7 +4,7 @@
     {
       "name": "selta_mobile_web",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "cd mobile && flutter run -d web-server --web-port 5678 --web-hostname 127.0.0.1"],
+      "runtimeArgs": ["/c", "cd mobile && flutter run -d web-server --web-port 5678 --web-hostname 127.0.0.1 --dart-define=SERVER_BASE_URL=https://selta-cleaning-server.onrender.com"],
       "port": 5678,
       "url": "http://127.0.0.1:5678"
     },
