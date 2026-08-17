@@ -50,6 +50,15 @@ service cloud.firestore {
       }
     }
 
+    // Yuqoridagi ichma-ich qoida faqat aniq xodim yo'li bo'yicha
+    // to'g'ridan-to'g'ri so'rovlarga tegishli. "Oylik hisobot" sahifasi
+    // BARCHA xodimlarning payrollRuns'ini bitta collection-group so'rovda
+    // o'qiydi — bunday so'rovlar uchun Firestore alohida `{path=**}`
+    // qoidasini talab qiladi (oddiy ichma-ich qoida uni qamrab olmaydi).
+    match /{path=**}/payrollRuns/{yyyyMM} {
+      allow read: if isAdmin();
+    }
+
     // --- orders ----------------------------------------------------------
     match /orders/{orderId} {
       allow read: if isSignedIn();
