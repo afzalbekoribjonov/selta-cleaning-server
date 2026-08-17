@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, User, Wallet, KeyRound, UserX, ChevronRight } from 'lucide-react'
+import { Plus, X, User, Phone, Wallet, KeyRound, UserX, ChevronRight } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { DEPARTMENTS } from '@/lib/departments'
 import { SALARY_METHODS } from '@/lib/salary-methods'
-import { type Employee } from '@/lib/employees'
+import { type Employee, formatTenure } from '@/lib/employees'
 import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
 import { PinResetDialog } from '@/components/employees/PinResetDialog'
 import { TerminateDialog } from '@/components/employees/TerminateDialog'
@@ -24,12 +24,34 @@ export default function EmployeesPage() {
     queryFn: () => apiPost<{ employees: Employee[] }>('/adminListEmployees'),
   })
 
+  const byDepartment = useMemo(() => {
+    const groups: Record<string, Employee[]> = {}
+    for (const key of Object.keys(DEPARTMENTS)) groups[key] = []
+    for (const e of query.data?.employees ?? []) {
+      if (!groups[e.department]) groups[e.department] = []
+      groups[e.department].push(e)
+    }
+    return groups
+  }, [query.data])
+
+  // DEPARTMENTS'da yo'q, lekin ma'lumotda uchragan bo'lim kalitlari ham
+  // bo'lishi mumkin (masalan eski/noma'lum qiymat) — hech bir xodim jimgina
+  // ro'yxatdan tushib qolmasligi uchun ularni ham ko'rsatamiz.
+  const sections = useMemo(() => {
+    const known = Object.entries(DEPARTMENTS).map(([key, dept]) => ({ key, dept }))
+    const extraKeys = Object.keys(byDepartment).filter((key) => !DEPARTMENTS[key])
+    const extra = extraKeys.map((key) => ({ key, dept: { label: key, icon: User } }))
+    return [...known, ...extra]
+  }, [byDepartment])
+
+  const total = query.data?.employees.length ?? 0
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-ink">Xodimlar</h1>
-          <p className="mt-1 text-sm text-gray-dark">Bo'lim bo'yicha xodimlar ro'yxati</p>
+          <p className="mt-1 text-sm text-gray-dark">Bo'lim bo'yicha ajratilgan xodimlar ro'yxati</p>
         </div>
         <button
           onClick={() => setFormOpen(true)}
@@ -40,88 +62,68 @@ export default function EmployeesPage() {
         </button>
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface shadow-sm">
-        {query.isLoading && <Spinner className="p-8" />}
-        {query.isError && (
-          <p className="p-6 text-sm font-semibold text-danger">
-            {query.error instanceof ApiError ? query.error.message : 'Xatolik yuz berdi'}
-          </p>
-        )}
-        {query.data && query.data.employees.length === 0 && (
-          <div className="flex flex-col items-center gap-2 p-12 text-center">
-            <User className="text-gray" size={40} />
-            <p className="font-semibold text-ink">Hali xodim yo'q</p>
-            <p className="text-sm text-gray-dark">"Yangi xodim" tugmasi orqali qo'shing</p>
+      {query.isLoading && <Spinner className="p-8" />}
+      {query.isError && (
+        <p className="rounded-2xl border border-border bg-surface p-6 text-sm font-semibold text-danger">
+          {query.error instanceof ApiError ? query.error.message : 'Xatolik yuz berdi'}
+        </p>
+      )}
+
+      {query.data && total === 0 && (
+        <div className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-surface p-12 text-center shadow-sm">
+          <User className="text-gray" size={40} />
+          <p className="font-semibold text-ink">Hali xodim yo'q</p>
+          <p className="text-sm text-gray-dark">"Yangi xodim" tugmasi orqali qo'shing</p>
+        </div>
+      )}
+
+      {query.data && total > 0 && (
+        <>
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {sections.map(({ key, dept }) => (
+              <div key={key} className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                  <dept.icon size={20} />
+                </div>
+                <div>
+                  <div className="font-heading text-xl font-extrabold text-ink leading-tight">{byDepartment[key]?.length ?? 0}</div>
+                  <div className="text-xs font-semibold text-gray-dark">{dept.label}</div>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
-        {query.data && query.data.employees.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-gray-dark">
-                  <th className="px-5 py-3 font-semibold">Ism familiya</th>
-                  <th className="px-5 py-3 font-semibold">Telefon</th>
-                  <th className="px-5 py-3 font-semibold">Bo'lim</th>
-                  <th className="px-5 py-3 font-semibold">Maosh usuli</th>
-                  <th className="px-5 py-3 font-semibold">Holat</th>
-                  <th className="px-5 py-3 font-semibold text-right">Amallar</th>
-                  <th className="w-8"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {query.data.employees.map((e) => {
-                  const dept = DEPARTMENTS[e.department]
-                  const terminated = e.status !== 'active'
-                  return (
-                    <tr
-                      key={e.id}
-                      onClick={() => navigate(`/employees/${e.id}`)}
-                      className={`cursor-pointer border-b border-border last:border-0 hover:bg-bg ${terminated ? 'opacity-50' : ''}`}
-                    >
-                      <td className="px-5 py-3 font-semibold text-ink">{e.fullName}</td>
-                      <td className="px-5 py-3 text-ink">{e.phone}</td>
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-primary/10 px-2.5 py-1 text-xs font-bold text-brand-primary">
-                          {dept && <dept.icon size={13} />}
-                          {dept?.label ?? e.department}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-ink">
-                        {e.salary?.method ? SALARY_METHODS[e.salary.method]?.label ?? e.salary.method : (
-                          <span className="text-gray-dark">Belgilanmagan</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className={terminated ? 'text-xs font-bold text-danger' : 'text-xs font-bold text-success'}>
-                          {terminated ? "Ishdan bo'shatilgan" : 'Faol'}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3" onClick={(ev) => ev.stopPropagation()}>
-                        {!terminated && (
-                          <div className="flex justify-end gap-1">
-                            <IconAction title="Maosh sozlash" onClick={() => setSalaryTarget(e)}>
-                              <Wallet size={16} />
-                            </IconAction>
-                            <IconAction title="PIN o'zgartirish" onClick={() => setPinTarget(e)}>
-                              <KeyRound size={16} />
-                            </IconAction>
-                            <IconAction title="Ishdan bo'shatish" danger onClick={() => setTerminateTarget(e)}>
-                              <UserX size={16} />
-                            </IconAction>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 text-gray">
-                        <ChevronRight size={16} />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+
+          <div className="space-y-8">
+            {sections.map(({ key, dept }) => {
+              const employees = byDepartment[key] ?? []
+              if (employees.length === 0) return null
+              return (
+                <div key={key}>
+                  <div className="mb-3 flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                      <dept.icon size={17} />
+                    </div>
+                    <h2 className="font-heading text-lg font-bold text-ink">{dept.label}</h2>
+                    <span className="rounded-full bg-bg px-2.5 py-1 text-xs font-bold text-gray-dark">{employees.length} ta</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {employees.map((e) => (
+                      <EmployeeCard
+                        key={e.id}
+                        employee={e}
+                        onOpen={() => navigate(`/employees/${e.id}`)}
+                        onSalary={() => setSalaryTarget(e)}
+                        onPin={() => setPinTarget(e)}
+                        onTerminate={() => setTerminateTarget(e)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
-        )}
-      </section>
+        </>
+      )}
 
       {formOpen && <NewEmployeeDialog onClose={() => setFormOpen(false)} />}
       {salaryTarget && (
@@ -135,6 +137,73 @@ export default function EmployeesPage() {
       )}
       {pinTarget && <PinResetDialog employeeId={pinTarget.id} employeeName={pinTarget.fullName} onClose={() => setPinTarget(null)} />}
       {terminateTarget && <TerminateDialog employee={terminateTarget} onClose={() => setTerminateTarget(null)} />}
+    </div>
+  )
+}
+
+function EmployeeCard({
+  employee: e,
+  onOpen,
+  onSalary,
+  onPin,
+  onTerminate,
+}: {
+  employee: Employee
+  onOpen: () => void
+  onSalary: () => void
+  onPin: () => void
+  onTerminate: () => void
+}) {
+  const dept = DEPARTMENTS[e.department]
+  const terminated = e.status !== 'active'
+  const hiredAt = e.createdAt ? new Date(e.createdAt) : null
+  const referenceEnd = e.terminatedAt ? new Date(e.terminatedAt) : new Date()
+
+  return (
+    <div
+      onClick={onOpen}
+      className={`group cursor-pointer rounded-2xl border border-border bg-surface p-4 shadow-sm transition-shadow hover:shadow-md ${terminated ? 'opacity-60' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+            {dept && <dept.icon size={20} />}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate font-heading font-bold text-ink">{e.fullName}</div>
+            <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-dark">
+              <Phone size={11} />
+              {e.phone}
+            </div>
+          </div>
+        </div>
+        <ChevronRight size={16} className="mt-1 shrink-0 text-gray opacity-0 transition-opacity group-hover:opacity-100" />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <span className={`text-xs font-bold ${terminated ? 'text-danger' : 'text-success'}`}>{terminated ? "Bo'shatilgan" : 'Faol'}</span>
+        <span className="text-xs text-gray-dark">·</span>
+        <span className="text-xs text-gray-dark">
+          {e.salary?.method ? SALARY_METHODS[e.salary.method]?.label ?? e.salary.method : 'Maosh belgilanmagan'}
+        </span>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+        <span className="text-xs font-semibold text-gray-dark">{hiredAt ? formatTenure(hiredAt, referenceEnd) : '—'}</span>
+        {!terminated && (
+          <div className="flex gap-0.5" onClick={(ev) => ev.stopPropagation()}>
+            <IconAction title="Maosh sozlash" onClick={onSalary}>
+              <Wallet size={15} />
+            </IconAction>
+            <IconAction title="PIN o'zgartirish" onClick={onPin}>
+              <KeyRound size={15} />
+            </IconAction>
+            <IconAction title="Ishdan bo'shatish" danger onClick={onTerminate}>
+              <UserX size={15} />
+            </IconAction>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -154,7 +223,7 @@ function IconAction({
     <button
       title={title}
       onClick={onClick}
-      className={`rounded-lg p-2 transition-colors ${danger ? 'text-gray-dark hover:bg-danger-bg hover:text-danger' : 'text-gray-dark hover:bg-brand-primary/10 hover:text-brand-primary'}`}
+      className={`rounded-lg p-1.5 transition-colors ${danger ? 'text-gray-dark hover:bg-danger-bg hover:text-danger' : 'text-gray-dark hover:bg-brand-primary/10 hover:text-brand-primary'}`}
     >
       {children}
     </button>

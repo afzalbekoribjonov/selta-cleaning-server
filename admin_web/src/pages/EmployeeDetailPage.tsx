@@ -2,15 +2,30 @@ import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Area, AreaChart, CartesianGrid, RadialBar, RadialBarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ArrowLeft, Phone, Wallet, KeyRound, UserX, TrendingUp, CalendarCheck, History, Sparkles, CalendarDays } from 'lucide-react'
+import {
+  ArrowLeft,
+  Phone,
+  Wallet,
+  KeyRound,
+  UserX,
+  TrendingUp,
+  CalendarCheck,
+  History,
+  Sparkles,
+  CalendarDays,
+  ClipboardList,
+  ReceiptText,
+} from 'lucide-react'
 import { apiPost } from '@/lib/api'
 import { DEPARTMENTS } from '@/lib/departments'
 import { SALARY_METHODS } from '@/lib/salary-methods'
 import { type Employee, formatTenure } from '@/lib/employees'
-import { formatDateUz, UZ_MONTHS_SHORT } from '@/lib/date-utils'
+import { formatDateUz, formatDateTimeUz, UZ_MONTHS_SHORT } from '@/lib/date-utils'
 import { useEmployeeOrders } from '@/hooks/useEmployeeOrders'
 import { usePayrollHistory } from '@/hooks/usePayrollHistory'
 import { Spinner } from '@/components/ui/Spinner'
+import { StatCard } from '@/components/ui/StatCard'
+import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
 import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
 import { PinResetDialog } from '@/components/employees/PinResetDialog'
 import { TerminateDialog } from '@/components/employees/TerminateDialog'
@@ -73,6 +88,8 @@ export default function EmployeeDetailPage() {
     return { activeDays: activeDaySet.size, totalDays: daysSoFar, inactiveDays: Math.max(daysSoFar - activeDaySet.size, 0) }
   }, [orders, hiredAt])
 
+  const lastOrder = orders && orders.length > 0 ? orders[0] : null
+
   if (employeesQuery.isLoading) {
     return <Spinner className="p-16" />
   }
@@ -91,6 +108,7 @@ export default function EmployeeDetailPage() {
   const terminated = employee.status !== 'active'
   const radialData = [{ name: 'active', value: activityThisMonth.activeDays, fill: 'var(--color-brand-primary)' }]
   const radialMax = Math.max(activityThisMonth.totalDays, 1)
+  const tenureLabel = hiredAt ? formatTenure(hiredAt, referenceEnd) : '—'
 
   return (
     <div className="space-y-6">
@@ -99,66 +117,121 @@ export default function EmployeeDetailPage() {
         Xodimlar ro'yxati
       </button>
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Profil bannerini — Selta Cleaning brend gradienti bilan */}
+      <section
+        className="relative overflow-hidden rounded-3xl p-6 shadow-lg sm:p-8"
+        style={{ background: 'linear-gradient(135deg, var(--color-brand-primary), var(--color-brand-primary-dark))' }}
+      >
+        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/5" />
+        <div className="absolute -bottom-16 right-24 h-56 w-56 rounded-full bg-white/5" />
+
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-primary/10 text-brand-primary">
-              {dept && <dept.icon size={26} />}
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15 p-2.5 ring-1 ring-white/25 backdrop-blur-sm">
+              <img src="/brand/icon_white.png" alt="Selta Cleaning" className="h-full w-full object-contain" />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-ink">{employee.fullName}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-primary/10 px-2.5 py-1 text-xs font-bold text-brand-primary">
-                  {dept?.label ?? employee.department}
-                </span>
-                <span className={`text-xs font-bold ${terminated ? 'text-danger' : 'text-success'}`}>
-                  {terminated ? "Ishdan bo'shatilgan" : 'Faol'}
-                </span>
-                <span className="flex items-center gap-1 text-xs text-gray-dark">
-                  <Phone size={12} />
-                  {employee.phone}
-                </span>
-                {hiredAt && (
-                  <span className="flex items-center gap-1 text-xs text-gray-dark">
-                    <CalendarDays size={12} />
-                    {formatDateUz(hiredAt)}dan beri — {formatTenure(hiredAt, referenceEnd)}
-                  </span>
-                )}
+              <h1 className="font-heading text-2xl font-extrabold text-white">{employee.fullName}</h1>
+              <div className="mt-1 flex items-center gap-1.5 text-sm font-bold text-white/85">
+                {dept && <dept.icon size={15} />}
+                {dept?.label ?? employee.department}
               </div>
             </div>
           </div>
+
           {!terminated && (
             <div className="flex gap-1.5">
-              <ActionButton title="Maosh sozlash" onClick={() => setSalaryOpen(true)}>
+              <HeaderActionButton title="Maosh sozlash" onClick={() => setSalaryOpen(true)}>
                 <Wallet size={16} />
-              </ActionButton>
-              <ActionButton title="PIN o'zgartirish" onClick={() => setPinOpen(true)}>
+              </HeaderActionButton>
+              <HeaderActionButton title="PIN o'zgartirish" onClick={() => setPinOpen(true)}>
                 <KeyRound size={16} />
-              </ActionButton>
-              <ActionButton title="Ishdan bo'shatish" danger onClick={() => setTerminateOpen(true)}>
+              </HeaderActionButton>
+              <HeaderActionButton title="Ishdan bo'shatish" danger onClick={() => setTerminateOpen(true)}>
                 <UserX size={16} />
-              </ActionButton>
+              </HeaderActionButton>
             </div>
           )}
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-border pt-4 text-sm text-ink">
-          <span>
-            Maosh usuli:{' '}
-            <span className="font-bold">
-              {employee.salary?.method ? SALARY_METHODS[employee.salary.method]?.label ?? employee.salary.method : 'Belgilanmagan'}
-            </span>
+
+        <div className="relative mt-6 flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
+              terminated ? 'bg-red-500/20 text-red-100' : 'bg-white/15 text-white'
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${terminated ? 'bg-red-200' : 'bg-brand-accent'}`} />
+            {terminated ? "Ishdan bo'shatilgan" : 'Faol xodim'}
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90">
+            <Phone size={12} />
+            {employee.phone}
           </span>
           {hiredAt && (
-            <span>
-              Ishga qabul qilingan: <span className="font-bold">{formatDateUz(hiredAt)}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90">
+              <CalendarDays size={12} />
+              {formatDateUz(hiredAt)}dan beri
             </span>
           )}
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-3 py-1.5 text-xs font-extrabold text-ink">
+            <Sparkles size={12} />
+            Ish staji: {tenureLabel}
+          </span>
           {employee.terminatedAt && (
-            <span>
-              Ishdan bo'shatilgan: <span className="font-bold text-danger">{formatDateUz(new Date(employee.terminatedAt))}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-100">
+              Bo'shatilgan: {formatDateUz(new Date(employee.terminatedAt))}
             </span>
           )}
         </div>
+      </section>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard icon={CalendarDays} label="Ish staji" value={tenureLabel} tone="primary" />
+        <StatCard icon={ClipboardList} label="Jami buyurtmalar" numericValue={orders?.length ?? 0} tone="primary" />
+        <StatCard
+          icon={CalendarCheck}
+          label="Shu oy faol kunlar"
+          numericValue={activityThisMonth.activeDays}
+          format={(n) => `${n} kun`}
+          tone="success"
+        />
+        <StatCard
+          icon={Wallet}
+          label="Maosh usuli"
+          value={employee.salary?.method ? SALARY_METHODS[employee.salary.method]?.label ?? employee.salary.method : 'Belgilanmagan'}
+          tone="warning"
+        />
+      </div>
+
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <div className="mb-1 flex items-center gap-2">
+          <ReceiptText size={18} className="text-brand-primary" />
+          <h2 className="font-heading font-bold text-ink">So'nggi buyurtma</h2>
+        </div>
+        <p className="mb-4 text-xs text-gray-dark">Xodim ishtirok etgan eng oxirgi buyurtma</p>
+
+        {ordersLoading ? (
+          <Spinner className="py-8" />
+        ) : !lastOrder ? (
+          <p className="py-6 text-center text-sm text-gray-dark">Hali buyurtma bilan bog'liq faoliyat yo'q</p>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-bg p-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-heading text-lg font-extrabold text-ink">#{lastOrder.orderNumber}</span>
+                <span className="font-semibold text-ink">{lastOrder.customerName || "Noma'lum mijoz"}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <StatusBadge status={lastOrder.status} />
+                <TariffBadge tariff={lastOrder.tariff} />
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="font-heading text-lg font-extrabold text-brand-primary">{formatMoney(lastOrder.totalPrice)}</div>
+              <div className="text-xs text-gray-dark">{formatDateTimeUz(lastOrder.createdAt)}</div>
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -306,7 +379,7 @@ export default function EmployeeDetailPage() {
   )
 }
 
-function ActionButton({
+function HeaderActionButton({
   children,
   title,
   danger,
@@ -321,7 +394,7 @@ function ActionButton({
     <button
       title={title}
       onClick={onClick}
-      className={`rounded-xl p-2.5 transition-colors ${danger ? 'text-gray-dark hover:bg-danger-bg hover:text-danger' : 'text-gray-dark hover:bg-brand-primary/10 hover:text-brand-primary'}`}
+      className={`rounded-xl bg-white/15 p-2.5 text-white backdrop-blur-sm transition-colors hover:bg-white/25 ${danger ? 'hover:bg-red-500/40' : ''}`}
     >
       {children}
     </button>

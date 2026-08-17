@@ -5,6 +5,10 @@ import { DEPARTMENT_ATTRIBUTION_FIELD } from '@/lib/employees'
 
 export interface AttributedOrder {
   id: string
+  orderNumber: number
+  customerName: string
+  tariff: string
+  status: string
   createdAt: Date
   totalPrice: number
 }
@@ -33,6 +37,10 @@ export function useEmployeeOrders(employeeId: string, department: string) {
           const data = d.data()
           return {
             id: d.id,
+            orderNumber: data.orderNumber ?? 0,
+            customerName: data.customerName ?? '',
+            tariff: data.tariff ?? 'standart',
+            status: data.status ?? 'new',
             createdAt: (data.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
             totalPrice: data.totalPrice ?? 0,
           }
