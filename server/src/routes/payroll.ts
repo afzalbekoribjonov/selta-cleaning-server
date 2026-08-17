@@ -165,6 +165,10 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
       }
 
       await payrollRunRef.set({
+        yearMonth, // qidiruv uchun maydon sifatida ham — "Oylik hisobot" bir
+        // yilning barcha xodimlar maoshini bitta collection-group so'rovda
+        // olishi uchun kerak (hujjat ID'sining o'zi bo'yicha collection-group
+        // so'rov qilib bo'lmaydi).
         method: salary.method,
         amount,
         breakdown,

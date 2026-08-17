@@ -1,6 +1,7 @@
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { TrendingUp } from 'lucide-react'
 import { useMonthlyRevenue, type MonthlyRevenue } from '@/hooks/useMonthlyRevenue'
+import { UZ_MONTHS_SHORT } from '@/lib/date-utils'
 import { Spinner } from '@/components/ui/Spinner'
 
 function formatMoney(value: number): string {
@@ -41,7 +42,7 @@ export function RevenueTrendChart() {
         const avg = last3.reduce((s, m) => s + m.revenue, 0) / (last3.length || 1)
         const now = new Date()
         const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-        const nextLabel = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'][next.getMonth()]
+        const nextLabel = UZ_MONTHS_SHORT[next.getMonth()]
         return [...data, { month: 'projected', label: nextLabel, revenue: Math.round(avg), orderCount: 0, projected: true }]
       })()
     : []

@@ -7,15 +7,13 @@ import { apiPost } from '@/lib/api'
 import { DEPARTMENTS } from '@/lib/departments'
 import { SALARY_METHODS } from '@/lib/salary-methods'
 import { type Employee, formatTenure } from '@/lib/employees'
-import { formatDateUz } from '@/lib/date-utils'
+import { formatDateUz, UZ_MONTHS_SHORT } from '@/lib/date-utils'
 import { useEmployeeOrders } from '@/hooks/useEmployeeOrders'
 import { usePayrollHistory } from '@/hooks/usePayrollHistory'
 import { Spinner } from '@/components/ui/Spinner'
 import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
 import { PinResetDialog } from '@/components/employees/PinResetDialog'
 import { TerminateDialog } from '@/components/employees/TerminateDialog'
-
-const MONTH_LABELS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek']
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -49,7 +47,7 @@ export default function EmployeeDetailPage() {
       // Ishga qabul qilinishidan oldingi oylarni ko'rsatmaymiz — aks holda
       // "0 ta buyurtma" xuddi faolsizlikdek noto'g'ri taassurot qoldiradi.
       if (hiredAt && end <= hiredAt) continue
-      months.push({ key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`, label: MONTH_LABELS[start.getMonth()], start, end })
+      months.push({ key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`, label: UZ_MONTHS_SHORT[start.getMonth()], start, end })
     }
     const list = orders ?? []
     const counts = months.map(({ key, label, start, end }) => ({

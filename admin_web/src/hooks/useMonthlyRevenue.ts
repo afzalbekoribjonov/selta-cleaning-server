@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getAggregateFromServer, query, sum, count, where, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { UZ_MONTHS_SHORT } from '@/lib/date-utils'
 
 export interface MonthlyRevenue {
   month: string // "2026-03"
@@ -9,8 +10,6 @@ export interface MonthlyRevenue {
   orderCount: number
   projected?: boolean
 }
-
-const MONTH_LABELS = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek']
 
 /**
  * Oxirgi 6 oyning haqiqiy tushumini Firestore aggregatsiya so'rovlari
@@ -36,7 +35,7 @@ export function useMonthlyRevenue(monthsBack = 6) {
             start,
             end,
             key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`,
-            label: MONTH_LABELS[start.getMonth()],
+            label: UZ_MONTHS_SHORT[start.getMonth()],
           })
         }
 

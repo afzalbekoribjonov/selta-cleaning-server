@@ -9,6 +9,8 @@ const OrdersPage = lazy(() => import('@/pages/OrdersPage'))
 const EmployeesPage = lazy(() => import('@/pages/EmployeesPage'))
 const EmployeeDetailPage = lazy(() => import('@/pages/EmployeeDetailPage'))
 const PayrollPage = lazy(() => import('@/pages/PayrollPage'))
+const MonthlyReportPage = lazy(() => import('@/pages/MonthlyReportPage'))
+const ExpensesPage = lazy(() => import('@/pages/ExpensesPage'))
 const ProductsPage = lazy(() => import('@/pages/ProductsPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
@@ -42,6 +44,8 @@ export default function App() {
                     <Route path="employees" element={<EmployeesPage />} />
                     <Route path="employees/:id" element={<EmployeeDetailPage />} />
                     <Route path="payroll" element={<PayrollPage />} />
+                    <Route path="monthly-report" element={<MonthlyReportPage />} />
+                    <Route path="expenses" element={<ExpensesPage />} />
                     <Route path="products" element={<ProductsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />

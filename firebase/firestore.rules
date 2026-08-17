@@ -99,5 +99,14 @@ service cloud.firestore {
     match /counters/{doc} {
       allow read, write: if false; // faqat createOrder tranzaksiyasi (Admin SDK)
     }
+
+    // --- expenses ---------------------------------------------------------
+    // Moliyaviy ma'lumot — faqat admin ko'radi va yozadi (xodimlar buni
+    // umuman ko'rmaydi). Yozish baribir server orqali, boshqa yozuvlar bilan
+    // bir xil izchillik uchun.
+    match /expenses/{expenseId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
   }
 }

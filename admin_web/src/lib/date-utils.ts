@@ -3,6 +3,14 @@ const UZ_MONTHS = [
   'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr',
 ]
 
+/** 0-indeksli (Date.getMonth() bilan bir xil), bosh harf bilan — banner/sarlavhalar uchun. */
+export const UZ_MONTHS_FULL = [
+  'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
+  'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr',
+]
+
+export const UZ_MONTHS_SHORT = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyun', 'Iyul', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek']
+
 export function formatDateUz(date: Date): string {
   return `${date.getDate()}-${UZ_MONTHS[date.getMonth() + 1]}`
 }

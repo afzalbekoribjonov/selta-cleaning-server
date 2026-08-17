@@ -5,6 +5,8 @@ import {
   ClipboardList,
   Users,
   Wallet,
+  CalendarRange,
+  Receipt,
   Package,
   Settings,
   Menu,
@@ -19,6 +21,8 @@ const NAV_ITEMS = [
   { to: '/orders', label: 'Buyurtmalar', icon: ClipboardList },
   { to: '/employees', label: 'Xodimlar', icon: Users },
   { to: '/payroll', label: 'Maosh va statistika', icon: Wallet },
+  { to: '/monthly-report', label: 'Oylik hisobot', icon: CalendarRange },
+  { to: '/expenses', label: 'Chiqimlar', icon: Receipt },
   { to: '/products', label: 'Mahsulotlar', icon: Package },
   { to: '/settings', label: 'Sozlamalar', icon: Settings },
 ]

@@ -10,6 +10,7 @@ import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
 import { RevenueTrendChart } from '@/components/dashboard/RevenueTrendChart'
 import { ProfitLossCard } from '@/components/dashboard/ProfitLossCard'
 import { EmployeeActivityChart } from '@/components/dashboard/EmployeeActivityChart'
+import { MonthlyExpensesCard } from '@/components/dashboard/MonthlyExpensesCard'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -72,7 +73,10 @@ export default function DashboardPage() {
         <EmployeeActivityChart />
       </div>
 
-      <ProfitLossCard />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <MonthlyExpensesCard />
+        <ProfitLossCard />
+      </div>
 
       <section className="rounded-2xl border border-border bg-surface shadow-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
