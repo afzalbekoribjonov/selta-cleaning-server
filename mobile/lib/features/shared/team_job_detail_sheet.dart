@@ -158,7 +158,7 @@ class _TeamItemsCard extends StatelessWidget {
               const Spacer(),
               if (editable)
                 TextButton.icon(
-                  onPressed: () => openCatalogItemSheet(context, order.id),
+                  onPressed: () => openCatalogItemSheet(context, order),
                   icon: const Icon(Icons.add_rounded, size: 18),
                   label: Text(items.isEmpty ? "Qo'shish" : "Yana qo'shish"),
                 ),
@@ -173,7 +173,7 @@ class _TeamItemsCard extends StatelessWidget {
             for (final item in items)
               InkWell(
                 borderRadius: BorderRadius.circular(10),
-                onTap: editable ? () => openCatalogItemSheet(context, order.id, existingItem: item) : null,
+                onTap: editable ? () => openCatalogItemSheet(context, order, existingItem: item) : null,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(

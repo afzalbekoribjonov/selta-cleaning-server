@@ -171,7 +171,7 @@ class _ItemsCard extends StatelessWidget {
               const Spacer(),
               if (editable)
                 TextButton.icon(
-                  onPressed: () => openCatalogItemSheet(context, order.id),
+                  onPressed: () => openCatalogItemSheet(context, order),
                   icon: const Icon(Icons.add_rounded, size: 18),
                   label: Text(items.isEmpty ? 'Belgilash' : "Qo'shish"),
                 ),
@@ -193,7 +193,7 @@ class _ItemsCard extends StatelessWidget {
     final failed = item.qcStatus == 'failed';
     return InkWell(
       borderRadius: BorderRadius.circular(10),
-      onTap: editable ? () => openCatalogItemSheet(context, order.id, existingItem: item) : null,
+      onTap: editable ? () => openCatalogItemSheet(context, order, existingItem: item) : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Column(

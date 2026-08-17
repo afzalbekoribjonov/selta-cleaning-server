@@ -4,6 +4,7 @@ import { Plus, X, Pencil, Trash2, Package, Percent } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { useProducts, useConditionSurcharges } from '@/hooks/useProducts'
 import { CALC_TYPE_CONFIG, type Product, type CalcType } from '@/lib/products'
+import { TARIFF_CONFIG } from '@/lib/status-config'
 import { Spinner } from '@/components/ui/Spinner'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 
@@ -56,6 +57,7 @@ export default function ProductsPage() {
                 <tr className="border-b border-border text-left text-gray-dark">
                   <th className="px-5 py-3 font-semibold">Nomi</th>
                   <th className="px-5 py-3 font-semibold">Hisoblash turi</th>
+                  <th className="px-5 py-3 font-semibold">Tariflar</th>
                   <th className="px-5 py-3 font-semibold">Narx</th>
                   <th className="px-5 py-3 font-semibold text-right">Amallar</th>
                 </tr>
@@ -68,6 +70,19 @@ export default function ProductsPage() {
                       <span className="inline-flex items-center rounded-full bg-brand-primary/10 px-2.5 py-1 text-xs font-bold text-brand-primary">
                         {CALC_TYPE_CONFIG[p.calcType].label}
                       </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {p.tariffs.map((t) => (
+                          <span
+                            key={t}
+                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold"
+                            style={{ color: TARIFF_CONFIG[t]?.color, backgroundColor: TARIFF_CONFIG[t]?.bg }}
+                          >
+                            {TARIFF_CONFIG[t]?.label ?? t}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-ink">{priceLabel(p)}</td>
                     <td className="px-5 py-3">
@@ -193,11 +208,16 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
   const [unitPrice, setUnitPrice] = useState(product?.unitPrice != null ? String(product.unitPrice) : '')
   const [smallPrice, setSmallPrice] = useState(product?.smallPrice != null ? String(product.smallPrice) : '')
   const [largePrice, setLargePrice] = useState(product?.largePrice != null ? String(product.largePrice) : '')
+  const [tariffs, setTariffs] = useState<string[]>(product?.tariffs ?? [])
   const [error, setError] = useState<string | null>(null)
+
+  function toggleTariff(key: string) {
+    setTariffs((prev) => (prev.includes(key) ? prev.filter((t) => t !== key) : [...prev, key]))
+  }
 
   const mutation = useMutation({
     mutationFn: () => {
-      const body: Record<string, unknown> = { name: name.trim(), calcType }
+      const body: Record<string, unknown> = { name: name.trim(), calcType, tariffs }
       if (calcType === 'size') {
         body.smallPrice = Number(smallPrice) || 0
         body.largePrice = Number(largePrice) || 0
@@ -221,6 +241,10 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
     setError(null)
     if (!name.trim()) {
       setError('Mahsulot nomini kiriting')
+      return
+    }
+    if (tariffs.length === 0) {
+      setError('Kamida bitta tarif tanlang')
       return
     }
     mutation.mutate()
@@ -259,6 +283,33 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-ink">Tariflar</label>
+            <p className="mb-2 text-xs text-gray-dark">
+              Xodimlar bu mahsulotni faqat tanlangan tarifdagi buyurtmalarga qo'sha oladi.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(TARIFF_CONFIG).map(([key, info]) => {
+                const selected = tariffs.includes(key)
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleTariff(key)}
+                    className="rounded-full border px-3 py-1.5 text-xs font-bold transition-colors"
+                    style={
+                      selected
+                        ? { color: '#fff', backgroundColor: info.color, borderColor: info.color }
+                        : { color: info.color, backgroundColor: info.bg, borderColor: 'transparent' }
+                    }
+                  >
+                    {info.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {calcType === 'size' ? (

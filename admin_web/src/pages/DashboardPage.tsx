@@ -7,6 +7,9 @@ import { useRecentOrders } from '@/hooks/useRecentOrders'
 import { isOverdue, type Order } from '@/lib/orders'
 import { formatDateUz } from '@/lib/date-utils'
 import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
+import { RevenueTrendChart } from '@/components/dashboard/RevenueTrendChart'
+import { ProfitLossCard } from '@/components/dashboard/ProfitLossCard'
+import { EmployeeActivityChart } from '@/components/dashboard/EmployeeActivityChart'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -47,11 +50,29 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard icon={ClipboardList} label="Faol buyurtmalar" value={loading ? '—' : String(stats.activeCount)} tone="primary" />
-        <StatCard icon={Clock} label="Bugungi buyurtmalar" value={loading ? '—' : String(stats.todayCount)} tone="primary" />
-        <StatCard icon={TrendingUp} label="Bugungi tushum" value={loading ? '—' : formatMoney(stats.todayRevenue)} tone="success" />
-        <StatCard icon={AlertTriangle} label="Kechikkan buyurtmalar" value={loading ? '—' : String(stats.overdueCount)} tone="danger" />
+        {loading ? (
+          <>
+            <StatCard icon={ClipboardList} label="Faol buyurtmalar" value="—" tone="primary" />
+            <StatCard icon={Clock} label="Bugungi buyurtmalar" value="—" tone="primary" />
+            <StatCard icon={TrendingUp} label="Bugungi tushum" value="—" tone="success" />
+            <StatCard icon={AlertTriangle} label="Kechikkan buyurtmalar" value="—" tone="danger" />
+          </>
+        ) : (
+          <>
+            <StatCard icon={ClipboardList} label="Faol buyurtmalar" numericValue={stats.activeCount} tone="primary" />
+            <StatCard icon={Clock} label="Bugungi buyurtmalar" numericValue={stats.todayCount} tone="primary" />
+            <StatCard icon={TrendingUp} label="Bugungi tushum" numericValue={stats.todayRevenue} format={formatMoney} tone="success" />
+            <StatCard icon={AlertTriangle} label="Kechikkan buyurtmalar" numericValue={stats.overdueCount} tone="danger" />
+          </>
+        )}
       </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <RevenueTrendChart />
+        <EmployeeActivityChart />
+      </div>
+
+      <ProfitLossCard />
 
       <section className="rounded-2xl border border-border bg-surface shadow-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">

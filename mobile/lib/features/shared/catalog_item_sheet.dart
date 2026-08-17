@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/models/product.dart';
 import '../../core/services/auth_service.dart' show describeApiError;
@@ -34,20 +35,21 @@ const _conditions = [
 /// Katalogdan mahsulot tanlab (yoki qo'lda kiritib) buyurtmaga qo'shish
 /// — `existingItem` berilsa tahrirlash rejimida ochiladi (o'chirish
 /// tugmasi bilan). Dastavchik ("Olib ketildi"dan oldin, ixtiyoriy) va
-/// ishchi ("Sexga keldi"da) shu bitta komponentni ishlatadi.
-Future<void> openCatalogItemSheet(BuildContext context, String orderId, {OrderItem? existingItem}) {
+/// ishchi ("Sexga keldi"da) shu bitta komponentni ishlatadi. Faqat
+/// buyurtma tarifiga mos mahsulotlar ko'rsatiladi.
+Future<void> openCatalogItemSheet(BuildContext context, Order order, {OrderItem? existingItem}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => _CatalogItemSheet(orderId: orderId, existingItem: existingItem),
+    builder: (context) => _CatalogItemSheet(order: order, existingItem: existingItem),
   );
 }
 
 class _CatalogItemSheet extends ConsumerStatefulWidget {
-  final String orderId;
+  final Order order;
   final OrderItem? existingItem;
-  const _CatalogItemSheet({required this.orderId, this.existingItem});
+  const _CatalogItemSheet({required this.order, this.existingItem});
 
   @override
   ConsumerState<_CatalogItemSheet> createState() => _CatalogItemSheetState();
@@ -160,12 +162,12 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
       final draft = _buildDraft();
       if (_editing) {
         await ref.read(ordersRepositoryProvider).updateOrderItem(
-              orderId: widget.orderId,
+              orderId: widget.order.id,
               itemId: widget.existingItem!.id,
               item: draft,
             );
       } else {
-        await ref.read(ordersRepositoryProvider).addOrderItems(orderId: widget.orderId, items: [draft]);
+        await ref.read(ordersRepositoryProvider).addOrderItems(orderId: widget.order.id, items: [draft]);
       }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -191,7 +193,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
 
     setState(() => _deleting = true);
     try {
-      await ref.read(ordersRepositoryProvider).deleteOrderItem(orderId: widget.orderId, itemId: widget.existingItem!.id);
+      await ref.read(ordersRepositoryProvider).deleteOrderItem(orderId: widget.order.id, itemId: widget.existingItem!.id);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       setState(() {
@@ -258,11 +260,17 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                       productsAsync.when(
                         loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
                         error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
-                        data: (products) {
+                        data: (allProducts) {
+                          final products = allProducts.where((p) => p.appliesToTariff(widget.order.tariff)).toList();
                           if (products.isEmpty) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 8),
-                              child: Text('Katalogda hali mahsulot yo\'q — admin panelda qo\'shiladi', style: TextStyle(color: AppColors.gray, fontSize: 12.5)),
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                allProducts.isEmpty
+                                    ? "Katalogda hali mahsulot yo'q — admin panelda qo'shiladi"
+                                    : "Bu tarif (${kTariffConfig[widget.order.tariff]?.label ?? widget.order.tariff}) uchun mahsulot yo'q",
+                                style: const TextStyle(color: AppColors.gray, fontSize: 12.5),
+                              ),
                             );
                           }
                           return Wrap(

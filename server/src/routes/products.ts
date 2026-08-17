@@ -6,16 +6,18 @@ import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from 
 export const productsRouter = Router();
 
 const CALC_TYPES = new Set(["sqm", "meter", "kg", "count", "size"]);
+const VALID_TARIFFS = new Set(["express", "comfort", "standart", "premium"]);
 
 /**
  * Narx katalogi — admin oldindan mahsulot turlari va hisoblash usulini
- * belgilaydi (kvadrat metr/metr/kilogram/soni/kichik-katta). Xodimlar
- * buyurtmaga mahsulot qo'shganda shu katalogdan tanlaydi. O'qish
- * to'g'ridan-to'g'ri Firestore orqali (firestore.rules: isSignedIn()),
- * faqat yozish shu yerdan — admin.
+ * belgilaydi (kvadrat metr/metr/kilogram/soni/kichik-katta), va qaysi
+ * tarif(lar)ga tegishli ekanligini ham. Xodimlar buyurtmaga mahsulot
+ * qo'shganda shu katalogdan, faqat o'sha buyurtma tarifiga mos
+ * mahsulotlarni ko'radi. O'qish to'g'ridan-to'g'ri Firestore orqali
+ * (firestore.rules: isSignedIn()), faqat yozish shu yerdan — admin.
  */
-function validateProductBody(body: Record<string, unknown>) {
-  const { name, calcType, unitPrice, smallPrice, largePrice } = body;
+function validateProductBody(body: Record<string, unknown>): string[] {
+  const { name, calcType, unitPrice, smallPrice, largePrice, tariffs } = body;
   if (!(name as string)?.toString()?.trim()) {
     throw new ApiError(400, "invalid-argument", "Mahsulot nomi majburiy");
   }
@@ -31,12 +33,16 @@ function validateProductBody(body: Record<string, unknown>) {
       throw new ApiError(400, "invalid-argument", "Narx kiritilishi shart");
     }
   }
+  if (!Array.isArray(tariffs) || tariffs.length === 0 || !tariffs.every((t) => VALID_TARIFFS.has(t))) {
+    throw new ApiError(400, "invalid-argument", "Kamida bitta tarif tanlang");
+  }
+  return tariffs as string[];
 }
 
 productsRouter.post("/adminCreateProduct", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
     const { name, calcType, unitPrice, smallPrice, largePrice } = req.body ?? {};
-    validateProductBody(req.body ?? {});
+    const tariffs = validateProductBody(req.body ?? {});
 
     const ref = db.collection("products").doc();
     await ref.set({
@@ -45,6 +51,7 @@ productsRouter.post("/adminCreateProduct", withAuth, requireAdmin, async (req: A
       unitPrice: calcType === "size" ? null : unitPrice,
       smallPrice: calcType === "size" ? smallPrice : null,
       largePrice: calcType === "size" ? largePrice : null,
+      tariffs,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       createdBy: req.auth!.uid,
@@ -60,7 +67,7 @@ productsRouter.post("/adminUpdateProduct", withAuth, requireAdmin, async (req: A
   try {
     const { productId, name, calcType, unitPrice, smallPrice, largePrice } = req.body ?? {};
     if (!productId) throw new ApiError(400, "invalid-argument", "productId majburiy");
-    validateProductBody(req.body ?? {});
+    const tariffs = validateProductBody(req.body ?? {});
 
     const ref = db.collection("products").doc(productId);
     const snap = await ref.get();
@@ -72,6 +79,7 @@ productsRouter.post("/adminUpdateProduct", withAuth, requireAdmin, async (req: A
       unitPrice: calcType === "size" ? null : unitPrice,
       smallPrice: calcType === "size" ? smallPrice : null,
       largePrice: calcType === "size" ? largePrice : null,
+      tariffs,
       updatedAt: FieldValue.serverTimestamp(),
     });
 

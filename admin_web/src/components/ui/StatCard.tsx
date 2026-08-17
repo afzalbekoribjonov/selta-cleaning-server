@@ -1,15 +1,22 @@
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AnimatedNumber } from './AnimatedNumber'
 
 export function StatCard({
   icon: Icon,
   label,
   value,
+  numericValue,
+  format,
   tone = 'primary',
 }: {
   icon: LucideIcon
   label: string
-  value: string
+  /** Yuklanayotganda yoki animatsiya kerak bo'lmaganda — statik matn. */
+  value?: string
+  /** Berilsa, sonni oldingi qiymatdan silliq animatsiya bilan ko'rsatadi. */
+  numericValue?: number
+  format?: (n: number) => string
   tone?: 'primary' | 'success' | 'warning' | 'danger'
 }) {
   const toneClasses: Record<string, string> = {
@@ -25,7 +32,9 @@ export function StatCard({
         <Icon size={20} />
       </div>
       <div>
-        <div className="text-2xl font-heading font-extrabold text-ink leading-tight">{value}</div>
+        <div className="text-2xl font-heading font-extrabold text-ink leading-tight">
+          {numericValue != null ? <AnimatedNumber value={numericValue} format={format} /> : value}
+        </div>
         <div className="text-sm text-gray-dark">{label}</div>
       </div>
     </div>

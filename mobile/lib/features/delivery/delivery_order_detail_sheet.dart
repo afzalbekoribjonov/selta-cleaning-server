@@ -270,7 +270,7 @@ class _PickupItemsCard extends StatelessWidget {
               const Text('Mahsulotlar (ixtiyoriy)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
               const Spacer(),
               TextButton.icon(
-                onPressed: () => openCatalogItemSheet(context, order.id),
+                onPressed: () => openCatalogItemSheet(context, order),
                 icon: const Icon(Icons.add_rounded, size: 18),
                 label: Text(items.isEmpty ? "Qo'shish" : "Yana qo'shish"),
               ),
@@ -285,7 +285,7 @@ class _PickupItemsCard extends StatelessWidget {
             for (final item in items)
               InkWell(
                 borderRadius: BorderRadius.circular(10),
-                onTap: () => openCatalogItemSheet(context, order.id, existingItem: item),
+                onTap: () => openCatalogItemSheet(context, order, existingItem: item),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(

@@ -8,6 +8,7 @@ class Product {
   final num? unitPrice;
   final num? smallPrice;
   final num? largePrice;
+  final List<String> tariffs;
 
   const Product({
     required this.id,
@@ -16,6 +17,7 @@ class Product {
     this.unitPrice,
     this.smallPrice,
     this.largePrice,
+    this.tariffs = const [],
   });
 
   factory Product.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -27,8 +29,13 @@ class Product {
       unitPrice: data['unitPrice'] as num?,
       smallPrice: data['smallPrice'] as num?,
       largePrice: data['largePrice'] as num?,
+      tariffs: (data['tariffs'] as List?)?.map((e) => e.toString()).toList() ?? const [],
     );
   }
+
+  /// Mahsulot bu tarifga tegishlimi — eski (tariffs bo'sh) mahsulotlar
+  /// hammaga ko'rinadi (moslik uchun).
+  bool appliesToTariff(String tariff) => tariffs.isEmpty || tariffs.contains(tariff);
 }
 
 class ConditionSurcharges {

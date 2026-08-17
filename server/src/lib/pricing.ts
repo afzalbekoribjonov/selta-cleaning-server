@@ -33,8 +33,13 @@ export interface ComputedItem {
  * narxini serverda hisoblaydi — klient tomonidan yuborilgan narxga
  * ishonmaydi (faqat calcType='fixed', ya'ni katalogsiz qo'lda kiritilgan
  * itemlar uchun klient narxi qabul qilinadi).
+ *
+ * `orderTariff` berilsa — mahsulot shu tarifga tegishli emasligini ham
+ * tekshiradi (klient UI faqat mos mahsulotlarni ko'rsatadi, lekin serverda
+ * ham tasdiqlanadi — boshqa tarifga tegishli mahsulot hech qachon
+ * qo'shilmasligini kafolatlaydi).
  */
-export async function computeItems(items: ItemInput[]): Promise<ComputedItem[]> {
+export async function computeItems(items: ItemInput[], orderTariff?: string): Promise<ComputedItem[]> {
   const productIds = [...new Set(items.map((i) => i.productId).filter((id): id is string => !!id))];
   const needsSurcharge = items.some((i) => i.condition);
 
@@ -70,6 +75,11 @@ export async function computeItems(items: ItemInput[]): Promise<ComputedItem[]> 
 
     const product = products.get(item.productId);
     if (!product) throw new ApiError(404, "not-found", `Mahsulot topilmadi: ${item.productId}`);
+
+    const productTariffs = (product.tariffs as string[] | undefined) ?? [];
+    if (orderTariff && productTariffs.length > 0 && !productTariffs.includes(orderTariff)) {
+      throw new ApiError(400, "invalid-argument", `"${product.name}" mahsuloti bu tarifga tegishli emas`);
+    }
 
     let base = 0;
     let unitPrice: number | null = null;

@@ -10,6 +10,7 @@ export interface Product {
   unitPrice: number | null
   smallPrice: number | null
   largePrice: number | null
+  tariffs: string[]
 }
 
 export const CALC_TYPE_CONFIG: Record<CalcType, { label: string; unitLabel: string }> = {
@@ -29,6 +30,7 @@ function toProduct(doc: QueryDocumentSnapshot<DocumentData>): Product {
     unitPrice: data.unitPrice ?? null,
     smallPrice: data.smallPrice ?? null,
     largePrice: data.largePrice ?? null,
+    tariffs: data.tariffs ?? [],
   }
 }
 

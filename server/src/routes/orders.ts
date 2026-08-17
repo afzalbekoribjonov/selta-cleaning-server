@@ -414,7 +414,7 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
     if (!orderSnapPre.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
     assertItemsEditable(orderSnapPre.data()!, role, employeeId);
 
-    const computed = await computeItems(items as ItemInput[]);
+    const computed = await computeItems(items as ItemInput[], orderSnapPre.data()!.tariff as string | undefined);
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, existingItemsSnap] = await Promise.all([tx.get(orderRef), tx.get(itemsRef)]);
@@ -465,7 +465,10 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
     const orderRef = db.collection("orders").doc(orderId);
     const itemRef = orderRef.collection("items").doc(itemId);
 
-    const [computed] = await computeItems([item as ItemInput]);
+    const orderSnapPre = await orderRef.get();
+    if (!orderSnapPre.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+
+    const [computed] = await computeItems([item as ItemInput], orderSnapPre.data()!.tariff as string | undefined);
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, itemSnap] = await Promise.all([tx.get(orderRef), tx.get(itemRef)]);
