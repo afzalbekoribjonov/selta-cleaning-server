@@ -55,7 +55,12 @@ export function RevenueTrendChart() {
       <p className="mb-4 text-xs text-gray-dark">Oxirgi 6 oy haqiqiy tushum, oxirgi ustun — keyingi oy uchun taxmin</p>
 
       {loading && <Spinner className="py-16" />}
-      {error && <p className="py-8 text-center text-sm text-danger">Ma'lumotni yuklab bo'lmadi</p>}
+      {error && (
+        <div className="py-8 text-center text-sm text-danger">
+          <p className="font-semibold">Ma'lumotni yuklab bo'lmadi</p>
+          <p className="mt-1 text-xs text-gray-dark">{error.message}</p>
+        </div>
+      )}
       {!loading && !error && (
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }} barCategoryGap="28%">

@@ -54,6 +54,8 @@ export function useMonthlyRevenue(monthsBack = 6) {
 
         if (!cancelled) setData(results)
       } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('useMonthlyRevenue failed:', err)
         if (!cancelled) setError(err as Error)
       }
     }

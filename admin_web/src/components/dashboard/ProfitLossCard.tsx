@@ -42,7 +42,10 @@ export function ProfitLossCard() {
         getAggregateFromServer(
           query(collection(db, 'orders'), where('createdAt', '>=', Timestamp.fromDate(start)), where('createdAt', '<', Timestamp.fromDate(end))),
           { revenue: sum('totalPrice'), count: count() },
-        ),
+        ).catch((err) => {
+          console.error('ProfitLossCard revenue aggregate failed:', err)
+          throw err
+        }),
         apiPost<{ results: Record<string, { amount: number }> }>('/computeMonthlyPayroll', { yearMonth }),
       ])
 
@@ -88,7 +91,7 @@ export function ProfitLossCard() {
         </button>
         {mutation.isError && (
           <span className="text-sm font-semibold text-danger">
-            {mutation.error instanceof ApiError ? mutation.error.message : 'Xatolik yuz berdi'}
+            {mutation.error instanceof ApiError ? mutation.error.message : mutation.error instanceof Error ? mutation.error.message : 'Xatolik yuz berdi'}
           </span>
         )}
       </div>
