@@ -86,18 +86,24 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
 
     for (const empDoc of employeesSnap.docs) {
       const emp = empDoc.data();
-      const salary = emp.salary as { method?: string; params?: Record<string, number> } | undefined;
-      if (!salary?.method) continue;
+      const empId = empDoc.id;
+      const payrollRunRef = db.collection("employees").doc(empId).collection("payrollRuns").doc(yearMonth);
 
       // Xodim shu oy davomida faol bo'lgan bo'lishi kerak: oy tugashidan oldin
       // ishga qabul qilingan, va (agar bo'shatilgan bo'lsa) oy boshlanishidan
-      // KEYIN bo'shatilgan bo'lishi kerak.
+      // KEYIN bo'shatilgan bo'lishi kerak. Eskirgan (masalan, ishga
+      // qabul qilinishidan oldingi oy uchun avvalroq xato hisoblangan)
+      // yozuv qolib ketmasligi uchun bunday holatlarda tozalab qo'yiladi —
+      // "Hisoblash" har doim shu oyning haqiqiy holatini aks ettirishi kerak.
+      const salary = emp.salary as { method?: string; params?: Record<string, number> } | undefined;
       const hiredAt = (emp.createdAt as Timestamp | undefined)?.toDate();
       const terminatedAt = (emp.terminatedAt as Timestamp | undefined)?.toDate();
       const wasActiveDuringMonth = (!hiredAt || hiredAt < end) && (!terminatedAt || terminatedAt >= start);
-      if (!wasActiveDuringMonth) continue;
 
-      const empId = empDoc.id;
+      if (!salary?.method || !wasActiveDuringMonth) {
+        await payrollRunRef.delete();
+        continue;
+      }
       const params = salary.params ?? {};
       let amount = 0;
       let breakdown: Record<string, unknown> = {};
@@ -158,7 +164,7 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
           continue;
       }
 
-      await db.collection("employees").doc(empId).collection("payrollRuns").doc(yearMonth).set({
+      await payrollRunRef.set({
         method: salary.method,
         amount,
         breakdown,
