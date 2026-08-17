@@ -1,20 +1,23 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, User, Phone, Wallet, KeyRound, UserX, ChevronRight } from 'lucide-react'
+import { Plus, X, User, Phone, Wallet, KeyRound, UserX, Pencil, ChevronRight } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
-import { DEPARTMENTS } from '@/lib/departments'
 import { SALARY_METHODS } from '@/lib/salary-methods'
 import { type Employee, formatTenure } from '@/lib/employees'
+import { useDepartmentLookup, type DepartmentInfo } from '@/hooks/useDepartmentLookup'
 import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
 import { PinResetDialog } from '@/components/employees/PinResetDialog'
 import { TerminateDialog } from '@/components/employees/TerminateDialog'
+import { EditEmployeeDialog } from '@/components/employees/EditEmployeeDialog'
+import { DepartmentSelectField, type DepartmentSelection } from '@/components/employees/DepartmentSelectField'
 import { Spinner } from '@/components/ui/Spinner'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 export default function EmployeesPage() {
   const navigate = useNavigate()
   const [formOpen, setFormOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [salaryTarget, setSalaryTarget] = useState<Employee | null>(null)
   const [pinTarget, setPinTarget] = useState<Employee | null>(null)
   const [terminateTarget, setTerminateTarget] = useState<Employee | null>(null)
@@ -23,28 +26,20 @@ export default function EmployeesPage() {
     queryKey: ['employees'],
     queryFn: () => apiPost<{ employees: Employee[] }>('/adminListEmployees'),
   })
+  const { all: departments } = useDepartmentLookup()
 
   const byDepartment = useMemo(() => {
     const groups: Record<string, Employee[]> = {}
-    for (const key of Object.keys(DEPARTMENTS)) groups[key] = []
+    for (const d of departments) groups[d.key] = []
     for (const e of query.data?.employees ?? []) {
       if (!groups[e.department]) groups[e.department] = []
       groups[e.department].push(e)
     }
     return groups
-  }, [query.data])
-
-  // DEPARTMENTS'da yo'q, lekin ma'lumotda uchragan bo'lim kalitlari ham
-  // bo'lishi mumkin (masalan eski/noma'lum qiymat) — hech bir xodim jimgina
-  // ro'yxatdan tushib qolmasligi uchun ularni ham ko'rsatamiz.
-  const sections = useMemo(() => {
-    const known = Object.entries(DEPARTMENTS).map(([key, dept]) => ({ key, dept }))
-    const extraKeys = Object.keys(byDepartment).filter((key) => !DEPARTMENTS[key])
-    const extra = extraKeys.map((key) => ({ key, dept: { label: key, icon: User } }))
-    return [...known, ...extra]
-  }, [byDepartment])
+  }, [query.data, departments])
 
   const total = query.data?.employees.length ?? 0
+  const statDepartments = departments.filter((d) => d.includeInStats)
 
   return (
     <div className="space-y-8">
@@ -80,13 +75,13 @@ export default function EmployeesPage() {
       {query.data && total > 0 && (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {sections.map(({ key, dept }) => (
-              <div key={key} className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
+            {statDepartments.map((dept) => (
+              <div key={dept.key} className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
                   <dept.icon size={20} />
                 </div>
                 <div>
-                  <div className="font-heading text-xl font-extrabold text-ink leading-tight">{byDepartment[key]?.length ?? 0}</div>
+                  <div className="font-heading text-xl font-extrabold text-ink leading-tight">{byDepartment[dept.key]?.length ?? 0}</div>
                   <div className="text-xs font-semibold text-gray-dark">{dept.label}</div>
                 </div>
               </div>
@@ -94,11 +89,11 @@ export default function EmployeesPage() {
           </div>
 
           <div className="space-y-8">
-            {sections.map(({ key, dept }) => {
-              const employees = byDepartment[key] ?? []
+            {departments.map((dept) => {
+              const employees = byDepartment[dept.key] ?? []
               if (employees.length === 0) return null
               return (
-                <div key={key}>
+                <div key={dept.key}>
                   <div className="mb-3 flex items-center gap-2.5">
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
                       <dept.icon size={17} />
@@ -111,7 +106,9 @@ export default function EmployeesPage() {
                       <EmployeeCard
                         key={e.id}
                         employee={e}
+                        dept={dept}
                         onOpen={() => navigate(`/employees/${e.id}`)}
+                        onEdit={() => setEditTarget(e)}
                         onSalary={() => setSalaryTarget(e)}
                         onPin={() => setPinTarget(e)}
                         onTerminate={() => setTerminateTarget(e)}
@@ -126,6 +123,7 @@ export default function EmployeesPage() {
       )}
 
       {formOpen && <NewEmployeeDialog onClose={() => setFormOpen(false)} />}
+      {editTarget && <EditEmployeeDialog employee={editTarget} onClose={() => setEditTarget(null)} />}
       {salaryTarget && (
         <SalaryConfigDialog
           employeeId={salaryTarget.id}
@@ -143,18 +141,21 @@ export default function EmployeesPage() {
 
 function EmployeeCard({
   employee: e,
+  dept,
   onOpen,
+  onEdit,
   onSalary,
   onPin,
   onTerminate,
 }: {
   employee: Employee
+  dept: DepartmentInfo
   onOpen: () => void
+  onEdit: () => void
   onSalary: () => void
   onPin: () => void
   onTerminate: () => void
 }) {
-  const dept = DEPARTMENTS[e.department]
   const terminated = e.status !== 'active'
   const hiredAt = e.createdAt ? new Date(e.createdAt) : null
   const referenceEnd = e.terminatedAt ? new Date(e.terminatedAt) : new Date()
@@ -167,7 +168,7 @@ function EmployeeCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
-            {dept && <dept.icon size={20} />}
+            <dept.icon size={20} />
           </div>
           <div className="min-w-0">
             <div className="truncate font-heading font-bold text-ink">{e.fullName}</div>
@@ -190,19 +191,24 @@ function EmployeeCard({
 
       <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
         <span className="text-xs font-semibold text-gray-dark">{hiredAt ? formatTenure(hiredAt, referenceEnd) : '—'}</span>
-        {!terminated && (
-          <div className="flex gap-0.5" onClick={(ev) => ev.stopPropagation()}>
-            <IconAction title="Maosh sozlash" onClick={onSalary}>
-              <Wallet size={15} />
-            </IconAction>
-            <IconAction title="PIN o'zgartirish" onClick={onPin}>
-              <KeyRound size={15} />
-            </IconAction>
-            <IconAction title="Ishdan bo'shatish" danger onClick={onTerminate}>
-              <UserX size={15} />
-            </IconAction>
-          </div>
-        )}
+        <div className="flex gap-0.5" onClick={(ev) => ev.stopPropagation()}>
+          <IconAction title="Ma'lumotlarni tahrirlash" onClick={onEdit}>
+            <Pencil size={15} />
+          </IconAction>
+          {!terminated && (
+            <>
+              <IconAction title="Maosh sozlash" onClick={onSalary}>
+                <Wallet size={15} />
+              </IconAction>
+              <IconAction title="PIN o'zgartirish" onClick={onPin}>
+                <KeyRound size={15} />
+              </IconAction>
+              <IconAction title="Ishdan bo'shatish" danger onClick={onTerminate}>
+                <UserX size={15} />
+              </IconAction>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -235,12 +241,12 @@ function NewEmployeeDialog({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
-  const [department, setDepartment] = useState<keyof typeof DEPARTMENTS>('dispatcher')
+  const [selection, setSelection] = useState<DepartmentSelection>({ department: 'dispatcher' })
   const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
-    mutationFn: () => apiPost('/adminCreateEmployee', { fullName, phone, department, pin }),
+    mutationFn: () => apiPost('/adminCreateEmployee', { fullName, phone, ...selection, pin }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       onClose()
@@ -253,6 +259,11 @@ function NewEmployeeDialog({ onClose }: { onClose: () => void }) {
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    const hasValidDepartment = selection.newDepartment ? !!selection.newDepartment.label.trim() : !!selection.department
+    if (!hasValidDepartment) {
+      setError('Xodim kasbini tanlang yoki yozing')
+      return
+    }
     if (!/^\d{4}$/.test(pin)) {
       setError('PIN 4 ta raqamdan iborat bo‘lishi kerak')
       return
@@ -290,20 +301,7 @@ function NewEmployeeDialog({ onClose }: { onClose: () => void }) {
               className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
             />
           </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-semibold text-ink">Xodim bo'limi</label>
-            <select
-              value={department}
-              onChange={(e) => setDepartment(e.target.value as keyof typeof DEPARTMENTS)}
-              className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
-            >
-              {Object.entries(DEPARTMENTS).map(([key, d]) => (
-                <option key={key} value={key}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <DepartmentSelectField value={selection} onChange={setSelection} mode="create" />
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-ink">4 xonali PIN</label>
             <input

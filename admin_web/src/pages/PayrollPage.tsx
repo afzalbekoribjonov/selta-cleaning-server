@@ -19,7 +19,7 @@ function currentYearMonth(): string {
 
 interface PayrollResult {
   fullName: string
-  department: keyof typeof DEPARTMENTS
+  department: string
   method: string
   amount: number
   breakdown: Record<string, number>

@@ -48,6 +48,11 @@ service cloud.firestore {
         allow read: if isAdmin() || (isSignedIn() && employeeId() == employeeId);
         allow write: if false; // faqat scheduled/callable Cloud Function
       }
+
+      match /departmentHistory/{eventId} {
+        allow read: if isAdmin();
+        allow write: if false; // faqat adminChangeEmployeeDepartment (Admin SDK)
+      }
     }
 
     // Yuqoridagi ichma-ich qoida faqat aniq xodim yo'li bo'yicha
@@ -114,6 +119,15 @@ service cloud.firestore {
     // umuman ko'rmaydi). Yozish baribir server orqali, boshqa yozuvlar bilan
     // bir xil izchillik uchun.
     match /expenses/{expenseId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // --- customDepartments --------------------------------------------------
+    // "Boshqa" tanlanganda admin kiritgan yangi kasblar reestri (label +
+    // statistikaga qo'shish/qo'shmaslik belgisi). Yozish baribir server
+    // orqali (adminCreateEmployee/adminChangeEmployeeDepartment).
+    match /customDepartments/{departmentId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
     }

@@ -1,10 +1,10 @@
-import type { DEPARTMENTS } from './departments'
-
 export interface Employee {
   id: string
   fullName: string
   phone: string
-  department: keyof typeof DEPARTMENTS
+  // Doimiy 4 ta bo'lim kalitidan biri YOKI "Boshqa" orqali yaratilgan
+  // customDepartments/{slug} hujjatining id'si bo'lishi mumkin.
+  department: string
   status: 'active' | 'terminated'
   salary?: { method: string; params: Record<string, number> }
   createdAt: string | null

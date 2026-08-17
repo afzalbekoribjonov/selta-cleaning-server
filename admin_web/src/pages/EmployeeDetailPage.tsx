@@ -8,6 +8,8 @@ import {
   Wallet,
   KeyRound,
   UserX,
+  Pencil,
+  Briefcase,
   TrendingUp,
   CalendarCheck,
   History,
@@ -15,20 +17,25 @@ import {
   CalendarDays,
   ClipboardList,
   ReceiptText,
+  ArrowRight,
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
-import { DEPARTMENTS } from '@/lib/departments'
 import { SALARY_METHODS } from '@/lib/salary-methods'
 import { type Employee, formatTenure } from '@/lib/employees'
 import { formatDateUz, formatDateTimeUz, UZ_MONTHS_SHORT } from '@/lib/date-utils'
 import { useEmployeeOrders } from '@/hooks/useEmployeeOrders'
 import { usePayrollHistory } from '@/hooks/usePayrollHistory'
+import { useDepartmentHistory } from '@/hooks/useDepartmentHistory'
+import { useDepartmentLookup } from '@/hooks/useDepartmentLookup'
+import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { Spinner } from '@/components/ui/Spinner'
 import { StatCard } from '@/components/ui/StatCard'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
 import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
 import { PinResetDialog } from '@/components/employees/PinResetDialog'
 import { TerminateDialog } from '@/components/employees/TerminateDialog'
+import { EditEmployeeDialog } from '@/components/employees/EditEmployeeDialog'
+import { ChangeDepartmentDialog } from '@/components/employees/ChangeDepartmentDialog'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -37,6 +44,8 @@ function formatMoney(value: number): string {
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [editOpen, setEditOpen] = useState(false)
+  const [changeDeptOpen, setChangeDeptOpen] = useState(false)
   const [salaryOpen, setSalaryOpen] = useState(false)
   const [pinOpen, setPinOpen] = useState(false)
   const [terminateOpen, setTerminateOpen] = useState(false)
@@ -49,6 +58,9 @@ export default function EmployeeDetailPage() {
 
   const { orders, loading: ordersLoading } = useEmployeeOrders(id ?? '', employee?.department ?? '')
   const { runs: payrollRuns, loading: payrollLoading } = usePayrollHistory(id ?? '')
+  const { events: deptHistory, loading: deptHistoryLoading } = useDepartmentHistory(id ?? '')
+  const { getDepartment } = useDepartmentLookup()
+  const employeesMap = useEmployeesMap()
 
   const hiredAt = employee?.createdAt ? new Date(employee.createdAt) : null
   const referenceEnd = employee?.terminatedAt ? new Date(employee.terminatedAt) : new Date()
@@ -104,7 +116,7 @@ export default function EmployeeDetailPage() {
     )
   }
 
-  const dept = DEPARTMENTS[employee.department]
+  const dept = getDepartment(employee.department)
   const terminated = employee.status !== 'active'
   const radialData = [{ name: 'active', value: activityThisMonth.activeDays, fill: 'var(--color-brand-primary)' }]
   const radialMax = Math.max(activityThisMonth.totalDays, 1)
@@ -139,19 +151,27 @@ export default function EmployeeDetailPage() {
             </div>
           </div>
 
-          {!terminated && (
-            <div className="flex gap-1.5">
-              <HeaderActionButton title="Maosh sozlash" onClick={() => setSalaryOpen(true)}>
-                <Wallet size={16} />
-              </HeaderActionButton>
-              <HeaderActionButton title="PIN o'zgartirish" onClick={() => setPinOpen(true)}>
-                <KeyRound size={16} />
-              </HeaderActionButton>
-              <HeaderActionButton title="Ishdan bo'shatish" danger onClick={() => setTerminateOpen(true)}>
-                <UserX size={16} />
-              </HeaderActionButton>
-            </div>
-          )}
+          <div className="flex flex-wrap gap-1.5">
+            <HeaderActionButton title="Ma'lumotlarni tahrirlash" onClick={() => setEditOpen(true)}>
+              <Pencil size={16} />
+            </HeaderActionButton>
+            {!terminated && (
+              <>
+                <HeaderActionButton title="Kasbni o'zgartirish" onClick={() => setChangeDeptOpen(true)}>
+                  <Briefcase size={16} />
+                </HeaderActionButton>
+                <HeaderActionButton title="Maosh sozlash" onClick={() => setSalaryOpen(true)}>
+                  <Wallet size={16} />
+                </HeaderActionButton>
+                <HeaderActionButton title="PIN o'zgartirish" onClick={() => setPinOpen(true)}>
+                  <KeyRound size={16} />
+                </HeaderActionButton>
+                <HeaderActionButton title="Ishdan bo'shatish" danger onClick={() => setTerminateOpen(true)}>
+                  <UserX size={16} />
+                </HeaderActionButton>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="relative mt-6 flex flex-wrap items-center gap-2">
@@ -356,6 +376,38 @@ export default function EmployeeDetailPage() {
         )}
       </section>
 
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <div className="mb-1 flex items-center gap-2">
+          <Briefcase size={18} className="text-brand-primary" />
+          <h2 className="font-heading font-bold text-ink">Kasb tarixi</h2>
+        </div>
+        <p className="mb-4 text-xs text-gray-dark">Xodimning bo'lim/kasb o'zgarishlari — vaqti va kimning tomonidan</p>
+
+        {deptHistoryLoading ? (
+          <Spinner className="py-8" />
+        ) : deptHistory.length === 0 ? (
+          <p className="py-6 text-center text-sm text-gray-dark">Hali kasbi o'zgartirilmagan</p>
+        ) : (
+          <div className="space-y-2">
+            {deptHistory.map((event) => (
+              <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-bg p-3.5">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold text-gray-dark">{getDepartment(event.fromDepartment).label}</span>
+                  <ArrowRight size={14} className="text-brand-primary" />
+                  <span className="font-bold text-ink">{getDepartment(event.toDepartment).label}</span>
+                </div>
+                <div className="text-right text-xs text-gray-dark">
+                  <div>{formatDateTimeUz(event.changedAt)}</div>
+                  <div>{employeesMap[event.changedBy] ?? 'Admin'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {editOpen && <EditEmployeeDialog employee={employee} onClose={() => setEditOpen(false)} />}
+      {changeDeptOpen && <ChangeDepartmentDialog employee={employee} onClose={() => setChangeDeptOpen(false)} />}
       {salaryOpen && (
         <SalaryConfigDialog
           employeeId={employee.id}
