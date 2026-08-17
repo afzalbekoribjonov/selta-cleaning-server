@@ -1,24 +1,19 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, User, Wallet, KeyRound, UserX } from 'lucide-react'
+import { Plus, X, User, Wallet, KeyRound, UserX, ChevronRight } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { DEPARTMENTS } from '@/lib/departments'
 import { SALARY_METHODS } from '@/lib/salary-methods'
+import { type Employee } from '@/lib/employees'
 import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
 import { PinResetDialog } from '@/components/employees/PinResetDialog'
+import { TerminateDialog } from '@/components/employees/TerminateDialog'
 import { Spinner } from '@/components/ui/Spinner'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 
-interface Employee {
-  id: string
-  fullName: string
-  phone: string
-  department: keyof typeof DEPARTMENTS
-  status: 'active' | 'terminated'
-  salary?: { method: string; params: Record<string, number> }
-}
-
 export default function EmployeesPage() {
+  const navigate = useNavigate()
   const [formOpen, setFormOpen] = useState(false)
   const [salaryTarget, setSalaryTarget] = useState<Employee | null>(null)
   const [pinTarget, setPinTarget] = useState<Employee | null>(null)
@@ -70,6 +65,7 @@ export default function EmployeesPage() {
                   <th className="px-5 py-3 font-semibold">Maosh usuli</th>
                   <th className="px-5 py-3 font-semibold">Holat</th>
                   <th className="px-5 py-3 font-semibold text-right">Amallar</th>
+                  <th className="w-8"></th>
                 </tr>
               </thead>
               <tbody>
@@ -77,7 +73,11 @@ export default function EmployeesPage() {
                   const dept = DEPARTMENTS[e.department]
                   const terminated = e.status !== 'active'
                   return (
-                    <tr key={e.id} className={`border-b border-border last:border-0 ${terminated ? 'opacity-50' : ''}`}>
+                    <tr
+                      key={e.id}
+                      onClick={() => navigate(`/employees/${e.id}`)}
+                      className={`cursor-pointer border-b border-border last:border-0 hover:bg-bg ${terminated ? 'opacity-50' : ''}`}
+                    >
                       <td className="px-5 py-3 font-semibold text-ink">{e.fullName}</td>
                       <td className="px-5 py-3 text-ink">{e.phone}</td>
                       <td className="px-5 py-3">
@@ -96,7 +96,7 @@ export default function EmployeesPage() {
                           {terminated ? "Ishdan bo'shatilgan" : 'Faol'}
                         </span>
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-5 py-3" onClick={(ev) => ev.stopPropagation()}>
                         {!terminated && (
                           <div className="flex justify-end gap-1">
                             <IconAction title="Maosh sozlash" onClick={() => setSalaryTarget(e)}>
@@ -110,6 +110,9 @@ export default function EmployeesPage() {
                             </IconAction>
                           </div>
                         )}
+                      </td>
+                      <td className="px-3 text-gray">
+                        <ChevronRight size={16} />
                       </td>
                     </tr>
                   )
@@ -155,46 +158,6 @@ function IconAction({
     >
       {children}
     </button>
-  )
-}
-
-function TerminateDialog({ employee, onClose }: { employee: Employee; onClose: () => void }) {
-  useEscapeClose(onClose)
-  const queryClient = useQueryClient()
-  const [error, setError] = useState<string | null>(null)
-
-  const mutation = useMutation({
-    mutationFn: () => apiPost('/adminTerminateEmployee', { employeeId: employee.id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['employees'] })
-      onClose()
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : 'Xatolik yuz berdi'),
-  })
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
-      <div className="w-full max-w-sm rounded-3xl bg-surface p-6 shadow-2xl">
-        <h2 className="text-lg font-heading font-bold text-ink">Ishdan bo'shatish</h2>
-        <p className="mt-2 text-sm text-gray-dark">
-          <strong className="text-ink">{employee.fullName}</strong> ishdan bo'shatilsinmi? Bu amalni ortga qaytarib bo'lmaydi — xodim
-          tizimga kira olmay qoladi.
-        </p>
-        {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
-        <div className="mt-5 flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-bold text-ink">
-            Bekor qilish
-          </button>
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
-            className="flex-1 rounded-xl bg-danger py-2.5 text-sm font-bold text-white disabled:opacity-60"
-          >
-            {mutation.isPending ? '...' : "Bo'shatish"}
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
 

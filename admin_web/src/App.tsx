@@ -7,6 +7,7 @@ import { FullPageSpinner } from '@/components/ui/Spinner'
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const OrdersPage = lazy(() => import('@/pages/OrdersPage'))
 const EmployeesPage = lazy(() => import('@/pages/EmployeesPage'))
+const EmployeeDetailPage = lazy(() => import('@/pages/EmployeeDetailPage'))
 const PayrollPage = lazy(() => import('@/pages/PayrollPage'))
 const ProductsPage = lazy(() => import('@/pages/ProductsPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
@@ -39,6 +40,7 @@ export default function App() {
                     <Route index element={<DashboardPage />} />
                     <Route path="orders" element={<OrdersPage />} />
                     <Route path="employees" element={<EmployeesPage />} />
+                    <Route path="employees/:id" element={<EmployeeDetailPage />} />
                     <Route path="payroll" element={<PayrollPage />} />
                     <Route path="products" element={<ProductsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
