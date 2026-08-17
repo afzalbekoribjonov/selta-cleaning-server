@@ -1,0 +1,132 @@
+import 'package:flutter/material.dart';
+
+import '../../app/theme.dart';
+import '../../core/models/order_item.dart';
+
+const _conditionLabels = {
+  'average': "O'rtacha",
+  'bad': 'Yomon',
+  'veryBad': 'Juda yomon',
+};
+
+/// Mahsulotning o'lchov/miqdor tafsilotini hisoblash turiga qarab
+/// o'qiladigan matnga aylantiradi.
+String itemMeasurementLabel(OrderItem item) {
+  switch (item.calcType) {
+    case 'sqm':
+      final qty = item.qty?.toStringAsFixed(2) ?? '0';
+      if (item.width != null && item.height != null) {
+        return '$qty m² (${item.width}×${item.height})';
+      }
+      return '$qty m²';
+    case 'meter':
+      return '${item.qty?.toStringAsFixed(1) ?? '0'} metr';
+    case 'kg':
+      return '${item.qty?.toStringAsFixed(1) ?? '0'} kg';
+    case 'count':
+      return '${item.qty?.toStringAsFixed(0) ?? '0'} dona';
+    case 'size':
+      return item.sizeVariant == 'large' ? 'Katta' : 'Kichik';
+    default:
+      return '';
+  }
+}
+
+/// Har bir buyurtma buyum(item) qatori — sub-ID, nomi, o'lchov/miqdor,
+/// mahsulot holati (agar belgilangan bo'lsa — ustama foizi bilan), narx,
+/// va QC rad etilgan bo'lsa sababi. Ishchi, Dastavchik, Jamoa va
+/// Dispetcher ekranlarida bir xil ko'rinishda ishlatiladi.
+class ItemDetailRow extends StatelessWidget {
+  final OrderItem item;
+  final String subId;
+  final bool editable;
+  final VoidCallback? onTap;
+
+  const ItemDetailRow({
+    super.key,
+    required this.item,
+    required this.subId,
+    this.editable = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = item.qcStatus == 'failed';
+    final measurement = itemMeasurementLabel(item);
+    final conditionLabel = _conditionLabels[item.condition];
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Text(subId, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 11.5)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      if (measurement.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Text(measurement, style: const TextStyle(fontSize: 11.5, color: AppColors.grayDark)),
+                        ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text("${item.price.toStringAsFixed(0)} so'm", style: const TextStyle(color: AppColors.grayDark, fontSize: 12, fontWeight: FontWeight.w600)),
+                    if (conditionLabel != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
+                          child: Text(
+                            item.conditionSurchargePercent != null && item.conditionSurchargePercent! > 0
+                                ? '$conditionLabel +${item.conditionSurchargePercent!.toStringAsFixed(0)}%'
+                                : conditionLabel,
+                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.warning),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (editable) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.edit_rounded, size: 14, color: AppColors.gray),
+                ],
+                if (failed) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.error_rounded, color: AppColors.danger, size: 16),
+                ],
+              ],
+            ),
+            if (failed)
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 3),
+                child: Text(
+                  item.qcNote?.isNotEmpty == true ? "Sifat nazorati rad etdi: ${item.qcNote}" : "Sifat nazorati rad etdi — qayta ishlov kerak",
+                  style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

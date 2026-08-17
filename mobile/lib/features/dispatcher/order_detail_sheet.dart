@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/models/order.dart';
+import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../shared/comments_section.dart';
+import '../shared/item_detail_row.dart';
 import '../shared/team_assign_sheet.dart';
 
 void openOrderDetailSheet(BuildContext context, Order order) {
@@ -20,12 +22,19 @@ void openOrderDetailSheet(BuildContext context, Order order) {
   );
 }
 
-class _OrderDetailSheet extends StatelessWidget {
+final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
+  ref.watch(authStateProvider);
+  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
+});
+
+class _OrderDetailSheet extends ConsumerWidget {
   final Order order;
   const _OrderDetailSheet({required this.order});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final itemsAsync = ref.watch(_itemsProvider(order.id));
+
     return DraggableScrollableSheet(
       initialChildSize: 0.88,
       minChildSize: 0.5,
@@ -65,6 +74,12 @@ class _OrderDetailSheet extends StatelessWidget {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 20),
+                    itemsAsync.when(
+                      loading: () => const Padding(padding: EdgeInsets.all(6), child: LinearProgressIndicator()),
+                      error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
+                      data: (items) => _ItemsSummaryCard(order: order, items: items),
+                    ),
                     const SizedBox(height: 20),
                     _ProgressChecklist(order: order),
                     const SizedBox(height: 20),
@@ -168,6 +183,41 @@ class _InfoCard extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// Dispetcher mahsulotlarni o'zi qo'shmaydi/tahrirlamaydi, lekin nazorat
+/// uchun nima qo'shilgani — o'lchovi, holati, narxi — ko'rinishi kerak.
+class _ItemsSummaryCard extends StatelessWidget {
+  final Order order;
+  final List<OrderItem> items;
+  const _ItemsSummaryCard({required this.order, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+              const Spacer(),
+              if (items.isNotEmpty) Text('${order.totalPrice.toStringAsFixed(0)} so\'m', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary)),
+            ],
+          ),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('Hali mahsulot belgilanmagan', style: TextStyle(color: AppColors.gray, fontSize: 13)),
+            )
+          else
+            for (final item in items) ItemDetailRow(item: item, subId: item.subId(order.orderNumber)),
+        ],
+      ),
+    );
+  }
 }
 
 /// Progress checklist — talab: "Dispetcher buyurtmani tekshirishda buyurtma

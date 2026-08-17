@@ -9,6 +9,7 @@ import '../../core/services/auth_service.dart' show authStateProvider, describeA
 import '../../core/services/orders_repository.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
+import '../shared/item_detail_row.dart';
 
 void openWorkerOrderDetailSheet(BuildContext context, Order order) {
   showModalBottomSheet(
@@ -183,52 +184,14 @@ class _ItemsCard extends StatelessWidget {
               child: Text('Hali mahsulot belgilanmagan', style: TextStyle(color: AppColors.gray, fontSize: 13)),
             )
           else
-            for (final item in items) _itemRow(context, item, editable),
-        ],
-      ),
-    );
-  }
-
-  Widget _itemRow(BuildContext context, OrderItem item, bool editable) {
-    final failed = item.qcStatus == 'failed';
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: editable ? () => openCatalogItemSheet(context, order, existingItem: item) : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                  child: Text(item.subId(order.orderNumber), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 11.5)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-                Text("${item.price.toStringAsFixed(0)} so'm", style: const TextStyle(color: AppColors.grayDark, fontSize: 12)),
-                if (editable) ...[
-                  const SizedBox(width: 6),
-                  const Icon(Icons.edit_rounded, size: 14, color: AppColors.gray),
-                ],
-                if (failed) ...[
-                  const SizedBox(width: 6),
-                  const Icon(Icons.error_rounded, color: AppColors.danger, size: 16),
-                ],
-              ],
-            ),
-            if (failed)
-              Padding(
-                padding: const EdgeInsets.only(left: 8, top: 3),
-                child: Text(
-                  item.qcNote?.isNotEmpty == true ? "Sifat nazorati rad etdi: ${item.qcNote}" : "Sifat nazorati rad etdi — qayta ishlov kerak",
-                  style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
+            for (final item in items)
+              ItemDetailRow(
+                item: item,
+                subId: item.subId(order.orderNumber),
+                editable: editable,
+                onTap: editable ? () => openCatalogItemSheet(context, order, existingItem: item) : null,
               ),
-          ],
-        ),
+        ],
       ),
     );
   }

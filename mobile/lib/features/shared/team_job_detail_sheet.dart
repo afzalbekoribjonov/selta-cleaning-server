@@ -10,6 +10,7 @@ import '../../core/services/orders_repository.dart';
 import '../worker/worker_order_detail_sheet.dart' show itemsEditableFor;
 import 'catalog_item_sheet.dart';
 import 'comments_section.dart';
+import 'item_detail_row.dart';
 
 void openTeamJobDetailSheet(BuildContext context, Order order) {
   showModalBottomSheet(
@@ -171,28 +172,11 @@ class _TeamItemsCard extends StatelessWidget {
             )
           else
             for (final item in items)
-              InkWell(
-                borderRadius: BorderRadius.circular(10),
+              ItemDetailRow(
+                item: item,
+                subId: item.subId(order.orderNumber),
+                editable: editable,
                 onTap: editable ? () => openCatalogItemSheet(context, order, existingItem: item) : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                        child: Text(item.subId(order.orderNumber), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 11.5)),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-                      Text("${item.price.toStringAsFixed(0)} so'm", style: const TextStyle(color: AppColors.grayDark, fontSize: 12)),
-                      if (editable) ...[
-                        const SizedBox(width: 6),
-                        const Icon(Icons.edit_rounded, size: 14, color: AppColors.gray),
-                      ],
-                    ],
-                  ),
-                ),
               ),
         ],
       ),
