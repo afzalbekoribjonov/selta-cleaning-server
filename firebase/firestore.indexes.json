@@ -65,6 +65,14 @@
         { "fieldPath": "qcRatedBy", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdAt", "order": "ASCENDING" },
+        { "fieldPath": "totalPrice", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
