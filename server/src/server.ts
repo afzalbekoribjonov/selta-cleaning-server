@@ -13,8 +13,11 @@ app.use(cors());
 app.use(express.json());
 
 // Render sog'ligini tekshirish uchun, va bepul reja "uxlab qolishi"ni
-// oldini olish uchun tashqi keep-alive xizmati shu manzilga so'rov yuboradi.
-app.get("/health", (_req, res) => res.json({ ok: true }));
+// oldini olish uchun tashqi keep-alive xizmati (masalan UptimeRobot) har
+// ~10 daqiqada shu manzilga so'rov yuboradi. GET va HEAD ikkalasi ham
+// aniq belgilangan — UptimeRobot standart holatda HEAD so'rov yuboradi.
+app.get("/health", (_req, res) => res.status(200).json({ ok: true }));
+app.head("/health", (_req, res) => res.status(200).end());
 
 app.use("/", authRouter);
 app.use("/", employeeAdminRouter);
