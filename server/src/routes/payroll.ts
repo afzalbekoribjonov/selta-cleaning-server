@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin } from "../lib/authz";
 
@@ -65,8 +65,13 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
     }
     const { start, end } = monthRange(yearMonth);
 
+    // Diqqat: barcha xodimlar olinadi (faqat hozir "active" bo'lganlar emas) —
+    // maosh shu OY DAVOMIDA faol bo'lgan xodimlarga hisoblanishi kerak, hozirgi
+    // holatiga qarab emas. Aks holda o'tgan oyni qayta hisoblaganda, keyinroq
+    // ishdan bo'shatilgan xodim o'sha oyda haqiqatan ishlagan bo'lsa ham
+    // ro'yxatdan butunlay tushib qolar edi.
     const [employeesSnap, updatedSnap, createdSnap] = await Promise.all([
-      db.collection("employees").where("status", "==", "active").get(),
+      db.collection("employees").get(),
       db.collection("orders").where("updatedAt", ">=", start).where("updatedAt", "<", end).get(),
       db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
     ]);
@@ -83,6 +88,14 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
       const emp = empDoc.data();
       const salary = emp.salary as { method?: string; params?: Record<string, number> } | undefined;
       if (!salary?.method) continue;
+
+      // Xodim shu oy davomida faol bo'lgan bo'lishi kerak: oy tugashidan oldin
+      // ishga qabul qilingan, va (agar bo'shatilgan bo'lsa) oy boshlanishidan
+      // KEYIN bo'shatilgan bo'lishi kerak.
+      const hiredAt = (emp.createdAt as Timestamp | undefined)?.toDate();
+      const terminatedAt = (emp.terminatedAt as Timestamp | undefined)?.toDate();
+      const wasActiveDuringMonth = (!hiredAt || hiredAt < end) && (!terminatedAt || terminatedAt >= start);
+      if (!wasActiveDuringMonth) continue;
 
       const empId = empDoc.id;
       const params = salary.params ?? {};

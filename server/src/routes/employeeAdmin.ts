@@ -21,6 +21,8 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           department: data.department,
           status: data.status,
           salary: data.salary ?? null,
+          createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
+          terminatedAt: data.terminatedAt?.toDate?.().toISOString() ?? null,
         };
       }),
     });

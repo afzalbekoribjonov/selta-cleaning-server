@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Area, AreaChart, CartesianGrid, RadialBar, RadialBarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ArrowLeft, Phone, Wallet, KeyRound, UserX, TrendingUp, CalendarCheck, History, Sparkles } from 'lucide-react'
+import { ArrowLeft, Phone, Wallet, KeyRound, UserX, TrendingUp, CalendarCheck, History, Sparkles, CalendarDays } from 'lucide-react'
 import { apiPost } from '@/lib/api'
 import { DEPARTMENTS } from '@/lib/departments'
 import { SALARY_METHODS } from '@/lib/salary-methods'
-import { type Employee } from '@/lib/employees'
+import { type Employee, formatTenure } from '@/lib/employees'
+import { formatDateUz } from '@/lib/date-utils'
 import { useEmployeeOrders } from '@/hooks/useEmployeeOrders'
 import { usePayrollHistory } from '@/hooks/usePayrollHistory'
 import { Spinner } from '@/components/ui/Spinner'
@@ -36,12 +37,18 @@ export default function EmployeeDetailPage() {
   const { orders, loading: ordersLoading } = useEmployeeOrders(id ?? '', employee?.department ?? '')
   const { runs: payrollRuns, loading: payrollLoading } = usePayrollHistory(id ?? '')
 
+  const hiredAt = employee?.createdAt ? new Date(employee.createdAt) : null
+  const referenceEnd = employee?.terminatedAt ? new Date(employee.terminatedAt) : new Date()
+
   const monthly = useMemo(() => {
     const now = new Date()
     const months: { key: string; label: string; start: Date; end: Date }[] = []
     for (let i = 5; i >= 0; i--) {
       const start = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+      // Ishga qabul qilinishidan oldingi oylarni ko'rsatmaymiz — aks holda
+      // "0 ta buyurtma" xuddi faolsizlikdek noto'g'ri taassurot qoldiradi.
+      if (hiredAt && end <= hiredAt) continue
       months.push({ key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`, label: MONTH_LABELS[start.getMonth()], start, end })
     }
     const list = orders ?? []
@@ -51,20 +58,22 @@ export default function EmployeeDetailPage() {
       count: list.filter((o) => o.createdAt >= start && o.createdAt < end).length,
       revenue: list.filter((o) => o.createdAt >= start && o.createdAt < end).reduce((s, o) => s + o.totalPrice, 0),
     }))
-    const last3Avg = counts.slice(-3).reduce((s, m) => s + m.count, 0) / 3
+    const last3Avg = counts.slice(-3).reduce((s, m) => s + m.count, 0) / (Math.min(counts.length, 3) || 1)
     return { counts, projectedNext: Math.round(last3Avg) }
-  }, [orders])
+  }, [orders, hiredAt])
 
   const activityThisMonth = useMemo(() => {
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const daysSoFar = now.getDate()
+    // Shu oyda ishga kirgan bo'lsa, kunlar sanog'i ishga kirgan kundan boshlanadi.
+    const rangeStart = hiredAt && hiredAt > monthStart ? hiredAt : monthStart
+    const daysSoFar = Math.max(Math.floor((now.getTime() - rangeStart.getTime()) / 86_400_000) + 1, 0)
     const activeDaySet = new Set<number>()
     for (const o of orders ?? []) {
-      if (o.createdAt >= monthStart) activeDaySet.add(o.createdAt.getDate())
+      if (o.createdAt >= rangeStart) activeDaySet.add(o.createdAt.getDate())
     }
     return { activeDays: activeDaySet.size, totalDays: daysSoFar, inactiveDays: Math.max(daysSoFar - activeDaySet.size, 0) }
-  }, [orders])
+  }, [orders, hiredAt])
 
   if (employeesQuery.isLoading) {
     return <Spinner className="p-16" />
@@ -111,6 +120,12 @@ export default function EmployeeDetailPage() {
                   <Phone size={12} />
                   {employee.phone}
                 </span>
+                {hiredAt && (
+                  <span className="flex items-center gap-1 text-xs text-gray-dark">
+                    <CalendarDays size={12} />
+                    {formatDateUz(hiredAt)}dan beri — {formatTenure(hiredAt, referenceEnd)}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -128,11 +143,23 @@ export default function EmployeeDetailPage() {
             </div>
           )}
         </div>
-        <div className="mt-4 border-t border-border pt-4 text-sm text-ink">
-          Maosh usuli:{' '}
-          <span className="font-bold">
-            {employee.salary?.method ? SALARY_METHODS[employee.salary.method]?.label ?? employee.salary.method : 'Belgilanmagan'}
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-border pt-4 text-sm text-ink">
+          <span>
+            Maosh usuli:{' '}
+            <span className="font-bold">
+              {employee.salary?.method ? SALARY_METHODS[employee.salary.method]?.label ?? employee.salary.method : 'Belgilanmagan'}
+            </span>
           </span>
+          {hiredAt && (
+            <span>
+              Ishga qabul qilingan: <span className="font-bold">{formatDateUz(hiredAt)}</span>
+            </span>
+          )}
+          {employee.terminatedAt && (
+            <span>
+              Ishdan bo'shatilgan: <span className="font-bold text-danger">{formatDateUz(new Date(employee.terminatedAt))}</span>
+            </span>
+          )}
         </div>
       </section>
 
