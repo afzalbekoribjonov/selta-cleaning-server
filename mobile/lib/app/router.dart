@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/employee_list_screen.dart';
 import '../features/auth/pin_entry_screen.dart';
 import '../features/home/employee_home_screen.dart';
+import '../features/profile/employee_profile_screen.dart';
 import '../features/role_select/role_select_screen.dart';
 import '../features/splash/splash_screen.dart';
 
@@ -25,5 +26,6 @@ final appRouter = GoRouter(
       ),
     ),
     GoRoute(path: '/home', builder: (context, state) => const EmployeeHomeScreen()),
+    GoRoute(path: '/profile', builder: (context, state) => const EmployeeProfileScreen()),
   ],
 );

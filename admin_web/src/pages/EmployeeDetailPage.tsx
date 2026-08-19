@@ -36,6 +36,7 @@ import { PinResetDialog } from '@/components/employees/PinResetDialog'
 import { TerminateDialog } from '@/components/employees/TerminateDialog'
 import { EditEmployeeDialog } from '@/components/employees/EditEmployeeDialog'
 import { ChangeDepartmentDialog } from '@/components/employees/ChangeDepartmentDialog'
+import { TasksSection } from '@/components/employees/TasksSection'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -253,6 +254,8 @@ export default function EmployeeDetailPage() {
           </div>
         )}
       </section>
+
+      {dept.isCustom && <TasksSection employee={employee} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm xl:col-span-2">

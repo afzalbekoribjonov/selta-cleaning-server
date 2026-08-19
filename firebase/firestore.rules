@@ -131,5 +131,16 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if isAdmin();
     }
+
+    // --- tasks ---------------------------------------------------------
+    // "Boshqa" bo'limdagi xodimlarga admin tayinlaydigan topshiriqlar.
+    // Xodim faqat o'ziga tegishlisini o'qiy oladi; holat o'zgarishi hech
+    // qachon to'g'ridan-to'g'ri klient yozuvi orqali emas (reja qarori #3
+    // bilan bir xil tamoyil) — faqat server (adminCreateTask/markTaskDone/
+    // markTaskDelayed) orqali.
+    match /tasks/{taskId} {
+      allow read: if isAdmin() || (isSignedIn() && employeeId() == resource.data.employeeId);
+      allow write: if false;
+    }
   }
 }

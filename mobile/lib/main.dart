@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'core/widgets/connectivity_gate.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -25,6 +26,7 @@ class SeltaCleaningApp extends StatelessWidget {
       theme: AppTheme.light(),
       themeMode: ThemeMode.light,
       routerConfig: appRouter,
+      builder: (context, child) => ConnectivityGate(child: child),
     );
   }
 }

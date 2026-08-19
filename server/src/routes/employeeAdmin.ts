@@ -26,32 +26,42 @@ function slugifyDepartmentLabel(label: string): string {
  * o'z ichida `tx.get`/`tx.set` chaqiradi — chaqiruvchi buni tranzaksiyadagi
  * BOSHQA yozuvlardan OLDIN chaqirishi kerak (Firestore: avval o'qish, keyin
  * yozish qoidasi).
+ *
+ * `label` faqat CUSTOM kasblar uchun qaytariladi (doimiy 4 ta uchun null) —
+ * `employees/{id}.departmentLabel`ga yoziladi, chunki oddiy xodim (admin
+ * emas) `customDepartments` kolleksiyasini o'qiy olmaydi (faqat admin
+ * ruxsati bor); shu denormalizatsiya bilan xodim mobil ilovada o'z
+ * profilida kasb nomini ko'ra oladi.
  */
 async function resolveDepartment(
   tx: Transaction,
   body: { department?: unknown; newDepartment?: { label?: unknown; includeInStats?: unknown } },
   createdBy: string,
-): Promise<string> {
-  const label = typeof body.newDepartment?.label === "string" ? body.newDepartment.label.trim() : "";
-  if (label) {
-    const slug = slugifyDepartmentLabel(label);
-    if (FIXED_DEPARTMENTS.has(slug)) return slug;
+): Promise<{ key: string; label: string | null }> {
+  const newLabel = typeof body.newDepartment?.label === "string" ? body.newDepartment.label.trim() : "";
+  if (newLabel) {
+    const slug = slugifyDepartmentLabel(newLabel);
+    if (FIXED_DEPARTMENTS.has(slug)) return { key: slug, label: null };
 
     const ref = db.collection("customDepartments").doc(slug);
     const snap = await tx.get(ref);
     if (!snap.exists) {
       tx.set(ref, {
-        label,
+        label: newLabel,
         includeInStats: !!body.newDepartment?.includeInStats,
         createdAt: FieldValue.serverTimestamp(),
         createdBy,
       });
     }
-    return slug;
+    return { key: slug, label: newLabel };
   }
 
   const department = typeof body.department === "string" ? body.department.trim() : "";
-  if (department) return department;
+  if (department) {
+    if (FIXED_DEPARTMENTS.has(department)) return { key: department, label: null };
+    const snap = await tx.get(db.collection("customDepartments").doc(department));
+    return { key: department, label: (snap.data()?.label as string | undefined) ?? null };
+  }
 
   throw new ApiError(400, "invalid-argument", "Bo'lim (kasb) tanlanishi shart");
 }
@@ -68,6 +78,7 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           fullName: data.fullName,
           phone: data.phone,
           department: data.department,
+          departmentLabel: data.departmentLabel ?? null,
           status: data.status,
           salary: data.salary ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -97,12 +108,13 @@ employeeAdminRouter.post("/adminCreateEmployee", withAuth, requireAdmin, async (
     const createdBy = req.auth!.employeeId ?? req.auth!.uid;
 
     await db.runTransaction(async (tx) => {
-      const resolvedDepartment = await resolveDepartment(tx, { department, newDepartment }, createdBy);
+      const resolved = await resolveDepartment(tx, { department, newDepartment }, createdBy);
 
       tx.set(employeeRef, {
         fullName: fullName.trim(),
         phone: phone.trim(),
-        department: resolvedDepartment,
+        department: resolved.key,
+        departmentLabel: resolved.label,
         status: "active",
         salary: salary ?? null,
         createdAt: FieldValue.serverTimestamp(),
@@ -172,13 +184,14 @@ employeeAdminRouter.post("/adminChangeEmployeeDepartment", withAuth, requireAdmi
         throw new ApiError(404, "not-found", "Xodim topilmadi");
       }
       const fromDepartment = employeeSnap.data()!.department as string;
-      const toDepartment = await resolveDepartment(tx, { department, newDepartment }, changedBy);
+      const resolved = await resolveDepartment(tx, { department, newDepartment }, changedBy);
+      const toDepartment = resolved.key;
 
       if (toDepartment === fromDepartment) {
         throw new ApiError(400, "invalid-argument", "Xodim allaqachon shu kasbda ishlamoqda");
       }
 
-      tx.update(employeeRef, { department: toDepartment });
+      tx.update(employeeRef, { department: toDepartment, departmentLabel: resolved.label });
       tx.set(employeeRef.collection("departmentHistory").doc(), {
         fromDepartment,
         toDepartment,

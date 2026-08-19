@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/widgets/selta_loader.dart';
 
 /// Xodim ismini tanlagach ko'rsatiladigan 4 xonali PIN ekrani (talab #2).
 /// Muvaffaqiyatli bo'lsa signInWithCustomToken chaqiriladi va Firebase
@@ -121,7 +122,7 @@ class _PinEntryScreenState extends ConsumerState<PinEntryScreen> {
                   if (_checking)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
-                      child: CircularProgressIndicator(color: Colors.white),
+                      child: SeltaLoader(size: 40, white: true),
                     )
                   else
                     GridView.count(

@@ -6,6 +6,7 @@ import type { Department } from "../lib/pipeline";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
+const FIXED_DEPARTMENTS = new Set(["dispatcher", "worker", "delivery", "qc"]);
 
 export const authRouter = Router();
 
@@ -15,13 +16,40 @@ export const authRouter = Router();
  * o'tmagan, shuning uchun bu endpoint ochiq (auth talab qilinmaydi). To'liq
  * `employees` hujjati o'rniga faqat ism/id qaytariladi — telefon, maosh va
  * PIN xesh kabi nozik maydonlar hech qachon bu yo'l orqali chiqarilmaydi.
+ *
+ * `department: "other"` — mobil ilovaning "Boshqa" havolasi: 4 ta doimiy
+ * bo'limga tegishli bo'lmagan (admin panelda "Boshqa" orqali yaratilgan
+ * kasblardagi) xodimlar. Xodimlar soni odatda kichik bo'lgani uchun to'liq
+ * ro'yxat o'qib, JSda filtrlanadi — Firestore'ning `not-in` operatori
+ * `orderBy` bilan qo'shilganda qo'shimcha indeks talab qilishi mumkin,
+ * shuning uchun soddaroq va ishonchli yo'l tanlandi.
  */
 authRouter.post("/listEmployeesByDepartment", async (req, res) => {
   try {
-    const department = req.body?.department as Department;
+    const department = req.body?.department as string;
+
+    if (department === "other") {
+      const snap = await db.collection("employees").where("status", "==", "active").orderBy("fullName").get();
+      const rows = snap.docs
+        .map((doc) => ({ id: doc.id, fullName: doc.data().fullName as string, department: doc.data().department as string }))
+        .filter((e) => !FIXED_DEPARTMENTS.has(e.department));
+
+      const slugs = [...new Set(rows.map((e) => e.department))];
+      const labelEntries = await Promise.all(
+        slugs.map(async (slug) => {
+          const deptSnap = await db.collection("customDepartments").doc(slug).get();
+          return [slug, (deptSnap.data()?.label as string | undefined) ?? slug] as const;
+        }),
+      );
+      const labels = Object.fromEntries(labelEntries);
+
+      res.json({ employees: rows.map((e) => ({ id: e.id, fullName: e.fullName, departmentLabel: labels[e.department] ?? e.department })) });
+      return;
+    }
+
     const snap = await db
       .collection("employees")
-      .where("department", "==", department)
+      .where("department", "==", department as Department)
       .where("status", "==", "active")
       .orderBy("fullName")
       .get();

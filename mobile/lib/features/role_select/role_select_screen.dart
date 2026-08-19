@@ -4,45 +4,113 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/constants.dart';
 
-/// Bo'lim tanlash ekrani — talab #1: har bir bo'lim asosiy ekranda
-/// kattaroq va to'liq o'zbek tilida nomlar bilan ko'rsatiladi (reference
-/// ilovadagi kichik/siqilgan tugmalar emas).
+/// Bo'lim tanlash ekrani — brendlangan gradient bosh qism + ixcham
+/// grid ko'rinishidagi bo'lim kartalari (talab: "tugmalar haddan ziyod
+/// katta va xunuk ko'rinmoqda" — to'g'irlangan). Pastda 4 ta doimiy
+/// bo'limga tegishli bo'lmagan xodimlar uchun "Boshqa" matnli havola.
 class RoleSelectScreen extends StatelessWidget {
   const RoleSelectScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: AppColors.bg,
+      body: Column(
+        children: [
+          const _HeroHeader(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Bo'limingizni tanlang",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink),
+                  ),
+                  const SizedBox(height: 14),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 0.98,
+                    children: [
+                      for (final entry in kDepartmentConfig.entries)
+                        _DepartmentTile(
+                          info: entry.value,
+                          onTap: () => context.push('/employees/${entry.key.name}'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () => context.push('/employees/other'),
+                      icon: const Icon(Icons.more_horiz_rounded, size: 18, color: AppColors.grayDark),
+                      label: const Text(
+                        'Boshqa',
+                        style: TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                      '© 2026 Selta Cleaning',
+                      style: TextStyle(color: AppColors.gray, fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroHeader extends StatelessWidget {
+  const _HeroHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(gradient: primaryGradient),
+      child: SafeArea(
+        bottom: false,
+        child: ClipRect(
+          child: Stack(
             children: [
-              Image.asset('assets/brand/lockup_purple.png', height: 40),
-              const SizedBox(height: 28),
-              Text(
-                'Xush kelibsiz',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
+              Positioned(
+                right: -26,
+                top: -30,
+                child: _blurCircle(130),
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Davom etish uchun bo’limingizni tanlang',
-                style: TextStyle(color: AppColors.grayDark, fontSize: 15, height: 1.4),
+              Positioned(
+                left: -30,
+                bottom: -46,
+                child: _blurCircle(110),
               ),
-              const SizedBox(height: 28),
-              for (final entry in kDepartmentConfig.entries) ...[
-                _DepartmentCard(
-                  info: entry.value,
-                  onTap: () => context.push('/employees/${entry.key.name}'),
-                ),
-                const SizedBox(height: 16),
-              ],
-              const SizedBox(height: 12),
-              Center(
-                child: Text(
-                  '© 2026 Selta Cleaning',
-                  style: TextStyle(color: AppColors.gray, fontSize: 12, fontWeight: FontWeight.w500),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 22, 24, 30),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Image.asset('assets/brand/lockup_white.png', height: 30),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Xush kelibsiz',
+                      style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Davom etish uchun bo'limingizni tanlang",
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13.5, height: 1.4),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -51,61 +119,61 @@ class RoleSelectScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _blurCircle(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.07)),
+    );
+  }
 }
 
-class _DepartmentCard extends StatelessWidget {
+class _DepartmentTile extends StatelessWidget {
   final DepartmentInfo info;
   final VoidCallback onTap;
 
-  const _DepartmentCard({required this.info, required this.onTap});
+  const _DepartmentTile({required this.info, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.surface,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppColors.border),
             boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
+              BoxShadow(color: AppColors.primary.withValues(alpha: 0.05), blurRadius: 14, offset: const Offset(0, 5)),
             ],
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 60,
-                height: 60,
+                width: 42,
+                height: 42,
                 decoration: const BoxDecoration(gradient: heroGradient, shape: BoxShape.circle),
-                child: Icon(info.icon, color: Colors.white, size: 28),
+                child: Icon(info.icon, color: Colors.white, size: 20),
               ),
-              const SizedBox(width: 18),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      info.label,
-                      style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.ink),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      info.description,
-                      style: const TextStyle(fontSize: 13, color: AppColors.grayDark, height: 1.3),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 12),
+              Text(
+                info.label,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
               ),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.gray, size: 26),
+              const SizedBox(height: 3),
+              Text(
+                info.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11.5, color: AppColors.grayDark, height: 1.25),
+              ),
             ],
           ),
         ),

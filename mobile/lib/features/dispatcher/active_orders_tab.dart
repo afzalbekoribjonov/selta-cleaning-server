@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/widgets/selta_loader.dart';
 import 'order_detail_sheet.dart';
 import 'widgets/order_card.dart';
 
@@ -93,7 +94,7 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
         const SizedBox(height: 4),
         Expanded(
           child: ordersAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const SeltaLoadingView(),
             error: (err, _) => Center(child: Text('Xatolik: $err')),
             data: (orders) {
               var filtered = orders.where((o) => o.status != 'done').toList();

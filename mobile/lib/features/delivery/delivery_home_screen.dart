@@ -5,8 +5,9 @@ import '../../app/theme.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/launch_utils.dart';
-import '../../core/widgets/confirm_logout.dart';
+import '../../core/widgets/selta_loader.dart';
 import '../dispatcher/widgets/order_card.dart';
+import '../shared/employee_app_bar.dart';
 import '../shared/team_jobs_section.dart';
 import 'delivery_order_detail_sheet.dart';
 
@@ -37,22 +38,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
     final stage = _stages[_stageIndex].$1;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Dastavchik'),
-            Text(fullName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.grayDark)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: () => confirmLogout(context, ref),
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Chiqish',
-          ),
-        ],
-      ),
+      appBar: EmployeeAppBar(departmentLabel: 'Dastavchik', employeeName: fullName),
       body: Column(
         children: [
           const TeamJobsSection(),
@@ -74,7 +60,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
           ),
           Expanded(
             child: ordersAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const SeltaLoadingView(),
               error: (err, _) => Center(child: Text('Xatolik: $err')),
               data: (orders) {
                 var filtered = orders.where((o) => o.serviceType == 'pickup' && o.status == stage).toList();

@@ -5,6 +5,7 @@ import '../../app/theme.dart';
 import '../../core/models/employee_summary.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/widgets/selta_loader.dart';
 
 /// Dispetcher yoki Sifat nazorati joyida-yuvish buyurtmasiga jamoa
 /// biriktiradi (talab #14). Ishchi bo'limidan xodimlar tanlanadi.
@@ -76,7 +77,7 @@ class _TeamAssignSheetState extends ConsumerState<_TeamAssignSheet> {
               ),
               Expanded(
                 child: employeesAsync.when(
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => const Center(child: SeltaLoader(size: 32)),
                   error: (e, _) => Center(child: Text(describeApiError(e))),
                   data: (employees) {
                     if (employees.isEmpty) {

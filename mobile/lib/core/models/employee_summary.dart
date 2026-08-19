@@ -5,13 +5,18 @@
 class EmployeeSummary {
   final String id;
   final String fullName;
+  // Faqat "Boshqa" (aralash kasblar) ro'yxatida keladi — har bir xodimning
+  // aynan qaysi kasbda ekanini ko'rsatish uchun (bo'lim bo'yicha oddiy
+  // ro'yxatlarda hammasi bir xil bo'lgani uchun kerak emas).
+  final String? departmentLabel;
 
-  const EmployeeSummary({required this.id, required this.fullName});
+  const EmployeeSummary({required this.id, required this.fullName, this.departmentLabel});
 
   factory EmployeeSummary.fromMap(Map<Object?, Object?> map) {
     return EmployeeSummary(
       id: map['id'] as String,
       fullName: map['fullName'] as String? ?? "Noma'lum",
+      departmentLabel: map['departmentLabel'] as String?,
     );
   }
 }

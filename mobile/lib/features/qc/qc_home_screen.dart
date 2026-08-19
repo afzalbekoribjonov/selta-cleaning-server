@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
-import '../../core/widgets/confirm_logout.dart';
+import '../../core/widgets/selta_loader.dart';
 import '../dispatcher/widgets/order_card.dart';
+import '../shared/employee_app_bar.dart';
 import '../shared/team_assign_sheet.dart';
 import '../shared/team_jobs_section.dart';
 import 'qc_order_detail_sheet.dart';
@@ -33,22 +34,7 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
     final showTeamAssign = _tabIndex == 1;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Sifat nazorati'),
-            Text(fullName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.grayDark)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: () => confirmLogout(context, ref),
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Chiqish',
-          ),
-        ],
-      ),
+      appBar: EmployeeAppBar(departmentLabel: 'Sifat nazorati', employeeName: fullName),
       body: Column(
         children: [
           const TeamJobsSection(),
@@ -70,7 +56,7 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
           ),
           Expanded(
             child: ordersAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const SeltaLoadingView(),
               error: (err, _) => Center(child: Text('Xatolik: $err')),
               data: (orders) {
                 var filtered = showTeamAssign

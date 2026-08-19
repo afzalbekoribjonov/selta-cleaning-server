@@ -14,6 +14,9 @@ class Order {
   final num totalArea;
   final num totalPrice;
   final String createdBy;
+  final String? washedBy;
+  final String? deliveredBy;
+  final String? qcRatedBy;
   final DateTime createdAt;
   final DateTime? dueDate;
   final bool hasFailedItem;
@@ -34,6 +37,9 @@ class Order {
     this.totalArea = 0,
     this.totalPrice = 0,
     required this.createdBy,
+    this.washedBy,
+    this.deliveredBy,
+    this.qcRatedBy,
     required this.createdAt,
     this.dueDate,
     this.hasFailedItem = false,
@@ -57,6 +63,9 @@ class Order {
       totalArea: (data['totalArea'] as num?) ?? 0,
       totalPrice: (data['totalPrice'] as num?) ?? 0,
       createdBy: data['createdBy']?.toString() ?? '',
+      washedBy: data['washedBy']?.toString(),
+      deliveredBy: data['deliveredBy']?.toString(),
+      qcRatedBy: data['qcRatedBy']?.toString(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
       hasFailedItem: data['hasFailedItem'] as bool? ?? false,

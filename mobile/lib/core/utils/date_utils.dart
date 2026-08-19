@@ -13,3 +13,12 @@ String formatDateTimeUz(DateTime date) {
   final m = date.minute.toString().padLeft(2, '0');
   return '${formatDateUz(date)}, $h:$m';
 }
+
+/// Bosh harf bilan, 1-indeksli — banner/bo'lim sarlavhalari uchun
+/// (admin_web'dagi UZ_MONTHS_FULL bilan bir xil naqsh).
+const List<String> uzMonthsCapitalized = [
+  '', 'Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'Iyun',
+  'Iyul', 'Avgust', 'Sentabr', 'Oktabr', 'Noyabr', 'Dekabr',
+];
+
+String formatMonthYearUz(DateTime date) => '${uzMonthsCapitalized[date.month]} ${date.year}';

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/theme.dart';
 import '../../core/services/employee_repository.dart';
-import '../../core/widgets/confirm_logout.dart';
+import '../shared/employee_app_bar.dart';
 import 'active_orders_tab.dart';
 import 'new_order_tab.dart';
 
@@ -26,22 +25,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
     final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Dispetcher'),
-            Text(fullName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.grayDark)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: () => confirmLogout(context, ref),
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Chiqish',
-          ),
-        ],
-      ),
+      appBar: EmployeeAppBar(departmentLabel: 'Dispetcher', employeeName: fullName),
       body: IndexedStack(
         index: _index,
         children: [
