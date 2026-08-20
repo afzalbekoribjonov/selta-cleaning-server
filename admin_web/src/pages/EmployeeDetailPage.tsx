@@ -63,7 +63,9 @@ export default function EmployeeDetailPage() {
   const { getDepartment } = useDepartmentLookup()
   const employeesMap = useEmployeesMap()
 
-  const hiredAt = employee?.createdAt ? new Date(employee.createdAt) : null
+  // useMemo bilan barqarorlashtiriladi — aks holda har renderda yangi Date
+  // obyekti hosil bo'lib, pastdagi useMemo'larni bekorga qayta hisoblatadi.
+  const hiredAt = useMemo(() => (employee?.createdAt ? new Date(employee.createdAt) : null), [employee?.createdAt])
   const referenceEnd = employee?.terminatedAt ? new Date(employee.terminatedAt) : new Date()
 
   const monthly = useMemo(() => {
