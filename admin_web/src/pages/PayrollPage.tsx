@@ -96,14 +96,25 @@ export default function PayrollPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(results).map(([id, r]) => (
-                    <tr key={id} className="border-b border-border last:border-0">
-                      <td className="px-5 py-3 font-semibold text-ink">{r.fullName}</td>
-                      <td className="px-5 py-3 text-ink">{DEPARTMENTS[r.department]?.label ?? r.department}</td>
-                      <td className="px-5 py-3 text-ink">{SALARY_METHODS[r.method]?.label ?? r.method}</td>
-                      <td className="px-5 py-3 text-right font-bold text-brand-primary">{formatMoney(r.amount)}</td>
-                    </tr>
-                  ))}
+                  {Object.entries(results).map(([id, r]) => {
+                    const advancesTotal = (r.breakdown?.advancesTotal as number | undefined) ?? 0
+                    const grossAmount = (r.breakdown?.grossAmount as number | undefined) ?? r.amount
+                    return (
+                      <tr key={id} className="border-b border-border last:border-0">
+                        <td className="px-5 py-3 font-semibold text-ink">{r.fullName}</td>
+                        <td className="px-5 py-3 text-ink">{DEPARTMENTS[r.department]?.label ?? r.department}</td>
+                        <td className="px-5 py-3 text-ink">{SALARY_METHODS[r.method]?.label ?? r.method}</td>
+                        <td className="px-5 py-3 text-right">
+                          <div className={`font-bold ${r.amount < 0 ? 'text-danger' : 'text-brand-primary'}`}>{formatMoney(r.amount)}</div>
+                          {advancesTotal > 0 && (
+                            <div className="text-[11px] text-gray-dark">
+                              {formatMoney(grossAmount)} − avans {formatMoney(advancesTotal)}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

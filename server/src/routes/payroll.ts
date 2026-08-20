@@ -1,9 +1,70 @@
 import { Router } from "express";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
-import { ApiError, sendError, withAuth, requireAdmin } from "../lib/authz";
+import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 
 export const payrollRouter = Router();
+
+/**
+ * Admin xodimga oylik maoshining bir qismini "avans" sifatida oldindan
+ * beradi — `computeMonthlyPayroll` shu oy uchun hisoblangan maoshdan
+ * avanslar yig'indisini avtomatik ayirib, sof (net) summani chiqaradi
+ * (talab: "qanchadir qismini avans sifatida berish va qolgan qismini
+ * shunga qarab hisoblab borish").
+ */
+payrollRouter.post("/adminGiveAdvance", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  try {
+    const { employeeId, amount, yearMonth, note } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (typeof amount !== "number" || !(amount > 0)) {
+      throw new ApiError(400, "invalid-argument", "Summa musbat son bo'lishi kerak");
+    }
+    if (!/^\d{4}-\d{2}$/.test(yearMonth ?? "")) {
+      throw new ApiError(400, "invalid-argument", "yearMonth 'YYYY-MM' formatida bo'lishi kerak");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+
+    const ref = employeeRef.collection("advances").doc();
+    await ref.set({
+      amount,
+      yearMonth,
+      note: typeof note === "string" && note.trim() ? note.trim() : null,
+      createdAt: FieldValue.serverTimestamp(),
+      createdBy: req.auth!.employeeId ?? req.auth!.uid,
+    });
+
+    res.json({ advanceId: ref.id });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+payrollRouter.post("/adminDeleteAdvance", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, advanceId } = req.body ?? {};
+    if (!employeeId || !advanceId) {
+      throw new ApiError(400, "invalid-argument", "employeeId va advanceId majburiy");
+    }
+
+    const ref = db.collection("employees").doc(employeeId).collection("advances").doc(advanceId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Avans topilmadi");
+    }
+
+    await ref.delete();
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
 
 /**
  * Admin har bir xodim uchun maosh usulini va parametrlarini tanlaydi
@@ -163,6 +224,23 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
         default:
           continue;
       }
+
+      // Shu oy uchun berilgan avanslar hisoblangan (gross) maoshdan
+      // ayiriladi — natija sof (net) to'lanadigan summa. Ataylab NOLGA
+      // cheklanmaydi: agar avans hisoblangan maoshdan katta bo'lsa, admin
+      // buni ochiq-oydin (manfiy summa sifatida) ko'rishi kerak — bu
+      // xodim "qarzga chiqib qolgani"ni bildiradi.
+      const advancesSnap = await db
+        .collection("employees")
+        .doc(empId)
+        .collection("advances")
+        .where("yearMonth", "==", yearMonth)
+        .get();
+      const advancesTotal = advancesSnap.docs.reduce((s, d) => s + ((d.data().amount as number) || 0), 0);
+      const grossAmount = amount;
+      const netAmount = grossAmount - advancesTotal;
+      amount = netAmount;
+      breakdown = { ...breakdown, grossAmount, advancesTotal };
 
       await payrollRunRef.set({
         yearMonth, // qidiruv uchun maydon sifatida ham — "Oylik hisobot" bir

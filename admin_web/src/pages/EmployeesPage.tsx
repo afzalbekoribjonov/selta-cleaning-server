@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, User, Phone, Wallet, KeyRound, UserX, Pencil, ChevronRight } from 'lucide-react'
+import { Plus, X, User, Phone, Wallet, KeyRound, UserX, Pencil, ChevronRight, RotateCcw, Trash2 } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { SALARY_METHODS } from '@/lib/salary-methods'
 import { type Employee, formatTenure } from '@/lib/employees'
@@ -10,6 +10,8 @@ import { SalaryConfigDialog } from '@/components/employees/SalaryConfigDialog'
 import { PinResetDialog } from '@/components/employees/PinResetDialog'
 import { TerminateDialog } from '@/components/employees/TerminateDialog'
 import { EditEmployeeDialog } from '@/components/employees/EditEmployeeDialog'
+import { RestoreEmployeeDialog } from '@/components/employees/RestoreEmployeeDialog'
+import { DeleteEmployeeDialog } from '@/components/employees/DeleteEmployeeDialog'
 import { DepartmentSelectField, type DepartmentSelection } from '@/components/employees/DepartmentSelectField'
 import { Spinner } from '@/components/ui/Spinner'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -21,6 +23,8 @@ export default function EmployeesPage() {
   const [salaryTarget, setSalaryTarget] = useState<Employee | null>(null)
   const [pinTarget, setPinTarget] = useState<Employee | null>(null)
   const [terminateTarget, setTerminateTarget] = useState<Employee | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<Employee | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
 
   const query = useQuery({
     queryKey: ['employees'],
@@ -112,6 +116,8 @@ export default function EmployeesPage() {
                         onSalary={() => setSalaryTarget(e)}
                         onPin={() => setPinTarget(e)}
                         onTerminate={() => setTerminateTarget(e)}
+                        onRestore={() => setRestoreTarget(e)}
+                        onDelete={() => setDeleteTarget(e)}
                       />
                     ))}
                   </div>
@@ -135,6 +141,8 @@ export default function EmployeesPage() {
       )}
       {pinTarget && <PinResetDialog employeeId={pinTarget.id} employeeName={pinTarget.fullName} onClose={() => setPinTarget(null)} />}
       {terminateTarget && <TerminateDialog employee={terminateTarget} onClose={() => setTerminateTarget(null)} />}
+      {restoreTarget && <RestoreEmployeeDialog employee={restoreTarget} onClose={() => setRestoreTarget(null)} />}
+      {deleteTarget && <DeleteEmployeeDialog employee={deleteTarget} onClose={() => setDeleteTarget(null)} />}
     </div>
   )
 }
@@ -147,6 +155,8 @@ function EmployeeCard({
   onSalary,
   onPin,
   onTerminate,
+  onRestore,
+  onDelete,
 }: {
   employee: Employee
   dept: DepartmentInfo
@@ -155,6 +165,8 @@ function EmployeeCard({
   onSalary: () => void
   onPin: () => void
   onTerminate: () => void
+  onRestore: () => void
+  onDelete: () => void
 }) {
   const terminated = e.status !== 'active'
   const hiredAt = e.createdAt ? new Date(e.createdAt) : null
@@ -195,7 +207,7 @@ function EmployeeCard({
           <IconAction title="Ma'lumotlarni tahrirlash" onClick={onEdit}>
             <Pencil size={15} />
           </IconAction>
-          {!terminated && (
+          {!terminated ? (
             <>
               <IconAction title="Maosh sozlash" onClick={onSalary}>
                 <Wallet size={15} />
@@ -205,6 +217,15 @@ function EmployeeCard({
               </IconAction>
               <IconAction title="Ishdan bo'shatish" danger onClick={onTerminate}>
                 <UserX size={15} />
+              </IconAction>
+            </>
+          ) : (
+            <>
+              <IconAction title="Xodimni tiklash" onClick={onRestore}>
+                <RotateCcw size={15} />
+              </IconAction>
+              <IconAction title="Butunlay o'chirish" danger onClick={onDelete}>
+                <Trash2 size={15} />
               </IconAction>
             </>
           )}

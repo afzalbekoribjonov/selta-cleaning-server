@@ -291,3 +291,74 @@ employeeAdminRouter.post("/adminTerminateEmployee", withAuth, requireAdmin, asyn
     sendError(res, err);
   }
 });
+
+/** Ishdan bo'shatilgan xodimni qayta faollashtiradi — u qaytadan PIN bilan kira oladi. */
+employeeAdminRouter.post("/adminRestoreEmployee", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+    if (snap.data()?.status !== "terminated") {
+      throw new ApiError(400, "invalid-argument", "Faqat ishdan bo'shatilgan xodimni tiklash mumkin");
+    }
+
+    await employeeRef.update({ status: "active", terminatedAt: null, terminatedBy: null });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Ishdan bo'shatilgan xodimni BUTUNLAY o'chiradi — o'zining barcha
+ * subkolleksiyalari (private/credentials, payrollRuns, advances,
+ * departmentHistory) bilan birga. Faqat allaqachon bo'shatilgan xodimga
+ * qo'llaniladi (admin panelda ham shu xodimlar uchun ko'rsatiladi) —
+ * server tomonida ham qayta tekshiriladi, to'g'ridan-to'g'ri API
+ * chaqiruvi orqali faol xodim tasodifan o'chirilib qolmasligi uchun.
+ * Buyurtmalardagi tarixiy yozuvlar (createdBy/washedBy va h.k.) ataylab
+ * TEGILMAYDI — audit tarixi xodim o'chirilgandan keyin ham saqlanishi kerak.
+ */
+employeeAdminRouter.post("/adminDeleteEmployee", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+    if (snap.data()?.status !== "terminated") {
+      throw new ApiError(400, "invalid-argument", "Faqat ishdan bo'shatilgan xodimni o'chirish mumkin");
+    }
+
+    const credentialsSnap = await employeeRef.collection("private").doc("credentials").get();
+    const uid = credentialsSnap.data()?.firebaseUid;
+
+    await db.recursiveDelete(employeeRef);
+
+    if (uid) {
+      try {
+        await auth.deleteUser(uid);
+      } catch (err) {
+        if ((err as { code?: string })?.code !== "auth/user-not-found") {
+          console.error(`deleteUser(${uid}) failed:`, err);
+        }
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});

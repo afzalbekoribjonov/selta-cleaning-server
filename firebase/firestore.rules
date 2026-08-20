@@ -53,6 +53,11 @@ service cloud.firestore {
         allow read: if isAdmin();
         allow write: if false; // faqat adminChangeEmployeeDepartment (Admin SDK)
       }
+
+      match /advances/{advanceId} {
+        allow read: if isAdmin() || (isSignedIn() && employeeId() == employeeId);
+        allow write: if false; // faqat adminGiveAdvance/adminDeleteAdvance (Admin SDK)
+      }
     }
 
     // Yuqoridagi ichma-ich qoida faqat aniq xodim yo'li bo'yicha

@@ -37,6 +37,7 @@ import { TerminateDialog } from '@/components/employees/TerminateDialog'
 import { EditEmployeeDialog } from '@/components/employees/EditEmployeeDialog'
 import { ChangeDepartmentDialog } from '@/components/employees/ChangeDepartmentDialog'
 import { TasksSection } from '@/components/employees/TasksSection'
+import { AdvancesSection } from '@/components/employees/AdvancesSection'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -380,6 +381,8 @@ export default function EmployeeDetailPage() {
           </div>
         )}
       </section>
+
+      <AdvancesSection employee={employee} />
 
       <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
         <div className="mb-1 flex items-center gap-2">
