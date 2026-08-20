@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore'
-import { X, User, Phone, MapPin, Calendar, Clock, Star } from 'lucide-react'
+import { X, User, Phone, MapPin, Calendar, Clock, Star, Trash2 } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { isOverdue, type Order } from '@/lib/orders'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
@@ -8,6 +8,7 @@ import { STATUS_CONFIG } from '@/lib/status-config'
 import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { DeleteOrderDialog } from './DeleteOrderDialog'
 
 interface OrderItem {
   id: string
@@ -48,6 +49,7 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
   useEscapeClose(onClose)
   const employees = useEmployeesMap()
   const overdue = isOverdue(order)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const items = useSubcollection<OrderItem>(order.id, 'items', 'itemNumber', (id, d) => ({
     id,
@@ -86,9 +88,19 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
               <TariffBadge tariff={order.tariff} />
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 hover:bg-bg" aria-label="Yopish">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setDeleteOpen(true)}
+              className="rounded-lg p-2 text-gray-dark hover:bg-danger-bg hover:text-danger"
+              title="Buyurtmani o'chirish"
+              aria-label="Buyurtmani o'chirish"
+            >
+              <Trash2 size={18} />
+            </button>
+            <button onClick={onClose} className="rounded-lg p-2 hover:bg-bg" aria-label="Yopish">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-5 p-6">
@@ -191,6 +203,8 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
           </section>
         </div>
       </div>
+
+      {deleteOpen && <DeleteOrderDialog order={order} onClose={() => setDeleteOpen(false)} onDeleted={onClose} />}
     </div>
   )
 }

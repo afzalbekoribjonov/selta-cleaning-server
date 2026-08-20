@@ -1,4 +1,6 @@
-import { Mail, ShieldCheck, Info, Clock3 } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import { Mail, ShieldCheck, Info, Clock3, KeyRound } from 'lucide-react'
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth'
 import { useAuth } from '@/lib/auth-context'
 import { TARIFF_CONFIG } from '@/lib/status-config'
 import { SALARY_METHODS } from '@/lib/salary-methods'
@@ -35,6 +37,8 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+
+      <ChangePasswordCard />
 
       <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
         <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
@@ -91,5 +95,118 @@ export default function SettingsPage() {
 
       <p className="text-center text-xs text-gray">Selta Cleaning admin panel · v1.0</p>
     </div>
+  )
+}
+
+function describePasswordError(err: unknown): string {
+  const code = (err as { code?: string })?.code
+  switch (code) {
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return "Joriy parol noto'g'ri"
+    case 'auth/weak-password':
+      return 'Yangi parol juda oddiy — kamida 6 ta belgidan iborat bo\'lsin'
+    case 'auth/too-many-requests':
+      return "Juda ko'p urinish — birozdan so'ng qayta urining"
+    case 'auth/requires-recent-login':
+      return "Xavfsizlik uchun qayta kirib, so'ng urinib ko'ring"
+    default:
+      return 'Xatolik yuz berdi'
+  }
+}
+
+function ChangePasswordCard() {
+  const { user } = useAuth()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setSuccess(false)
+
+    if (newPassword.length < 6) {
+      setError('Yangi parol kamida 6 ta belgidan iborat bo\'lishi kerak')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Yangi parol va tasdiqlash mos kelmadi")
+      return
+    }
+    if (!user?.email) {
+      setError('Foydalanuvchi aniqlanmadi')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const credential = EmailAuthProvider.credential(user.email, currentPassword)
+      await reauthenticateWithCredential(user, credential)
+      await updatePassword(user, newPassword)
+      setSuccess(true)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      setError(describePasswordError(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
+        <KeyRound size={18} className="text-brand-primary" />
+        Parolni o'zgartirish
+      </h2>
+      <p className="mb-4 text-xs text-gray-dark">Admin panelga kirish uchun ishlatiladigan parol</p>
+
+      <form className="max-w-sm space-y-3" onSubmit={handleSubmit}>
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold text-ink">Joriy parol</label>
+          <input
+            type="password"
+            required
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold text-ink">Yangi parol</label>
+          <input
+            type="password"
+            required
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-semibold text-ink">Yangi parolni tasdiqlash</label>
+          <input
+            type="password"
+            required
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+          />
+        </div>
+        {error && <p className="text-sm font-semibold text-danger">{error}</p>}
+        {success && <p className="text-sm font-semibold text-success">Parol muvaffaqiyatli o'zgartirildi</p>}
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+        >
+          {saving ? 'Saqlanmoqda...' : 'Saqlash'}
+        </button>
+      </form>
+    </section>
   )
 }

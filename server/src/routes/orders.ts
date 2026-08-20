@@ -2,7 +2,7 @@ import { Router } from "express";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { computeDueDate, isValidTransition, type ServiceType } from "../lib/pipeline";
-import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz";
+import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 import { computeItems, type ItemInput } from "../lib/pricing";
 
@@ -582,6 +582,27 @@ ordersRouter.post("/assignTeam", withAuth, async (req: AuthedRequest, res) => {
       });
     }
 
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Admin — buyurtmani butunlay o'chiradi (istalgan holatda). `recursiveDelete`
+ * hujjat bilan birga barcha subkolleksiyalarni (items/comments/statusHistory)
+ * ham tozalaydi — aks holda ular "yetim" holatda Firestore'da qolib ketardi.
+ */
+ordersRouter.post("/adminDeleteOrder", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { orderId } = req.body ?? {};
+    if (!orderId) throw new ApiError(400, "invalid-argument", "orderId majburiy");
+
+    const orderRef = db.collection("orders").doc(orderId);
+    const snap = await orderRef.get();
+    if (!snap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+
+    await db.recursiveDelete(orderRef);
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);

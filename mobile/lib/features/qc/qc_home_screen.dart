@@ -50,11 +50,14 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
         children: [
           const TeamJobsSection(),
           if (showActive) ...[
+            // Chip balandligi + tepa/pastdan bab-baravar joy — avval faqat
+            // 40px va faqat tepadan padding berilgani uchun matn pastga
+            // "cho'kib" kesilib qolayotgan edi (talab bo'yicha tuzatildi).
             SizedBox(
-              height: 40,
+              height: 60,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 itemCount: _activeStages.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (context, i) {
@@ -65,6 +68,7 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
                     selected: selected,
                     onSelected: (_) => setState(() => _activeStageIndex = i),
                     selectedColor: AppColors.primary,
+                    visualDensity: VisualDensity.compact,
                     labelStyle: TextStyle(
                       color: selected ? Colors.white : AppColors.ink,
                       fontWeight: FontWeight.w700,

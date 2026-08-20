@@ -15,7 +15,12 @@ class RoleSelectScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
+      // `_HeroHeader`ning ichki tarkibi (Stack -> Padding -> Column) tabiiy
+      // eniga moslashadi (shrink-wrap) — stretch bo'lmasa, Column uni
+      // markazlashtirib qo'yardi va ikki yon tomondan bo'sh joy ko'rinardi
+      // (talab: "yon taraflarida xunuk ko'rinmoqda" — shu bug tuzatildi).
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const _HeroHeader(),
           Expanded(
