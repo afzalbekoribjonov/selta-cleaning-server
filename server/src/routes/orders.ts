@@ -1,32 +1,49 @@
 import { Router } from "express";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
-import { computeDueDate, isValidTransition, type ServiceType } from "../lib/pipeline";
+import { computeDueDate, isValidTransition, isValidItemTransition, type ServiceType } from "../lib/pipeline";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 import { computeItems, type ItemInput } from "../lib/pricing";
 
-/** qc_review'ga yetgunga qadar itemlar tahrirlanishi mumkin (talab: dastavchik
- * mijoz oldida, keyin ishchi "Sexga keldi"da aniqlashtiradi). */
-const ITEM_LOCKED_STATUSES = new Set(["qc_review", "ready", "done"]);
+/**
+ * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
+ * buyurtmalarida item o'zining ITEM_PIPELINE bosqichi bo'yicha qulflanadi
+ * — "pending"/"washing"da hali erkin tahrirlanadi/o'chiriladi (dastavchik
+ * mijoz oldida yoki ishchi "Sexga keldi"da aniqlashtiradi), "packing"dan
+ * boshlab (ishlov jarayoniga kirgach) endi tahrirlab bo'lmaydi.
+ */
+const ITEM_STILL_EDITABLE_STATUSES = new Set(["pending", "washing"]);
 
-function assertItemsEditable(order: Record<string, unknown>, role: string, employeeId: string) {
-  if (ITEM_LOCKED_STATUSES.has(order.status as string)) {
-    throw new ApiError(412, "failed-precondition", "Buyurtma sifat nazoratiga yuborilgan — mahsulotlarni endi tahrirlab bo'lmaydi");
+function assertItemsEditable(
+  order: Record<string, unknown>,
+  role: string,
+  employeeId: string,
+  item?: Record<string, unknown> | null,
+) {
+  if (order.status === "done") {
+    throw new ApiError(412, "failed-precondition", "Buyurtma yakunlangan — mahsulotlarni endi tahrirlab bo'lmaydi");
   }
   const isTeamMember =
     order.serviceType === "onsite" && Array.isArray(order.assignedTeam) && (order.assignedTeam as string[]).includes(employeeId);
   if (!["worker", "delivery", "admin"].includes(role) && !isTeamMember) {
     throw new ApiError(403, "permission-denied", "Bu amal uchun ruxsatingiz yo'q");
   }
+  if (item && order.serviceType === "pickup" && !ITEM_STILL_EDITABLE_STATUSES.has(item.status as string)) {
+    throw new ApiError(412, "failed-precondition", "Bu mahsulot allaqachon ishlov jarayonida — endi tahrirlab bo'lmaydi");
+  }
 }
 
 export const ordersRouter = Router();
 
 /**
- * Dispetcher "Yangi buyurtma" formasi (talab #11): Ism familiya, Telefon,
- * Mo'ljal, Xizmat turi, Tarif. Mahsulotlar/itemlar bu bosqichda kiritilmaydi —
- * ular keyinroq (olib kelish/joyida yuvish jarayonida) qo'shiladi.
+ * Sotuv menejerining "Yangi buyurtma" formasi (talab #3): Ism familiya,
+ * Telefon, Mo'ljal, Xizmat turi. Olib kelish (pickup) buyurtmalarida
+ * mahsulotlar SHU YERDA, tashkil etilgan ro'yxat sifatida qo'shiladi —
+ * har biri O'ZINING tarifiga ega (order-level tarif endi pickup uchun
+ * ishlatilmaydi). Joyida yuvish (onsite) buyurtmalar o'zgarishsiz —
+ * order-level tarif majburiy, mahsulotlar keyinroq jamoa tashrifida
+ * qo'shiladi.
  *
  * `orderNumber` counters/orders hujjatida tranzaksion ravishda 1 dan
  * ketma-ket ajratiladi (talab #7).
@@ -35,15 +52,27 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
     if (role !== "dispatcher" && role !== "admin") {
-      throw new ApiError(403, "permission-denied", "Faqat dispetcher yangi buyurtma qo'sha oladi");
+      throw new ApiError(403, "permission-denied", "Faqat sotuv menejeri yangi buyurtma qo'sha oladi");
     }
 
-    const { customerName, phone, location, serviceType, tariff, gpsCoords } = req.body ?? {};
+    const { customerName, phone, location, serviceType, tariff, gpsCoords, items } = req.body ?? {};
     if (!customerName?.trim() || !phone?.trim() || !location?.trim()) {
       throw new ApiError(400, "invalid-argument", "Ism, telefon va mo'ljal majburiy");
     }
     if (serviceType !== "pickup" && serviceType !== "onsite") {
       throw new ApiError(400, "invalid-argument", "Xizmat turi noto'g'ri");
+    }
+    const isOnsite = serviceType === "onsite";
+    if (isOnsite && !tariff) {
+      throw new ApiError(400, "invalid-argument", "Tarif tanlanishi shart");
+    }
+
+    let computedItems: Awaited<ReturnType<typeof computeItems>> = [];
+    if (!isOnsite && Array.isArray(items) && items.length > 0) {
+      for (const it of items as ItemInput[]) {
+        if (!it.tariff) throw new ApiError(400, "invalid-argument", "Har bir mahsulot uchun tarif tanlanishi shart");
+      }
+      computedItems = await computeItems(items as ItemInput[]);
     }
 
     const counterRef = db.collection("counters").doc("orders");
@@ -55,7 +84,9 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       const next = (counterSnap.data()?.value ?? 0) + 1;
       tx.set(counterRef, { value: next }, { merge: true });
 
-      const dueDate = computeDueDate(new Date(), tariff);
+      const now = new Date();
+      let totalArea = 0;
+      let totalPrice = 0;
 
       tx.set(orderRef, {
         orderNumber: next,
@@ -64,7 +95,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         location: location.trim(),
         gpsCoords: gpsCoords ?? null,
         serviceType,
-        tariff,
+        tariff: isOnsite ? tariff : null,
         status: "new",
         assignedTeam: [],
         totalArea: 0,
@@ -72,7 +103,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         createdBy: employeeId,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        dueDate,
+        dueDate: isOnsite ? computeDueDate(now, tariff) : null,
       });
 
       tx.set(orderRef.collection("statusHistory").doc(), {
@@ -81,6 +112,26 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         changedBy: employeeId,
         changedAt: FieldValue.serverTimestamp(),
       });
+
+      let itemNumber = 1;
+      for (const item of computedItems) {
+        tx.set(orderRef.collection("items").doc(), {
+          itemNumber: itemNumber++,
+          ...item,
+          status: "pending",
+          dueDate: item.tariff ? computeDueDate(now, item.tariff) : null,
+          qcStatus: "pending",
+          addedBy: employeeId,
+          addedByDepartment: role,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        totalArea += item.area;
+        totalPrice += item.price;
+      }
+      if (computedItems.length > 0) {
+        tx.update(orderRef, { totalArea, totalPrice });
+      }
 
       return next;
     });
@@ -136,7 +187,9 @@ ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
         updatedBy: employeeId,
       };
 
-      if (tariff && tariff !== order.tariff) {
+      // Pickup buyurtmalarda tarif endi item-darajasida — order-level
+      // tarifni bu yerdan o'zgartirish faqat onsite uchun ma'noli.
+      if (order.serviceType === "onsite" && tariff && tariff !== order.tariff) {
         update.tariff = tariff;
         const createdAt = order.createdAt?.toDate?.() ?? new Date();
         update.dueDate = computeDueDate(createdAt, tariff);
@@ -153,18 +206,15 @@ ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
 
 /**
  * Har bir qo'lda bosiladigan status o'tishi qaysi bo'lim tomonidan
- * qilinishi mumkinligi. `qc_review -> ready` bu yerda YO'Q — u faqat
- * barcha itemlar sifat nazoratidan o'tganda submitItemQc ichida avtomatik
- * sodir bo'ladi (talab #6).
+ * qilinishi mumkinligi. Pickup buyurtmalarida faqat item'lar mavjud
+ * bo'lishidan OLDINGI ikkita o'tish shu yerda — "brought_in"dan keyingi
+ * butun jarayon (yuvish/upakovka/yetkazish) endi ITEM-darajasida,
+ * changeItemStatus orqali (talab: har bir mahsulot mustaqil pipeline).
  */
 const MANUAL_TRANSITIONS: Record<ServiceType, Record<string, string[]>> = {
   pickup: {
     "new->picked_up": ["delivery"],
     "picked_up->brought_in": ["delivery"],
-    "brought_in->washing": ["worker"],
-    "washing->packing": ["worker"],
-    "packing->qc_review": ["worker"],
-    "ready->done": ["delivery"],
   },
   onsite: {
     "new->team_assigned": ["dispatcher", "qc"],
@@ -172,20 +222,6 @@ const MANUAL_TRANSITIONS: Record<ServiceType, Record<string, string[]>> = {
     "in_progress->done": ["worker", "delivery", "qc"],
   },
 };
-
-/** Muvaffaqiyatli o'tishdan keyin tegishli bo'limga bildirishnoma. */
-async function notifyOnTransition(orderNumber: number, orderId: string, toStatus: string) {
-  const events: Record<string, [string, string, string]> = {
-    brought_in: ["worker", "Yangi ish", `#${orderNumber} — aniqlashtirish/yuvish kerak`],
-    qc_review: ["qc", "Sifat nazoratiga tushdi", `#${orderNumber} — tekshirish kerak`],
-    ready: ["delivery", "Yetkazishga tayyor", `#${orderNumber} — mijozga qaytarish kerak`],
-  };
-  const event = events[toStatus];
-  if (event) {
-    const [department, title, body] = event;
-    await notifyDepartment(department as Parameters<typeof notifyDepartment>[0], title, body, { orderId });
-  }
-}
 
 ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res) => {
   try {
@@ -216,17 +252,8 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
         throw new ApiError(403, "permission-denied", "Bu o'tish uchun ruxsatingiz yo'q");
       }
 
-      // Ishchi mahsulotlarni belgilamasdan yuvishni boshlay olmaydi (talab
-      // #3'ning tabiiy natijasi — har item o'z sub-ID'iga ega bo'lishi kerak).
-      if (fromStatus === "brought_in" && toStatus === "washing") {
-        const itemsSnap = await tx.get(orderRef.collection("items"));
-        if (itemsSnap.empty) {
-          throw new ApiError(412, "failed-precondition", "Avval mahsulotlarni belgilang");
-        }
-      }
-
       // Maosh hisob-kitobi uchun (talab #13) — qaysi xodim buyurtmani olib
-      // ketgani/yuvgani/yetkazgani shu holat o'tishlari orqali qayd etiladi.
+      // ketgani/yetkazgani shu holat o'tishlari orqali qayd etiladi.
       const attributionUpdate: Record<string, unknown> = {};
       if (toStatus === "picked_up") {
         attributionUpdate.pickedUpBy = employeeId;
@@ -239,7 +266,6 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
         }
         attributionUpdate.gpsCoords = gpsCoords.trim();
       }
-      if (fromStatus === "washing" && toStatus === "packing") attributionUpdate.washedBy = employeeId;
       if (toStatus === "done") {
         attributionUpdate.deliveredBy = employeeId;
         if (typeof collectedAmount === "number" && collectedAmount > 0) {
@@ -257,7 +283,9 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
       });
     });
 
-    await notifyOnTransition(orderNumber, orderId, toStatus);
+    if (toStatus === "brought_in") {
+      await notifyDepartment("worker", "Yangi ish", `#${orderNumber} — aniqlashtirish/yuvish kerak`, { orderId });
+    }
 
     res.json({ ok: true });
   } catch (err) {
@@ -266,28 +294,37 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
 });
 
 /**
- * Sifat nazorati — har bir itemni alohida pass/fail qiladi (talab #3/#6).
- * Agar shu yozuvdan so'ng buyurtmadagi BARCHA itemlar "passed" bo'lsa,
- * buyurtma avtomatik "ready" holatiga o'tadi. Agar bitta item ham "failed"
- * bo'lsa, buyurtma "qc_review"da qoladi.
+ * Item-darajasidagi holat o'tishi — pickup buyurtmalarining asosiy
+ * yuvish/upakovka/yetkazish jarayoni endi shu orqali (talab: har bir
+ * mahsulot mustaqil pipeline'ga ega). "packing"da istalgan ishchi ✅
+ * (ready) yoki ❌ (returned) bosishi mumkin — alohida Sifat nazorati
+ * bo'limi endi shart emas (talab #5/#10). "ready->done" — dastavchik
+ * item'ni alohida yetkazadi (talab #9: qisman yetkazish). Barcha itemlar
+ * "done" bo'lgach, buyurtmaning o'zi avtomatik "done"ga o'tadi.
  */
-ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => {
-  try {
-    const role = req.auth!.role;
-    if (role !== "qc" && role !== "admin") {
-      throw new ApiError(403, "permission-denied", "Faqat Sifat nazorati xodimi bu amalni bajara oladi");
-    }
+const ITEM_MANUAL_TRANSITIONS: Record<string, string[]> = {
+  "pending->washing": ["worker"],
+  "washing->packing": ["worker"],
+  "packing->ready": ["worker"],
+  "packing->returned": ["worker"],
+  "returned->washing": ["worker"],
+  "ready->done": ["delivery"],
+};
 
-    const { orderId, itemId, qcStatus, qcNote } = req.body ?? {};
+ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const role = req.auth!.role!;
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    const { orderId, itemId, toStatus, qcNote, collectedAmount } = req.body ?? {};
+    if (!orderId || !itemId || !toStatus) {
+      throw new ApiError(400, "invalid-argument", "orderId, itemId va toStatus majburiy");
+    }
 
     const orderRef = db.collection("orders").doc(orderId);
     const itemRef = orderRef.collection("items").doc(itemId);
 
-    let becameReady = false;
     let orderNumber = 0;
-    let anyFailed = false;
-    let washedBy: string | undefined;
+    let itemName = "";
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, itemSnap, itemsSnap] = await Promise.all([
@@ -295,55 +332,73 @@ ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => 
         tx.get(itemRef),
         tx.get(orderRef.collection("items")),
       ]);
-
       if (!orderSnap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
       if (!itemSnap.exists) throw new ApiError(404, "not-found", "Mahsulot topilmadi");
 
       const order = orderSnap.data()!;
+      const item = itemSnap.data()!;
       orderNumber = order.orderNumber;
-      washedBy = order.washedBy as string | undefined;
-      if (order.status !== "qc_review") {
-        throw new ApiError(412, "failed-precondition", "Buyurtma sifat nazorati bosqichida emas");
+      itemName = (item.name as string) ?? "Mahsulot";
+      if (order.serviceType !== "pickup") {
+        throw new ApiError(400, "invalid-argument", "Item-darajasidagi holat faqat olib kelish buyurtmalarida mavjud");
       }
 
-      tx.update(itemRef, {
-        qcStatus,
-        qcNote: qcNote ?? null,
-        qcBy: employeeId,
-        qcAt: FieldValue.serverTimestamp(),
-      });
+      const fromStatus = item.status as string;
+      if (!isValidItemTransition(fromStatus, toStatus)) {
+        throw new ApiError(412, "failed-precondition", `${fromStatus} -> ${toStatus} o'tishi ruxsat etilmagan`);
+      }
+      const allowedRoles = ITEM_MANUAL_TRANSITIONS[`${fromStatus}->${toStatus}`] ?? [];
+      if (role !== "admin" && !allowedRoles.includes(role)) {
+        throw new ApiError(403, "permission-denied", "Bu o'tish uchun ruxsatingiz yo'q");
+      }
 
-      const finalStatuses = itemsSnap.docs.map((doc) => (doc.id === itemId ? qcStatus : doc.data().qcStatus));
-      const allPassed = finalStatuses.every((s) => s === "passed");
-      anyFailed = finalStatuses.some((s) => s === "failed");
+      const itemUpdate: Record<string, unknown> = { status: toStatus, updatedAt: FieldValue.serverTimestamp() };
+      if (fromStatus === "washing" && toStatus === "packing") {
+        itemUpdate.washedBy = employeeId;
+        itemUpdate.washedAt = FieldValue.serverTimestamp();
+      }
+      if (toStatus === "ready") {
+        itemUpdate.qcStatus = "passed";
+        itemUpdate.qcBy = employeeId;
+        itemUpdate.qcAt = FieldValue.serverTimestamp();
+        itemUpdate.qcNote = null;
+      }
+      if (toStatus === "returned") {
+        itemUpdate.qcStatus = "failed";
+        itemUpdate.qcBy = employeeId;
+        itemUpdate.qcAt = FieldValue.serverTimestamp();
+        itemUpdate.qcNote = qcNote ?? null;
+      }
+      if (toStatus === "done") {
+        itemUpdate.deliveredBy = employeeId;
+        itemUpdate.deliveredAt = FieldValue.serverTimestamp();
+        if (typeof collectedAmount === "number" && collectedAmount > 0) {
+          itemUpdate.collectedAmount = collectedAmount;
+        }
+      }
 
-      if (allPassed) {
-        becameReady = true;
-        tx.update(orderRef, { status: "ready", hasFailedItem: false, updatedAt: FieldValue.serverTimestamp() });
-        tx.set(orderRef.collection("statusHistory").doc(), {
-          fromStatus: "qc_review",
-          toStatus: "ready",
-          changedBy: employeeId,
-          changedAt: FieldValue.serverTimestamp(),
-          note: "Barcha mahsulotlar sifat nazoratidan o'tdi",
-        });
-      } else {
-        tx.update(orderRef, { hasFailedItem: anyFailed, updatedAt: FieldValue.serverTimestamp() });
+      tx.update(itemRef, itemUpdate);
+
+      if (toStatus === "done" && order.status !== "done") {
+        const allDone = itemsSnap.docs.every((d) => (d.id === itemId ? true : d.data().status === "done"));
+        if (allDone) {
+          tx.update(orderRef, { status: "done", updatedAt: FieldValue.serverTimestamp() });
+          tx.set(orderRef.collection("statusHistory").doc(), {
+            fromStatus: order.status,
+            toStatus: "done",
+            changedBy: employeeId,
+            changedAt: FieldValue.serverTimestamp(),
+            note: "Barcha mahsulotlar yetkazildi",
+          });
+        }
       }
     });
 
-    if (becameReady) {
-      await notifyDepartment("delivery", "Yetkazishga tayyor", `#${orderNumber} — mijozga qaytarish kerak`, {
-        orderId,
-      });
-    } else if (qcStatus === "failed") {
-      const title = "Qayta ishlov kerak";
-      const body = `#${orderNumber} — mahsulot sifat nazoratidan o'tmadi${qcNote ? `: ${qcNote}` : ""}`;
-      if (washedBy) {
-        await notifyEmployee(washedBy, title, body, { orderId });
-      } else {
-        await notifyDepartment("worker", title, body, { orderId });
-      }
+    if (toStatus === "ready") {
+      await notifyDepartment("delivery", "Yetkazishga tayyor", `#${orderNumber} — ${itemName} mijozga qaytarish kerak`, { orderId });
+    } else if (toStatus === "returned") {
+      const body = `#${orderNumber} — ${itemName} sifat nazoratidan o'tmadi${qcNote ? `: ${qcNote}` : ""}`;
+      await notifyDepartment("worker", "Qayta ishlov kerak", body, { orderId });
     }
 
     res.json({ ok: true });
@@ -353,16 +408,17 @@ ordersRouter.post("/submitItemQc", withAuth, async (req: AuthedRequest, res) => 
 });
 
 /**
- * Sifat nazorati butun buyurtmaga umumiy baho qo'yadi (1-5) — har bir
- * mahsulotning alohida pass/fail holatidan tashqari, upakovka/umumiy
- * ishning sifatini baholash uchun. Istalgan payt (qc_review yoki ready
- * bosqichida) qayta yozilishi mumkin.
+ * Butun buyurtmaga umumiy baho qo'yadi (1-5) — har bir mahsulotning
+ * alohida pass/fail holatidan tashqari, upakovka/umumiy ishning
+ * sifatini baholash uchun. Istalgan payt qayta yozilishi mumkin.
+ * Ishchi va (hozircha mavjud bo'lsa) Sifat nazorati xodimi bajara oladi
+ * — sifat nazorati ishi endi upakovka bosqichidagi ishchilarga tegishli.
  */
 ordersRouter.post("/submitOrderQcRating", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
-    if (role !== "qc" && role !== "admin") {
-      throw new ApiError(403, "permission-denied", "Faqat Sifat nazorati xodimi bu amalni bajara oladi");
+    if (role !== "qc" && role !== "worker" && role !== "admin") {
+      throw new ApiError(403, "permission-denied", "Faqat ishchi bu amalni bajara oladi");
     }
 
     const { orderId, rating, note } = req.body ?? {};
@@ -412,9 +468,15 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
 
     const orderSnapPre = await orderRef.get();
     if (!orderSnapPre.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
-    assertItemsEditable(orderSnapPre.data()!, role, employeeId);
+    const orderDataPre = orderSnapPre.data()!;
+    assertItemsEditable(orderDataPre, role, employeeId);
 
-    const computed = await computeItems(items as ItemInput[], orderSnapPre.data()!.tariff as string | undefined);
+    const isPickup = orderDataPre.serviceType === "pickup";
+    if (isPickup && (items as ItemInput[]).some((i) => !i.tariff)) {
+      throw new ApiError(400, "invalid-argument", "Har bir mahsulot uchun tarif tanlanishi shart");
+    }
+
+    const computed = await computeItems(items as ItemInput[], orderDataPre.tariff as string | undefined);
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, existingItemsSnap] = await Promise.all([tx.get(orderRef), tx.get(itemsRef)]);
@@ -424,13 +486,17 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
       let nextNumber = existingItemsSnap.size + 1;
       let addedArea = 0;
       let addedPrice = 0;
+      const now = new Date();
 
       for (const item of computed) {
         tx.set(itemsRef.doc(), {
           itemNumber: nextNumber,
           ...item,
+          status: isPickup ? "pending" : null,
+          dueDate: isPickup && item.tariff ? computeDueDate(now, item.tariff) : null,
           qcStatus: "pending",
           addedBy: employeeId,
+          addedByDepartment: role,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
@@ -452,7 +518,7 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
   }
 });
 
-/** Mavjud itemni tahrirlash — faqat buyurtma hali qulflanmagan bosqichda. */
+/** Mavjud itemni tahrirlash — faqat buyurtma va item hali qulflanmagan bosqichda. */
 ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role!;
@@ -467,19 +533,29 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
 
     const orderSnapPre = await orderRef.get();
     if (!orderSnapPre.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+    const orderDataPre = orderSnapPre.data()!;
+    const isPickup = orderDataPre.serviceType === "pickup";
+    if (isPickup && !(item as ItemInput).tariff) {
+      throw new ApiError(400, "invalid-argument", "Tarif tanlanishi shart");
+    }
 
-    const [computed] = await computeItems([item as ItemInput], orderSnapPre.data()!.tariff as string | undefined);
+    const [computed] = await computeItems([item as ItemInput], orderDataPre.tariff as string | undefined);
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, itemSnap] = await Promise.all([tx.get(orderRef), tx.get(itemRef)]);
       if (!orderSnap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
       if (!itemSnap.exists) throw new ApiError(404, "not-found", "Mahsulot topilmadi");
-      assertItemsEditable(orderSnap.data()!, role, employeeId);
+      assertItemsEditable(orderSnap.data()!, role, employeeId, itemSnap.data());
 
       const prevPrice = Number(itemSnap.data()!.price) || 0;
       const prevArea = Number(itemSnap.data()!.area) || 0;
+      const now = new Date();
 
-      tx.update(itemRef, { ...computed, updatedAt: FieldValue.serverTimestamp() });
+      tx.update(itemRef, {
+        ...computed,
+        dueDate: isPickup && computed.tariff ? computeDueDate(now, computed.tariff) : null,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       tx.update(orderRef, {
         totalArea: FieldValue.increment(computed.area - prevArea),
         totalPrice: FieldValue.increment(computed.price - prevPrice),
@@ -493,7 +569,7 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
   }
 });
 
-/** Itemni o'chirish — faqat buyurtma hali qulflanmagan bosqichda. */
+/** Itemni o'chirish — faqat buyurtma va item hali qulflanmagan bosqichda. */
 ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role!;
@@ -510,7 +586,7 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
       const [orderSnap, itemSnap] = await Promise.all([tx.get(orderRef), tx.get(itemRef)]);
       if (!orderSnap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
       if (!itemSnap.exists) throw new ApiError(404, "not-found", "Mahsulot topilmadi");
-      assertItemsEditable(orderSnap.data()!, role, employeeId);
+      assertItemsEditable(orderSnap.data()!, role, employeeId, itemSnap.data());
 
       const price = Number(itemSnap.data()!.price) || 0;
       const area = Number(itemSnap.data()!.area) || 0;
