@@ -112,6 +112,48 @@ interface OrderRow {
   collectedAmount?: number;
 }
 
+interface PickupItemRow {
+  area?: number;
+  price?: number;
+  washedBy?: string;
+  washedAt?: Date;
+  deliveredBy?: string;
+  deliveredAt?: Date;
+  collectedAmount?: number;
+}
+
+/**
+ * Pickup buyurtmalarida yuvish/yetkazish endi ITEM-darajasida qayd
+ * etiladi (order.washedBy/deliveredBy endi faqat onsite uchun yoziladi) —
+ * shuning uchun maosh hisobida item'larni ham ko'rib chiqish kerak.
+ * Collection-group so'rov o'rniga har bir pickup buyurtmaning items
+ * subkolleksiyasi to'g'ridan-to'g'ri o'qiladi (order-scoped o'qish —
+ * qo'shimcha xavfsizlik qoidasi/indeks shart emas); hozircha loyiha
+ * hajmi kichik bo'lgani uchun bu yetarli — kelajakda buyurtmalar soni
+ * juda oshsa, collection-group so'rovga (wildcard qoidasi bilan)
+ * o'tish kerak bo'ladi.
+ */
+async function fetchPickupItems(): Promise<PickupItemRow[]> {
+  const pickupOrdersSnap = await db.collection("orders").where("serviceType", "==", "pickup").get();
+  const itemsSnaps = await Promise.all(pickupOrdersSnap.docs.map((d) => d.ref.collection("items").get()));
+  const rows: PickupItemRow[] = [];
+  for (const itemsSnap of itemsSnaps) {
+    for (const itemDoc of itemsSnap.docs) {
+      const d = itemDoc.data();
+      rows.push({
+        area: d.area as number | undefined,
+        price: d.price as number | undefined,
+        washedBy: d.washedBy as string | undefined,
+        washedAt: (d.washedAt as Timestamp | undefined)?.toDate(),
+        deliveredBy: d.deliveredBy as string | undefined,
+        deliveredAt: (d.deliveredAt as Timestamp | undefined)?.toDate(),
+        collectedAmount: d.collectedAmount as number | undefined,
+      });
+    }
+  }
+  return rows;
+}
+
 /**
  * Berilgan oy uchun har bir faol xodimning maoshini o'zining tanlangan
  * usuli bo'yicha hisoblaydi va `employees/{id}/payrollRuns/{yyyy-MM}`ga
@@ -131,14 +173,16 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
     // holatiga qarab emas. Aks holda o'tgan oyni qayta hisoblaganda, keyinroq
     // ishdan bo'shatilgan xodim o'sha oyda haqiqatan ishlagan bo'lsa ham
     // ro'yxatdan butunlay tushib qolar edi.
-    const [employeesSnap, updatedSnap, createdSnap] = await Promise.all([
+    const [employeesSnap, updatedSnap, createdSnap, pickupItems] = await Promise.all([
       db.collection("employees").get(),
       db.collection("orders").where("updatedAt", ">=", start).where("updatedAt", "<", end).get(),
       db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
+      fetchPickupItems(),
     ]);
 
     const updatedOrders = updatedSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as OrderRow);
     const createdOrders = createdSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as OrderRow);
+    const inRange = (date: Date | undefined) => !!date && date >= start && date < end;
 
     const results: Record<
       string,
@@ -185,30 +229,40 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
           break;
         }
         case "delivery": {
-          const delivered = updatedOrders.filter((o) => o.deliveredBy === empId && o.status === "done");
-          const orderValue = delivered.reduce((s, o) => s + (o.totalPrice || 0), 0);
-          const collected = delivered.reduce((s, o) => s + (o.collectedAmount || 0), 0);
+          // Onsite — order-level (o'zgarmagan); pickup — item-level (har bir
+          // mahsulot alohida yetkaziladi, talab #9: qisman yetkazish).
+          const deliveredOnsiteOrders = updatedOrders.filter(
+            (o) => o.serviceType === "onsite" && o.deliveredBy === empId && o.status === "done",
+          );
+          const deliveredItems = pickupItems.filter((i) => i.deliveredBy === empId && inRange(i.deliveredAt));
+          const orderValue =
+            deliveredOnsiteOrders.reduce((s, o) => s + (o.totalPrice || 0), 0) + deliveredItems.reduce((s, i) => s + (i.price || 0), 0);
+          const collected =
+            deliveredOnsiteOrders.reduce((s, o) => s + (o.collectedAmount || 0), 0) +
+            deliveredItems.reduce((s, i) => s + (i.collectedAmount || 0), 0);
           const base = params.baseAmount ?? 0;
           amount =
             base + (orderValue * (params.percentOfOrderValue ?? 0)) / 100 + (collected * (params.percentOfCashCollected ?? 0)) / 100;
-          breakdown = { baseAmount: base, orderValue, collected, orderCount: delivered.length };
+          breakdown = { baseAmount: base, orderValue, collected, orderCount: deliveredOnsiteOrders.length + deliveredItems.length };
           break;
         }
         case "finishing": {
-          const washed = updatedOrders.filter((o) => o.washedBy === empId);
-          const area = washed.reduce((s, o) => s + (o.totalArea || 0), 0);
+          // Yuvish endi pickup uchun ITEM-darajasida qayd etiladi
+          // (order.washedBy faqat eski/onsite yozuvlar uchun qoldi).
+          const washedItems = pickupItems.filter((i) => i.washedBy === empId && inRange(i.washedAt));
+          const area = washedItems.reduce((s, i) => s + (i.area || 0), 0);
           const rate = params.pricePerSqm ?? 0;
           amount = area * rate;
-          breakdown = { area, pricePerSqm: rate, orderCount: washed.length };
+          breakdown = { area, pricePerSqm: rate, itemCount: washedItems.length };
           break;
         }
         case "washing": {
-          const washed = updatedOrders.filter((o) => o.washedBy === empId);
-          const area = washed.reduce((s, o) => s + (o.totalArea || 0), 0);
+          const washedItems = pickupItems.filter((i) => i.washedBy === empId && inRange(i.washedAt));
+          const area = washedItems.reduce((s, i) => s + (i.area || 0), 0);
           const base = params.baseAmount ?? 0;
           const rate = params.pricePerSqm ?? 0;
           amount = base + area * rate;
-          breakdown = { baseAmount: base, area, pricePerSqm: rate, orderCount: washed.length };
+          breakdown = { baseAmount: base, area, pricePerSqm: rate, itemCount: washedItems.length };
           break;
         }
         case "furniture_onsite_percent": {
