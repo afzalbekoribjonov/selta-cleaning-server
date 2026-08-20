@@ -5,6 +5,7 @@ import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/utils/date_utils.dart';
 import 'team_job_detail_sheet.dart';
 
 /// Joyida-yuvish jamoasiga biriktirilgan buyurtmalar banneri (talab #14) —
@@ -56,17 +57,50 @@ class TeamJobsSection extends ConsumerWidget {
                       onTap: () => openTeamJobDetailSheet(context, order),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(
-                                '#${order.orderNumber} — ${order.customerName}',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '#${order.orderNumber} — ${order.customerName}',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                                  ),
+                                ),
+                                Text(statusOf(order.status).label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                const SizedBox(width: 4),
+                                const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 18),
+                              ],
                             ),
-                            Text(statusOf(order.status).label, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                            const SizedBox(width: 4),
-                            const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 18),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Icon(Icons.event_available_rounded, size: 13, color: Colors.white70),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Qabul: ${formatDateUz(order.createdAt)}',
+                                  style: const TextStyle(color: Colors.white70, fontSize: 11.5, fontWeight: FontWeight.w600),
+                                ),
+                                if (order.dueDate != null) ...[
+                                  const SizedBox(width: 10),
+                                  Icon(
+                                    Icons.timer_rounded,
+                                    size: 13,
+                                    color: order.isOverdue ? AppColors.accent : Colors.white70,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    formatDaysLeftUz(order.dueDate!),
+                                    style: TextStyle(
+                                      color: order.isOverdue ? AppColors.accent : Colors.white70,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ],
                         ),
                       ),

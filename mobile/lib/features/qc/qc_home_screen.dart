@@ -2,19 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../core/constants.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/widgets/selta_loader.dart';
+import '../dispatcher/order_detail_sheet.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/employee_app_bar.dart';
 import '../shared/team_assign_sheet.dart';
 import '../shared/team_jobs_section.dart';
 import 'qc_order_detail_sheet.dart';
 
-/// Sifat nazorati paneli — talab #6: upakovkaga yetib kelgan (qc_review
-/// holatidagi) buyurtmalarni tekshiradi, har bir mahsulotni alohida
-/// pass/fail qiladi. Talab #14: joyida-yuvish buyurtmalariga jamoa
-/// biriktirish (Dispetcher bilan bir qatorda) ham shu yerda.
+/// Sifat nazorati "Faol buyurtmalar" tabida ko'rinadigan bosqichlar —
+/// talab: butun "Olib kelish" quvurini kuzatib borish (o'z bosqichida
+/// tekshirish bilan bir qatorda), o'qish uchun.
+const _activeStages = ['brought_in', 'washing', 'packing', 'ready'];
+
+/// Sifat nazorati paneli — upakovkaga yetib kelgan (qc_review holatidagi)
+/// buyurtmalarni tekshiradi, har bir mahsulotni alohida pass/fail qiladi.
+/// Joyida-yuvish buyurtmalariga jamoa biriktirish (Dispetcher bilan bir
+/// qatorda) va butun "Olib kelish" quvurini kuzatib borish uchun "Faol
+/// buyurtmalar" tabi ham shu yerda.
 class QcHomeScreen extends ConsumerStatefulWidget {
   const QcHomeScreen({super.key});
 
@@ -24,6 +32,7 @@ class QcHomeScreen extends ConsumerStatefulWidget {
 
 class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
   int _tabIndex = 0;
+  int _activeStageIndex = 0;
   String _search = '';
 
   @override
@@ -31,13 +40,43 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
     final employeeAsync = ref.watch(currentEmployeeProvider);
     final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
     final ordersAsync = ref.watch(recentOrdersProvider);
-    final showTeamAssign = _tabIndex == 1;
+    final showActive = _tabIndex == 0;
+    final showReview = _tabIndex == 1;
+    final showTeamAssign = _tabIndex == 2;
 
     return Scaffold(
       appBar: EmployeeAppBar(departmentLabel: 'Sifat nazorati', employeeName: fullName),
       body: Column(
         children: [
           const TeamJobsSection(),
+          if (showActive) ...[
+            SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                itemCount: _activeStages.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final selected = i == _activeStageIndex;
+                  final label = statusOf(_activeStages[i]).label;
+                  return ChoiceChip(
+                    label: Text(label),
+                    selected: selected,
+                    onSelected: (_) => setState(() => _activeStageIndex = i),
+                    selectedColor: AppColors.primary,
+                    labelStyle: TextStyle(
+                      color: selected ? Colors.white : AppColors.ink,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                    ),
+                    backgroundColor: AppColors.surface,
+                    side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
+                  );
+                },
+              ),
+            ),
+          ],
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: TextField(
@@ -61,7 +100,11 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
               data: (orders) {
                 var filtered = showTeamAssign
                     ? orders.where((o) => o.serviceType == 'onsite' && o.status == 'new').toList()
-                    : orders.where((o) => o.status == 'qc_review').toList();
+                    : showReview
+                        ? orders.where((o) => o.status == 'qc_review').toList()
+                        : orders
+                            .where((o) => o.serviceType == 'pickup' && o.status == _activeStages[_activeStageIndex])
+                            .toList();
 
                 if (_search.isNotEmpty) {
                   filtered = filtered.where((o) {
@@ -73,11 +116,13 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
                 filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
                 if (filtered.isEmpty) {
+                  final emptyMessage = showTeamAssign
+                      ? 'Jamoa biriktirish kerak bo\'lgan buyurtma yo\'q'
+                      : showReview
+                          ? 'Tekshirish uchun buyurtma yo\'q'
+                          : 'Bu bosqichda buyurtma yo\'q';
                   return Center(
-                    child: Text(
-                      showTeamAssign ? 'Jamoa biriktirish kerak bo\'lgan buyurtma yo\'q' : 'Tekshirish uchun buyurtma yo\'q',
-                      style: const TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600),
-                    ),
+                    child: Text(emptyMessage, style: const TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600)),
                   );
                 }
 
@@ -89,7 +134,15 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
                     final order = filtered[i];
                     return OrderCard(
                       order: order,
-                      onTap: () => showTeamAssign ? openTeamAssignSheet(context, order.id) : openQcOrderDetailSheet(context, order),
+                      onTap: () {
+                        if (showTeamAssign) {
+                          openTeamAssignSheet(context, order.id);
+                        } else if (showReview) {
+                          openQcOrderDetailSheet(context, order);
+                        } else {
+                          openOrderDetailSheet(context, order);
+                        }
+                      },
                     );
                   },
                 );
@@ -102,6 +155,7 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
         loading: () => null,
         error: (_, __) => null,
         data: (orders) {
+          final activeCount = orders.where((o) => o.serviceType == 'pickup' && _activeStages.contains(o.status)).length;
           final reviewCount = orders.where((o) => o.status == 'qc_review').length;
           final teamCount = orders.where((o) => o.serviceType == 'onsite' && o.status == 'new').length;
 
@@ -109,6 +163,10 @@ class _QcHomeScreenState extends ConsumerState<QcHomeScreen> {
             selectedIndex: _tabIndex,
             onDestinationSelected: (i) => setState(() => _tabIndex = i),
             destinations: [
+              NavigationDestination(
+                icon: _BadgedIcon(icon: Icons.list_alt_rounded, count: activeCount),
+                label: 'Faol buyurtmalar',
+              ),
               NavigationDestination(
                 icon: _BadgedIcon(icon: Icons.fact_check_rounded, count: reviewCount),
                 label: 'Tekshirish',

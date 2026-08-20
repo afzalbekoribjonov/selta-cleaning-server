@@ -22,3 +22,16 @@ const List<String> uzMonthsCapitalized = [
 ];
 
 String formatMonthYearUz(DateTime date) => '${uzMonthsCapitalized[date.month]} ${date.year}';
+
+/// Muddatgacha necha kun qolganini o'zbekcha matnga aylantiradi — jamoa
+/// buyurtma kartalarida "necha kun qoldi" ko'rsatish uchun.
+String formatDaysLeftUz(DateTime dueDate) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final due = DateTime(dueDate.year, dueDate.month, dueDate.day);
+  final diff = due.difference(today).inDays;
+  if (diff < 0) return '${-diff} kun kechikdi';
+  if (diff == 0) return 'Bugun oxirgi kun';
+  if (diff == 1) return 'Ertaga muddati tugaydi';
+  return '$diff kun qoldi';
+}

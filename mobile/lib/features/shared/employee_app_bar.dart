@@ -24,23 +24,36 @@ class EmployeeAppBar extends StatelessWidget implements PreferredSizeWidget {
         onTap: () => context.push('/profile'),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(departmentLabel),
-              Row(
+              Container(
+                width: 34,
+                height: 34,
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(gradient: heroGradient, shape: BoxShape.circle),
+                child: Image.asset('assets/brand/icon_white.png', fit: BoxFit.contain),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Flexible(
-                    child: Text(
-                      employeeName,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.grayDark),
-                    ),
+                  Text(departmentLabel),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          employeeName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.grayDark),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(Icons.chevron_right_rounded, size: 15, color: AppColors.grayDark),
+                    ],
                   ),
-                  const SizedBox(width: 2),
-                  const Icon(Icons.chevron_right_rounded, size: 15, color: AppColors.grayDark),
                 ],
               ),
             ],

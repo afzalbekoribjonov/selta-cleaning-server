@@ -20,19 +20,22 @@ export const authRouter = Router();
  * `department: "other"` — mobil ilovaning "Boshqa" havolasi: 4 ta doimiy
  * bo'limga tegishli bo'lmagan (admin panelda "Boshqa" orqali yaratilgan
  * kasblardagi) xodimlar. Xodimlar soni odatda kichik bo'lgani uchun to'liq
- * ro'yxat o'qib, JSda filtrlanadi — Firestore'ning `not-in` operatori
- * `orderBy` bilan qo'shilganda qo'shimcha indeks talab qilishi mumkin,
- * shuning uchun soddaroq va ishonchli yo'l tanlandi.
+ * ro'yxat o'qib, JSda filtrlanadi VA saralanadi — `where('status','==',...)
+ * .orderBy('fullName')` Firestore'da alohida composite indeks talab qiladi
+ * (bo'lim bo'yicha filtr yo'q bo'lgani uchun mavjud `department+status+
+ * fullName` indeksi bunga mos kelmaydi); qo'shimcha indeks deploy qilish
+ * o'rniga saralashni JSda qilish soddaroq va ishonchliroq.
  */
 authRouter.post("/listEmployeesByDepartment", async (req, res) => {
   try {
     const department = req.body?.department as string;
 
     if (department === "other") {
-      const snap = await db.collection("employees").where("status", "==", "active").orderBy("fullName").get();
+      const snap = await db.collection("employees").where("status", "==", "active").get();
       const rows = snap.docs
         .map((doc) => ({ id: doc.id, fullName: doc.data().fullName as string, department: doc.data().department as string }))
         .filter((e) => !FIXED_DEPARTMENTS.has(e.department));
+      rows.sort((a, b) => a.fullName.localeCompare(b.fullName));
 
       const slugs = [...new Set(rows.map((e) => e.department))];
       const labelEntries = await Promise.all(

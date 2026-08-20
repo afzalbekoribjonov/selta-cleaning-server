@@ -18,8 +18,25 @@ Future<void> openTeamAssignSheet(BuildContext context, String orderId) {
   );
 }
 
-final _workerEmployeesProvider = FutureProvider<List<EmployeeSummary>>((ref) {
-  return ref.watch(authServiceProvider).listEmployeesByDepartment('worker');
+/// Joyida-yuvish jamoasi Ishchi VA Dastavchik bo'limlaridan aralash
+/// tuzilishi mumkin (talab) — ikkalasidan ham ro'yxat olinib, qaysi
+/// bo'limga tegishli ekani UI'da guruhlangan holda ko'rsatiladi.
+class _TeamCandidate {
+  final EmployeeSummary employee;
+  final String departmentLabel;
+  const _TeamCandidate(this.employee, this.departmentLabel);
+}
+
+final _teamCandidatesProvider = FutureProvider<List<_TeamCandidate>>((ref) async {
+  final auth = ref.watch(authServiceProvider);
+  final results = await Future.wait([
+    auth.listEmployeesByDepartment('worker'),
+    auth.listEmployeesByDepartment('delivery'),
+  ]);
+  return [
+    for (final e in results[0]) _TeamCandidate(e, 'Ishchi'),
+    for (final e in results[1]) _TeamCandidate(e, 'Dastavchik'),
+  ];
 });
 
 class _TeamAssignSheet extends ConsumerStatefulWidget {
@@ -57,7 +74,7 @@ class _TeamAssignSheetState extends ConsumerState<_TeamAssignSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final employeesAsync = ref.watch(_workerEmployeesProvider);
+    final employeesAsync = ref.watch(_teamCandidatesProvider);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -79,27 +96,42 @@ class _TeamAssignSheetState extends ConsumerState<_TeamAssignSheet> {
                 child: employeesAsync.when(
                   loading: () => const Center(child: SeltaLoader(size: 32)),
                   error: (e, _) => Center(child: Text(describeApiError(e))),
-                  data: (employees) {
-                    if (employees.isEmpty) {
-                      return const Center(child: Text("Ishchi bo'limida xodim yo'q", style: TextStyle(color: AppColors.gray)));
+                  data: (candidates) {
+                    if (candidates.isEmpty) {
+                      return const Center(
+                        child: Text("Ishchi yoki dastavchik bo'limida xodim yo'q", style: TextStyle(color: AppColors.gray)),
+                      );
+                    }
+                    final byDept = <String, List<_TeamCandidate>>{};
+                    for (final c in candidates) {
+                      byDept.putIfAbsent(c.departmentLabel, () => []).add(c);
                     }
                     return ListView(
                       controller: scrollController,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
-                        for (final e in employees)
-                          CheckboxListTile(
-                            value: _selected.contains(e.id),
-                            onChanged: (checked) => setState(() {
-                              if (checked == true) {
-                                _selected.add(e.id);
-                              } else {
-                                _selected.remove(e.id);
-                              }
-                            }),
-                            title: Text(e.fullName, style: const TextStyle(fontWeight: FontWeight.w700)),
-                            activeColor: AppColors.primary,
+                        for (final entry in byDept.entries) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+                            child: Text(
+                              entry.key,
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.primary),
+                            ),
                           ),
+                          for (final c in entry.value)
+                            CheckboxListTile(
+                              value: _selected.contains(c.employee.id),
+                              onChanged: (checked) => setState(() {
+                                if (checked == true) {
+                                  _selected.add(c.employee.id);
+                                } else {
+                                  _selected.remove(c.employee.id);
+                                }
+                              }),
+                              title: Text(c.employee.fullName, style: const TextStyle(fontWeight: FontWeight.w700)),
+                              activeColor: AppColors.primary,
+                            ),
+                        ],
                       ],
                     );
                   },

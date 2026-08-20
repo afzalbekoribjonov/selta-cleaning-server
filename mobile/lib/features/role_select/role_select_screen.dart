@@ -85,14 +85,14 @@ class _HeroHeader extends StatelessWidget {
           child: Stack(
             children: [
               Positioned(
-                right: -26,
-                top: -30,
-                child: _blurCircle(130),
+                right: -40,
+                top: -50,
+                child: _glowCircle(160),
               ),
               Positioned(
-                left: -30,
-                bottom: -46,
-                child: _blurCircle(110),
+                left: -50,
+                bottom: -70,
+                child: _glowCircle(140),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 22, 24, 30),
@@ -120,11 +120,21 @@ class _HeroHeader extends StatelessWidget {
     );
   }
 
-  Widget _blurCircle(double size) {
+  // Haqiqiy blur o'rniga radial gradient bilan "porlash" effekti — chekka
+  // to'liq shaffoflikka susayadi, shuning uchun ClipRect chetlab kesib
+  // qo'ysa ham qattiq/g'alati chiziq ko'rinmaydi (avvalgi tekis rangli
+  // doiraning kesilishi bilan bog'liq muammo shu tarzda hal qilindi).
+  Widget _glowCircle(double size) {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: 0.07)),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [Colors.white.withValues(alpha: 0.16), Colors.white.withValues(alpha: 0.0)],
+          stops: const [0.0, 0.72],
+        ),
+      ),
     );
   }
 }

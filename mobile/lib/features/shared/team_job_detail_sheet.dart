@@ -7,6 +7,7 @@ import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
 import '../../core/services/orders_repository.dart';
+import '../../core/utils/date_utils.dart';
 import '../worker/worker_order_detail_sheet.dart' show itemsEditableFor;
 import 'catalog_item_sheet.dart';
 import 'comments_section.dart';
@@ -103,6 +104,43 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                         Expanded(child: Text(order.location, style: const TextStyle(fontSize: 13, color: AppColors.grayDark))),
                       ],
                     ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: order.isOverdue ? AppColors.danger.withValues(alpha: 0.08) : AppColors.bg,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _DeadlineStat(
+                              icon: Icons.event_available_rounded,
+                              label: 'Qabul qilingan',
+                              value: formatDateUz(order.createdAt),
+                            ),
+                          ),
+                          if (order.dueDate != null)
+                            Expanded(
+                              child: _DeadlineStat(
+                                icon: Icons.timer_rounded,
+                                label: 'Muddat',
+                                value: formatDateUz(order.dueDate!),
+                                accent: order.isOverdue,
+                              ),
+                            ),
+                          if (order.dueDate != null)
+                            Expanded(
+                              child: _DeadlineStat(
+                                icon: Icons.hourglass_bottom_rounded,
+                                label: 'Qolgan vaqt',
+                                value: formatDaysLeftUz(order.dueDate!),
+                                accent: order.isOverdue,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 20),
                     itemsAsync.when(
                       loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
@@ -135,6 +173,34 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
           ),
         );
       },
+    );
+  }
+}
+
+class _DeadlineStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool accent;
+
+  const _DeadlineStat({required this.icon, required this.label, required this.value, this.accent = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ? AppColors.danger : AppColors.ink;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 13, color: accent ? AppColors.danger : AppColors.grayDark),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(fontSize: 10.5, color: AppColors.grayDark, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(value, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: color)),
+      ],
     );
   }
 }
