@@ -134,6 +134,7 @@ export default function EmployeesPage() {
         <SalaryConfigDialog
           employeeId={salaryTarget.id}
           employeeName={salaryTarget.fullName}
+          department={salaryTarget.department}
           currentMethod={salaryTarget.salary?.method}
           currentParams={salaryTarget.salary?.params}
           onClose={() => setSalaryTarget(null)}

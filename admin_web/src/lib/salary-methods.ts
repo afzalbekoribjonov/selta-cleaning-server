@@ -53,3 +53,22 @@ export const SALARY_METHODS: Record<string, SalaryMethodInfo> = {
     fields: [{ key: 'percent', label: 'Foiz (%)' }],
   },
 }
+
+/**
+ * Xodim bo'limiga qarab qaysi maosh usullari tavsiya etilishini
+ * belgilaydi (talab: mutaxassislikka qarab maosh usuli tanlovi
+ * filtrlansin) — "fixed"/"fixed_percent" har doim universal baza
+ * sifatida barcha bo'limlarga mos. Ro'yxatda bo'lmagan (masalan admin
+ * yaratgan "Boshqa" kasb) bo'limlar uchun cheklov qo'llanilmaydi —
+ * barcha usullar ko'rsatiladi.
+ */
+export const DEPARTMENT_SALARY_METHODS: Record<string, string[]> = {
+  dispatcher: ['fixed', 'fixed_percent'],
+  worker: ['fixed', 'fixed_percent', 'washing', 'finishing', 'furniture_onsite_percent'],
+  delivery: ['fixed', 'fixed_percent', 'delivery'],
+  qc: ['fixed', 'fixed_percent'],
+}
+
+export function recommendedSalaryMethods(department: string): string[] {
+  return DEPARTMENT_SALARY_METHODS[department] ?? Object.keys(SALARY_METHODS)
+}

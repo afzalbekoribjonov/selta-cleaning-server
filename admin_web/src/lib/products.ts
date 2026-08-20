@@ -2,6 +2,7 @@ import { collection, onSnapshot, orderBy, query, doc, type QueryDocumentSnapshot
 import { db } from './firebase'
 
 export type CalcType = 'sqm' | 'meter' | 'kg' | 'count' | 'size'
+export type ProductCategory = 'gilam' | 'parda' | 'boshqa'
 
 export interface TariffPrice {
   unitPrice: number | null
@@ -13,6 +14,7 @@ export interface Product {
   id: string
   name: string
   calcType: CalcType
+  category: ProductCategory
   tariffs: string[]
   pricesByTariff: Record<string, TariffPrice>
 }
@@ -23,6 +25,13 @@ export const CALC_TYPE_CONFIG: Record<CalcType, { label: string; unitLabel: stri
   kg: { label: 'Kilogram', unitLabel: "so'm / kg" },
   count: { label: 'Soni', unitLabel: "so'm / dona" },
   size: { label: 'Kichik / Katta', unitLabel: "so'm" },
+}
+
+/** Ishchi mutaxassisligi shu toifalar bo'yicha belgilanadi (EmployeeDetailPage). */
+export const PRODUCT_CATEGORY_CONFIG: Record<ProductCategory, { label: string }> = {
+  gilam: { label: 'Gilam' },
+  parda: { label: 'Parda' },
+  boshqa: { label: 'Boshqa' },
 }
 
 function toProduct(doc: QueryDocumentSnapshot<DocumentData>): Product {
@@ -40,6 +49,7 @@ function toProduct(doc: QueryDocumentSnapshot<DocumentData>): Product {
     id: doc.id,
     name: data.name ?? '',
     calcType: (data.calcType ?? 'count') as CalcType,
+    category: (data.category ?? 'boshqa') as ProductCategory,
     tariffs: data.tariffs ?? [],
     pricesByTariff,
   }

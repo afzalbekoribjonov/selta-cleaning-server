@@ -38,6 +38,7 @@ import { EditEmployeeDialog } from '@/components/employees/EditEmployeeDialog'
 import { ChangeDepartmentDialog } from '@/components/employees/ChangeDepartmentDialog'
 import { TasksSection } from '@/components/employees/TasksSection'
 import { AdvancesSection } from '@/components/employees/AdvancesSection'
+import { SpecializationsSection } from '@/components/employees/SpecializationsSection'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -259,6 +260,7 @@ export default function EmployeeDetailPage() {
       </section>
 
       {dept.isCustom && <TasksSection employee={employee} />}
+      {employee.department === 'worker' && <SpecializationsSection employee={employee} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm xl:col-span-2">
@@ -420,6 +422,7 @@ export default function EmployeeDetailPage() {
         <SalaryConfigDialog
           employeeId={employee.id}
           employeeName={employee.fullName}
+          department={employee.department}
           currentMethod={employee.salary?.method}
           currentParams={employee.salary?.params}
           onClose={() => setSalaryOpen(false)}

@@ -7,6 +7,8 @@ export const productsRouter = Router();
 
 const CALC_TYPES = new Set(["sqm", "meter", "kg", "count", "size"]);
 const VALID_TARIFFS = new Set(["express", "comfort", "standart", "premium"]);
+/** Ishchi mutaxassisligi shu kategoriyalar bo'yicha belgilanadi (employeeAdmin.ts: adminSetEmployeeSpecializations). */
+export const VALID_PRODUCT_CATEGORIES = new Set(["gilam", "parda", "boshqa"]);
 
 /**
  * Narx katalogi — admin oldindan mahsulot turlari va hisoblash usulini
@@ -28,13 +30,18 @@ interface TariffPriceInput {
  * ro'yxatidagi kalitlarni saqlaydi — chekindan chiqarilgan tariflar
  * uchun eski narxlar avtomatik tashlab yuboriladi.
  */
-function validateProductBody(body: Record<string, unknown>): { tariffs: string[]; pricesByTariff: Record<string, TariffPriceInput> } {
-  const { name, calcType, tariffs, pricesByTariff } = body;
+function validateProductBody(
+  body: Record<string, unknown>,
+): { category: string; tariffs: string[]; pricesByTariff: Record<string, TariffPriceInput> } {
+  const { name, calcType, category, tariffs, pricesByTariff } = body;
   if (!(name as string)?.toString()?.trim()) {
     throw new ApiError(400, "invalid-argument", "Mahsulot nomi majburiy");
   }
   if (!CALC_TYPES.has(calcType as string)) {
     throw new ApiError(400, "invalid-argument", "Hisoblash turi noto'g'ri");
+  }
+  if (!VALID_PRODUCT_CATEGORIES.has(category as string)) {
+    throw new ApiError(400, "invalid-argument", "Mahsulot toifasi noto'g'ri");
   }
   if (!Array.isArray(tariffs) || tariffs.length === 0 || !tariffs.every((t) => VALID_TARIFFS.has(t))) {
     throw new ApiError(400, "invalid-argument", "Kamida bitta tarif tanlang");
@@ -59,18 +66,19 @@ function validateProductBody(body: Record<string, unknown>): { tariffs: string[]
     }
   }
 
-  return { tariffs: tariffs as string[], pricesByTariff: cleaned };
+  return { category: category as string, tariffs: tariffs as string[], pricesByTariff: cleaned };
 }
 
 productsRouter.post("/adminCreateProduct", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
     const { name, calcType } = req.body ?? {};
-    const { tariffs, pricesByTariff } = validateProductBody(req.body ?? {});
+    const { category, tariffs, pricesByTariff } = validateProductBody(req.body ?? {});
 
     const ref = db.collection("products").doc();
     await ref.set({
       name: (name as string).trim(),
       calcType,
+      category,
       tariffs,
       pricesByTariff,
       createdAt: FieldValue.serverTimestamp(),
@@ -88,7 +96,7 @@ productsRouter.post("/adminUpdateProduct", withAuth, requireAdmin, async (req: A
   try {
     const { productId, name, calcType } = req.body ?? {};
     if (!productId) throw new ApiError(400, "invalid-argument", "productId majburiy");
-    const { tariffs, pricesByTariff } = validateProductBody(req.body ?? {});
+    const { category, tariffs, pricesByTariff } = validateProductBody(req.body ?? {});
 
     const ref = db.collection("products").doc(productId);
     const snap = await ref.get();
@@ -97,6 +105,7 @@ productsRouter.post("/adminUpdateProduct", withAuth, requireAdmin, async (req: A
     await ref.update({
       name: (name as string).trim(),
       calcType,
+      category,
       tariffs,
       pricesByTariff,
       updatedAt: FieldValue.serverTimestamp(),

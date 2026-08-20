@@ -2,18 +2,19 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
-import { SALARY_METHODS } from '@/lib/salary-methods'
+import { SALARY_METHODS, recommendedSalaryMethods } from '@/lib/salary-methods'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 interface Props {
   employeeId: string
   employeeName: string
+  department: string
   currentMethod?: string
   currentParams?: Record<string, number>
   onClose: () => void
 }
 
-export function SalaryConfigDialog({ employeeId, employeeName, currentMethod, currentParams, onClose }: Props) {
+export function SalaryConfigDialog({ employeeId, employeeName, department, currentMethod, currentParams, onClose }: Props) {
   useEscapeClose(onClose)
   const queryClient = useQueryClient()
   const [method, setMethod] = useState(currentMethod ?? 'fixed')
@@ -25,8 +26,11 @@ export function SalaryConfigDialog({ employeeId, employeeName, currentMethod, cu
     return init
   })
   const [error, setError] = useState<string | null>(null)
+  const recommended = recommendedSalaryMethods(department)
+  const [showAll, setShowAll] = useState(recommended.length === Object.keys(SALARY_METHODS).length || !recommended.includes(method))
 
   const methodInfo = SALARY_METHODS[method]
+  const methodOptions = showAll ? Object.keys(SALARY_METHODS) : recommended
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -71,13 +75,20 @@ export function SalaryConfigDialog({ employeeId, employeeName, currentMethod, cu
               }}
               className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
             >
-              {Object.entries(SALARY_METHODS).map(([key, info]) => (
+              {methodOptions.map((key) => (
                 <option key={key} value={key}>
-                  {info.label}
+                  {SALARY_METHODS[key].label}
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-gray-dark">{methodInfo.description}</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="text-xs text-gray-dark">{methodInfo.description}</p>
+              {!showAll && (
+                <button type="button" onClick={() => setShowAll(true)} className="shrink-0 text-xs font-bold text-brand-primary hover:underline">
+                  Barcha usullar
+                </button>
+              )}
+            </div>
           </div>
 
           {methodInfo.fields.map((field) => (

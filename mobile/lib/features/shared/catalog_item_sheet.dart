@@ -8,6 +8,7 @@ import '../../core/models/order_item.dart';
 import '../../core/models/product.dart';
 import '../../core/services/auth_service.dart' show describeApiError;
 import '../../core/services/catalog_repository.dart';
+import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 
 const _calcTypeIcons = {
@@ -208,6 +209,12 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
   Widget build(BuildContext context) {
     final productsAsync = ref.watch(productsProvider);
     final surchargesAsync = ref.watch(conditionSurchargesProvider);
+    final currentEmployee = ref.watch(currentEmployeeProvider).valueOrNull;
+    // Faqat "worker" bo'limidagi xodim uchun mutaxassislik bo'yicha
+    // filtrlanadi (dastavchik va boshqalar cheklanmaydi).
+    final specializations = currentEmployee?['department'] == 'worker'
+        ? ((currentEmployee?['specializations'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[])
+        : const <String>[];
 
     // Tahrirlash rejimida mahsulot ro'yxati kelgach, item'ning
     // productId'siga mos mahsulotni bir marta avtomatik tanlaydi.
@@ -262,14 +269,18 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                         loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
                         error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
                         data: (allProducts) {
-                          final products = allProducts.where((p) => p.appliesToTariff(widget.order.tariff)).toList();
+                          final products = allProducts
+                              .where((p) => p.appliesToTariff(widget.order.tariff) && p.matchesSpecializations(specializations))
+                              .toList();
                           if (products.isEmpty) {
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               child: Text(
                                 allProducts.isEmpty
                                     ? "Katalogda hali mahsulot yo'q — admin panelda qo'shiladi"
-                                    : "Bu tarif (${kTariffConfig[widget.order.tariff]?.label ?? widget.order.tariff}) uchun mahsulot yo'q",
+                                    : specializations.isNotEmpty
+                                        ? "Sizning mutaxassisligingizga mos mahsulot yo'q"
+                                        : "Bu tarif (${kTariffConfig[widget.order.tariff]?.label ?? widget.order.tariff}) uchun mahsulot yo'q",
                                 style: const TextStyle(color: AppColors.gray, fontSize: 12.5),
                               ),
                             );

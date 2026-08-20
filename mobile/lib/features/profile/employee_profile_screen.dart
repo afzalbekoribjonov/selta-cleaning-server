@@ -18,6 +18,9 @@ String _resolveDepartmentLabel(String? key, String? customLabel) {
   return customLabel ?? key;
 }
 
+const _categoryLabels = {'gilam': 'Gilam', 'parda': 'Parda', 'boshqa': 'Boshqa'};
+String _categoryLabel(String key) => _categoryLabels[key] ?? key;
+
 int _attributedCount(String field, Order o, String employeeId) {
   final actor = switch (field) {
     'createdBy' => o.createdBy,
@@ -51,6 +54,8 @@ class EmployeeProfileScreen extends ConsumerWidget {
           final departmentLabel = _resolveDepartmentLabel(departmentKey, employee['departmentLabel'] as String?);
           final fullName = employee['fullName'] as String? ?? '';
           final phone = employee['phone'] as String? ?? '';
+          final specializations = (employee['specializations'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+          final canPack = employee['canPack'] as bool? ?? false;
 
           return ListView(
             padding: EdgeInsets.zero,
@@ -70,6 +75,19 @@ class EmployeeProfileScreen extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 24),
+                    ],
+                    if (departmentKey == 'worker' && (specializations.isNotEmpty || canPack)) ...[
+                      const Text('Lavozimlar', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final s in specializations) _PositionBadge(label: _categoryLabel(s)),
+                          if (canPack) const _PositionBadge(label: 'Upakovkachi', accent: true),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
                     ],
                     const Text('Bu oy statistikasi', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
                     const SizedBox(height: 12),
@@ -190,6 +208,22 @@ class _MonthlyStatsCard extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _PositionBadge extends StatelessWidget {
+  final String label;
+  final bool accent;
+  const _PositionBadge({required this.label, this.accent = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ? AppColors.accent : AppColors.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12.5)),
     );
   }
 }

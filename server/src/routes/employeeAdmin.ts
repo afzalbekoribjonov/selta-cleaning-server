@@ -4,6 +4,7 @@ import { FieldValue, type Transaction } from "firebase-admin/firestore";
 import { db, auth } from "../lib/admin";
 import { hashPin, isValidFourDigitPin } from "../lib/pin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
+import { VALID_PRODUCT_CATEGORIES } from "./products";
 
 export const employeeAdminRouter = Router();
 
@@ -103,6 +104,8 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           departmentLabel: data.departmentLabel ?? null,
           status: data.status,
           salary: data.salary ?? null,
+          specializations: data.specializations ?? [],
+          canPack: data.canPack ?? false,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
           terminatedAt: data.terminatedAt?.toDate?.().toISOString() ?? null,
         };
@@ -232,6 +235,41 @@ employeeAdminRouter.post("/adminChangeEmployeeDepartment", withAuth, requireAdmi
     }
 
     res.json({ ok: true, ...result });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Ishchi mutaxassisligi — admin qaysi mahsulot toifalarini (gilam/parda/
+ * boshqa) shu xodim ishlashi mumkinligini belgilaydi, va alohida
+ * "upakovkachi" (packager) huquqini. Faqat "worker" bo'limidagi xodimlar
+ * uchun ma'noli — boshqa bo'lim uchun so'ralsa xato qaytariladi.
+ */
+employeeAdminRouter.post("/adminSetEmployeeSpecializations", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, specializations, canPack } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (!Array.isArray(specializations) || !specializations.every((s) => VALID_PRODUCT_CATEGORIES.has(s))) {
+      throw new ApiError(400, "invalid-argument", "Mutaxassislik toifalari noto'g'ri");
+    }
+    if (typeof canPack !== "boolean") {
+      throw new ApiError(400, "invalid-argument", "canPack noto'g'ri");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+    if (snap.data()!.department !== "worker") {
+      throw new ApiError(400, "invalid-argument", "Mutaxassislik faqat Ishchi bo'limidagi xodimlar uchun belgilanadi");
+    }
+
+    await employeeRef.update({ specializations, canPack });
+    res.json({ ok: true });
   } catch (err) {
     sendError(res, err);
   }

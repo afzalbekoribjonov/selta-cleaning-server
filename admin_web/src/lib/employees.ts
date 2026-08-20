@@ -7,6 +7,8 @@ export interface Employee {
   department: string
   status: 'active' | 'terminated'
   salary?: { method: string; params: Record<string, number> }
+  specializations: string[]
+  canPack: boolean
   createdAt: string | null
   terminatedAt: string | null
 }

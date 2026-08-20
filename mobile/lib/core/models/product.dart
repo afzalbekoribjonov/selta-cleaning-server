@@ -25,6 +25,7 @@ class Product {
   final String id;
   final String name;
   final String calcType; // 'sqm' | 'meter' | 'kg' | 'count' | 'size'
+  final String category; // 'gilam' | 'parda' | 'boshqa' — ishchi mutaxassisligi shu bo'yicha
   final List<String> tariffs;
   final Map<String, TariffPrice> pricesByTariff;
 
@@ -32,6 +33,7 @@ class Product {
     required this.id,
     required this.name,
     required this.calcType,
+    this.category = 'boshqa',
     this.tariffs = const [],
     this.pricesByTariff = const {},
   });
@@ -43,6 +45,7 @@ class Product {
       id: doc.id,
       name: data['name']?.toString() ?? '',
       calcType: data['calcType']?.toString() ?? 'count',
+      category: data['category']?.toString() ?? 'boshqa',
       tariffs: (data['tariffs'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       pricesByTariff: rawPrices.map((k, v) => MapEntry(k, TariffPrice.fromMap(v as Map<String, dynamic>?))),
     );
@@ -54,6 +57,11 @@ class Product {
 
   /// Berilgan tarif uchun narx tuzilmasi — topilmasa bo'sh (0) qaytadi.
   TariffPrice priceFor(String? tariff) => pricesByTariff[tariff] ?? const TariffPrice();
+
+  /// Ishchi mutaxassisligi bu toifani qamrab oladimi — bo'sh ro'yxat
+  /// (mutaxassislik belgilanmagan) hammasiga ruxsat beradi (moslik uchun,
+  /// va boshqa bo'limlar — masalan dastavchik — cheklanmasligi uchun).
+  bool matchesSpecializations(List<String> specializations) => specializations.isEmpty || specializations.contains(category);
 }
 
 class ConditionSurcharges {

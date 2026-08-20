@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, X, Pencil, Trash2, Package, Percent } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { useProducts, useConditionSurcharges } from '@/hooks/useProducts'
-import { CALC_TYPE_CONFIG, type Product, type CalcType, type TariffPrice } from '@/lib/products'
+import { CALC_TYPE_CONFIG, PRODUCT_CATEGORY_CONFIG, type Product, type CalcType, type ProductCategory, type TariffPrice } from '@/lib/products'
 import { TARIFF_CONFIG } from '@/lib/status-config'
 import { Spinner } from '@/components/ui/Spinner'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -58,6 +58,7 @@ export default function ProductsPage() {
               <thead>
                 <tr className="border-b border-border text-left text-gray-dark">
                   <th className="px-5 py-3 font-semibold">Nomi</th>
+                  <th className="px-5 py-3 font-semibold">Toifa</th>
                   <th className="px-5 py-3 font-semibold">Hisoblash turi</th>
                   <th className="px-5 py-3 font-semibold">Tariflar</th>
                   <th className="px-5 py-3 font-semibold">Narx</th>
@@ -68,6 +69,11 @@ export default function ProductsPage() {
                 {products.map((p) => (
                   <tr key={p.id} className="border-b border-border last:border-0">
                     <td className="px-5 py-3 font-semibold text-ink">{p.name}</td>
+                    <td className="px-5 py-3">
+                      <span className="inline-flex items-center rounded-full bg-brand-secondary/10 px-2.5 py-1 text-xs font-bold text-brand-secondary">
+                        {PRODUCT_CATEGORY_CONFIG[p.category]?.label ?? p.category}
+                      </span>
+                    </td>
                     <td className="px-5 py-3">
                       <span className="inline-flex items-center rounded-full bg-brand-primary/10 px-2.5 py-1 text-xs font-bold text-brand-primary">
                         {CALC_TYPE_CONFIG[p.calcType].label}
@@ -232,6 +238,7 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
   const editing = !!product
   const [name, setName] = useState(product?.name ?? '')
   const [calcType, setCalcType] = useState<CalcType>(product?.calcType ?? 'sqm')
+  const [category, setCategory] = useState<ProductCategory>(product?.category ?? 'gilam')
   const [tariffs, setTariffs] = useState<string[]>(product?.tariffs ?? [])
   const [prices, setPrices] = useState<Record<string, TariffPriceDraft>>(() => {
     const initial: Record<string, TariffPriceDraft> = {}
@@ -261,7 +268,7 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
             ? { smallPrice: Number(draft.smallPrice) || 0, largePrice: Number(draft.largePrice) || 0 }
             : { unitPrice: Number(draft.unitPrice) || 0 }
       }
-      const body: Record<string, unknown> = { name: name.trim(), calcType, tariffs, pricesByTariff }
+      const body: Record<string, unknown> = { name: name.trim(), calcType, category, tariffs, pricesByTariff }
       if (editing) {
         return apiPost('/adminUpdateProduct', { ...body, productId: product!.id })
       }
@@ -316,6 +323,23 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
               className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
             >
               {Object.entries(CALC_TYPE_CONFIG).map(([key, info]) => (
+                <option key={key} value={key}>
+                  {info.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-ink">Toifa</label>
+            <p className="mb-2 text-xs text-gray-dark">
+              Ishchilarning qaysi toifadagi mahsulotni ishlashi mumkinligini belgilash uchun ishlatiladi (Xodimlar sahifasi).
+            </p>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as ProductCategory)}
+              className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+            >
+              {Object.entries(PRODUCT_CATEGORY_CONFIG).map(([key, info]) => (
                 <option key={key} value={key}>
                   {info.label}
                 </option>
