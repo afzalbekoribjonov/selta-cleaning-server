@@ -22,7 +22,12 @@ export async function withAuth(req: AuthedRequest, res: Response, next: NextFunc
     return res.status(401).json({ error: "unauthenticated", message: "Tizimga kirish talab qilinadi" });
   }
   try {
-    const decoded = await auth.verifyIdToken(header.slice("Bearer ".length));
+    // `checkRevoked: true` — aks holda ID token o'zining muddati (odatda 1
+    // soatgacha) tugamaguncha, hatto revokeRefreshTokens() chaqirilgandan
+    // keyin ham "yaroqli" deb hisoblanardi (imzo/muddat to'g'ri bo'lgani
+    // uchun). Ishdan bo'shatish/PIN reset/kasb o'zgartirish darhol kuchga
+    // kirishi uchun bu tekshiruv har bir so'rovda majburiy.
+    const decoded = await auth.verifyIdToken(header.slice("Bearer ".length), true);
     req.auth = {
       uid: decoded.uid,
       role: decoded.role as string | undefined,
