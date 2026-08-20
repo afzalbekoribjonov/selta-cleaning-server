@@ -8,7 +8,9 @@ class Order {
   final String location;
   final String? gpsCoords;
   final String serviceType; // 'pickup' | 'onsite'
-  final String tariff; // 'express' | 'comfort' | 'standart' | 'premium'
+  // Faqat onsite buyurtmalarda mavjud — pickup'da tarif item-darajasiga
+  // ko'chirildi (har bir OrderItem.tariff'ga qarang).
+  final String? tariff; // 'express' | 'comfort' | 'standart' | 'premium'
   final String status;
   final List<String> assignedTeam;
   final num totalArea;
@@ -19,7 +21,6 @@ class Order {
   final String? qcRatedBy;
   final DateTime createdAt;
   final DateTime? dueDate;
-  final bool hasFailedItem;
   final int? qcRating;
   final String? qcRatingNote;
 
@@ -31,7 +32,7 @@ class Order {
     required this.location,
     this.gpsCoords,
     required this.serviceType,
-    required this.tariff,
+    this.tariff,
     required this.status,
     this.assignedTeam = const [],
     this.totalArea = 0,
@@ -42,7 +43,6 @@ class Order {
     this.qcRatedBy,
     required this.createdAt,
     this.dueDate,
-    this.hasFailedItem = false,
     this.qcRating,
     this.qcRatingNote,
   });
@@ -57,7 +57,7 @@ class Order {
       location: data['location']?.toString() ?? '',
       gpsCoords: data['gpsCoords']?.toString(),
       serviceType: data['serviceType']?.toString() ?? 'pickup',
-      tariff: data['tariff']?.toString() ?? 'standart',
+      tariff: data['tariff']?.toString(),
       status: data['status']?.toString() ?? 'new',
       assignedTeam: (data['assignedTeam'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       totalArea: (data['totalArea'] as num?) ?? 0,
@@ -68,7 +68,6 @@ class Order {
       qcRatedBy: data['qcRatedBy']?.toString(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
-      hasFailedItem: data['hasFailedItem'] as bool? ?? false,
       qcRating: (data['qcRating'] as num?)?.toInt(),
       qcRatingNote: data['qcRatingNote']?.toString(),
     );

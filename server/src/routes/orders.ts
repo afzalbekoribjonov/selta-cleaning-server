@@ -140,11 +140,10 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       await notifyDepartment("delivery", "Yangi buyurtma", `#${orderNumber} — olib ketish kerak`, {
         orderId: orderRef.id,
       });
-    } else {
-      await notifyDepartment("qc", "Yangi joyida-yuvish buyurtmasi", `#${orderNumber} — jamoa biriktirish kerak`, {
-        orderId: orderRef.id,
-      });
     }
+    // Onsite uchun alohida bildirishnoma shart emas — jamoa biriktirish
+    // endi to'liq sotuv menejeriga tegishli (talab #5), buyurtmani
+    // yaratgan xodimning o'zi buni allaqachon biladi.
 
     res.json({ orderId: orderRef.id, orderNumber });
   } catch (err) {
@@ -217,9 +216,11 @@ const MANUAL_TRANSITIONS: Record<ServiceType, Record<string, string[]>> = {
     "picked_up->brought_in": ["delivery"],
   },
   onsite: {
-    "new->team_assigned": ["dispatcher", "qc"],
-    "team_assigned->in_progress": ["worker", "delivery", "qc"],
-    "in_progress->done": ["worker", "delivery", "qc"],
+    // Jamoa biriktirish endi to'liq sotuv menejeriga tegishli (talab #5) —
+    // "qc" bo'limi olib tashlangan.
+    "new->team_assigned": ["dispatcher"],
+    "team_assigned->in_progress": ["worker", "delivery"],
+    "in_progress->done": ["worker", "delivery"],
   },
 };
 
@@ -410,14 +411,13 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
 /**
  * Butun buyurtmaga umumiy baho qo'yadi (1-5) — har bir mahsulotning
  * alohida pass/fail holatidan tashqari, upakovka/umumiy ishning
- * sifatini baholash uchun. Istalgan payt qayta yozilishi mumkin.
- * Ishchi va (hozircha mavjud bo'lsa) Sifat nazorati xodimi bajara oladi
- * — sifat nazorati ishi endi upakovka bosqichidagi ishchilarga tegishli.
+ * sifatini baholash uchun. Istalgan payt qayta yozilishi mumkin. Sifat
+ * nazorati bo'limi olib tashlangan (talab #5) — endi ishchi bajaradi.
  */
 ordersRouter.post("/submitOrderQcRating", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
-    if (role !== "qc" && role !== "worker" && role !== "admin") {
+    if (role !== "worker" && role !== "admin") {
       throw new ApiError(403, "permission-denied", "Faqat ishchi bu amalni bajara oladi");
     }
 
@@ -606,15 +606,15 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
 });
 
 /**
- * Dispetcher yoki Sifat nazorati joyida-yuvish buyurtmasiga jamoa
- * biriktiradi (talab #14). Faqat "new" holatidagi joyida-yuvish
- * buyurtmalariga qo'llaniladi.
+ * Sotuv menejeri joyida-yuvish buyurtmasiga jamoa biriktiradi (talab #14,
+ * #5: bu ish endi to'liq sotuv menejeriga tegishli). Faqat "new"
+ * holatidagi joyida-yuvish buyurtmalariga qo'llaniladi.
  */
 ordersRouter.post("/assignTeam", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
-    if (role !== "dispatcher" && role !== "qc" && role !== "admin") {
-      throw new ApiError(403, "permission-denied", "Faqat dispetcher yoki sifat nazorati jamoa biriktira oladi");
+    if (role !== "dispatcher" && role !== "admin") {
+      throw new ApiError(403, "permission-denied", "Faqat sotuv menejeri jamoa biriktira oladi");
     }
 
     const { orderId, employeeIds } = req.body ?? {};

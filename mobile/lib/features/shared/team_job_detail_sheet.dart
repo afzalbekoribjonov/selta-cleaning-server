@@ -8,7 +8,6 @@ import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
-import '../worker/worker_order_detail_sheet.dart' show itemsEditableFor;
 import 'catalog_item_sheet.dart';
 import 'comments_section.dart';
 import 'item_detail_row.dart';
@@ -212,7 +211,9 @@ class _TeamItemsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final editable = itemsEditableFor(order.status);
+    // Onsite buyurtmalarda item-level pipeline yo'q — faqat buyurtma
+    // yakunlanmagunicha (done) tahrirlanadi.
+    final editable = order.status != 'done';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),

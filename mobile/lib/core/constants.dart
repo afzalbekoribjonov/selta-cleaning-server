@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
 
-/// Xodim bo'limlari — mobil bosh ekranning 4 ta katta bo'limi.
-/// "Sifat nazorati" alohida bo'lim sifatida (Ishchi paneli ichiga
-/// aralashtirilmagan holda) — reja hujjatida qabul qilingan qaror.
-enum Department { dispatcher, worker, delivery, qc }
+/// Xodim bo'limlari — mobil bosh ekranning 3 ta katta bo'limi. "Sifat
+/// nazorati" bo'limi olib tashlangan (talab #5) — uning ishi (item
+/// pass/fail) endi istalgan ishchining "upakovka" bosqichiga tegishli.
+enum Department { dispatcher, worker, delivery }
 
 class DepartmentInfo {
   final String label;
@@ -35,17 +35,13 @@ const Map<Department, DepartmentInfo> kDepartmentConfig = {
     description: 'Olib ketish va yetkazib berish',
     icon: Icons.local_shipping_rounded,
   ),
-  Department.qc: DepartmentInfo(
-    label: 'Sifat nazorati',
-    description: 'Tayyor mahsulotlarni tekshirish',
-    icon: Icons.verified_rounded,
-  ),
 };
 
 /// Buyurtma holati konfiguratsiyasi. Ikkita xizmat turi ikkita alohida
-/// pipeline'ga ega (reja: bo'lim "Status pipeline"):
-///  Olib kelish: new -> picked_up -> brought_in -> washing -> packing
-///               -> qc_review -> ready -> done
+/// pipeline'ga ega:
+///  Olib kelish (order-level): new -> picked_up -> brought_in -> done
+///    ("brought_in" bosqichida har bir ITEM mustaqil ravishda o'zining
+///    pipeline'i bo'ylab ishlov olinadi — pastdagi kItemPipeline'ga qarang)
 ///  Joyida yuvish: new -> team_assigned -> in_progress -> done
 class StatusInfo {
   final String label;
@@ -104,6 +100,18 @@ const Map<String, StatusInfo> kStatusConfig = {
     color: AppColors.success,
     background: Color(0xFFE5F7EC),
   ),
+  'pending': StatusInfo(
+    label: 'Kutilmoqda',
+    icon: Icons.hourglass_empty_rounded,
+    color: AppColors.grayDark,
+    background: Color(0xFFF1EFF3),
+  ),
+  'returned': StatusInfo(
+    label: 'Qaytarilgan',
+    icon: Icons.replay_rounded,
+    color: AppColors.danger,
+    background: Color(0xFFFCEAEA),
+  ),
   'team_assigned': StatusInfo(
     label: 'Jamoa biriktirildi',
     icon: Icons.groups_rounded,
@@ -138,14 +146,48 @@ String? attributionFieldFor(Department department) {
       return 'washedBy';
     case Department.delivery:
       return 'deliveredBy';
-    case Department.qc:
-      return 'qcRatedBy';
   }
 }
 
-/// Har bir xizmat turi uchun to'liq status ketma-ketligi — dispetcher
-/// progress-checklist'ida "bajarilgan / qolgan" ko'rsatish uchun.
+/// Har bir xizmat turi uchun order-level status ketma-ketligi — sotuv
+/// menejeri progress-checklist'ida "bajarilgan / qolgan" ko'rsatish uchun.
+/// Pickup uchun bu faqat item'lar mavjud bo'lishidan OLDINGI bosqichlar —
+/// undan keyingi jarayon kItemPipeline bo'yicha, item-darajasida.
 const Map<String, List<String>> kServicePipeline = {
-  'pickup': ['new', 'picked_up', 'brought_in', 'washing', 'packing', 'qc_review', 'ready', 'done'],
+  'pickup': ['new', 'picked_up', 'brought_in', 'done'],
   'onsite': ['new', 'team_assigned', 'in_progress', 'done'],
+};
+
+/// Pickup buyurtmadagi HAR BIR item shu pipeline bo'ylab mustaqil ishlov
+/// olinadi. "packing"dan "returned"ga (sifat nazoratida rad etilganda) va
+/// "returned"dan "washing"ga ("Yuvishni boshlash" bilan) — chiziqli emas,
+/// server/src/lib/pipeline.ts'dagi isValidItemTransition bilan bir xil.
+const List<String> kItemPipeline = ['pending', 'washing', 'packing', 'ready', 'done'];
+
+/// server/src/lib/pipeline.ts'dagi TARIFF_COLOR_THRESHOLDS bilan bir xil —
+/// har bir tarif uchun aniq kun bo'linishi (yashil/sariq/qizil).
+const Map<String, ({int green, int yellow})> kTariffColorThresholds = {
+  'express': (green: 2, yellow: 3),
+  'comfort': (green: 3, yellow: 5),
+  'premium': (green: 2, yellow: 3),
+  'standart': (green: 4, yellow: 8),
+};
+
+enum ColorStage { green, yellow, red }
+
+/// `dueDate` yoki item qo'shilgan sanadan kelib chiqib rang bosqichini
+/// hisoblaydi. `addedAt` — item qo'shilgan vaqt (elapsedDays shundan
+/// hisoblanadi).
+ColorStage colorStageFor(String? tariff, DateTime addedAt) {
+  final t = kTariffColorThresholds[tariff] ?? kTariffColorThresholds['standart']!;
+  final elapsedDays = DateTime.now().difference(addedAt).inDays;
+  if (elapsedDays < t.green) return ColorStage.green;
+  if (elapsedDays < t.yellow) return ColorStage.yellow;
+  return ColorStage.red;
+}
+
+const Map<ColorStage, Color> kColorStageColors = {
+  ColorStage.green: AppColors.success,
+  ColorStage.yellow: AppColors.warning,
+  ColorStage.red: AppColors.danger,
 };

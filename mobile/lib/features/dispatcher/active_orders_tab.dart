@@ -9,7 +9,8 @@ import 'widgets/order_card.dart';
 
 const _tariffOrder = ['express', 'premium', 'comfort', 'standart'];
 
-int _tariffWeight(String tariff) {
+int _tariffWeight(String? tariff) {
+  if (tariff == null) return _tariffOrder.length;
   final i = _tariffOrder.indexOf(tariff);
   return i == -1 ? _tariffOrder.length : i;
 }

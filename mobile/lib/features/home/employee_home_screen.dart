@@ -9,12 +9,13 @@ import '../../core/widgets/selta_loader.dart';
 import '../delivery/delivery_home_screen.dart';
 import '../dispatcher/dispatcher_home_screen.dart';
 import '../other/other_home_screen.dart';
-import '../qc/qc_home_screen.dart';
 import '../worker/worker_home_screen.dart';
 
 /// `/home` — claims.department'ga qarab tegishli bo'lim paneliga
-/// yo'naltiradi. Har bir bo'lim (Dispetcher/Ishchi/Dastavchik/Sifat
-/// nazorati) o'zining to'liq ekraniga ega (Faza 3/4).
+/// yo'naltiradi. Har bir bo'lim (Sotuv menejeri/Ishchi/Dastavchik)
+/// o'zining to'liq ekraniga ega. "Sifat nazorati" bo'limi olib
+/// tashlangan — uning ishi endi ishchining "upakovka" bosqichiga
+/// birlashtirilgan (talab #5).
 class EmployeeHomeScreen extends ConsumerWidget {
   const EmployeeHomeScreen({super.key});
 
@@ -55,7 +56,6 @@ class EmployeeHomeScreen extends ConsumerWidget {
           Department.dispatcher => const DispatcherHomeScreen(),
           Department.worker => const WorkerHomeScreen(),
           Department.delivery => const DeliveryHomeScreen(),
-          Department.qc => const QcHomeScreen(),
         };
       },
     );

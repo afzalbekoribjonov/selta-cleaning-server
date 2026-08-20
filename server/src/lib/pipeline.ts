@@ -15,10 +15,7 @@
  * tarif/muddat ularga tegishli emas.
  */
 export type ServiceType = "pickup" | "onsite";
-// "qc" hali FIXED_DEPARTMENTS'da mavjud — Sifat nazorati bo'limi/xodimlari
-// alohida qadam sifatida olib tashlanadi (QC ishi "packing" bosqichiga
-// ko'chiriladi), shu bilan bir vaqtda bu type'dan ham chiqariladi.
-export type Department = "dispatcher" | "worker" | "delivery" | "qc";
+export type Department = "dispatcher" | "worker" | "delivery";
 
 export const SERVICE_PIPELINE: Record<ServiceType, string[]> = {
   pickup: ["new", "picked_up", "brought_in", "done"],

@@ -73,7 +73,7 @@ class OrdersRepository {
     required String customerName,
     required String phone,
     required String location,
-    required String tariff,
+    String? tariff,
     String? gpsCoords,
   }) async {
     await _api.post(
@@ -84,7 +84,7 @@ class OrdersRepository {
         'customerName': customerName,
         'phone': phone,
         'location': location,
-        'tariff': tariff,
+        if (tariff != null) 'tariff': tariff,
         if (gpsCoords != null) 'gpsCoords': gpsCoords,
       },
     );
@@ -208,20 +208,25 @@ class OrdersRepository {
     );
   }
 
-  Future<void> submitItemQc({
+  /// Pickup buyurtma itemining holatini o'zgartiradi (pending -> washing ->
+  /// packing -> ready/returned -> ... -> done) — talab: har bir mahsulot
+  /// mustaqil pipeline'ga ega, "packing"da istalgan ishchi ✅/❌ bosa oladi.
+  Future<void> changeItemStatus({
     required String orderId,
     required String itemId,
-    required String qcStatus,
+    required String toStatus,
     String? qcNote,
+    num? collectedAmount,
   }) async {
     await _api.post(
-      '/submitItemQc',
+      '/changeItemStatus',
       idToken: await _idToken(),
       body: {
         'orderId': orderId,
         'itemId': itemId,
-        'qcStatus': qcStatus,
+        'toStatus': toStatus,
         if (qcNote != null) 'qcNote': qcNote,
+        if (collectedAmount != null) 'collectedAmount': collectedAmount,
       },
     );
   }

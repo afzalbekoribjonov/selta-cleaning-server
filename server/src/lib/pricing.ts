@@ -18,6 +18,7 @@ export interface ComputedItem {
   name: string;
   productId: string | null;
   calcType: string;
+  category: string | null; // mahsulot toifasi (gilam/parda/boshqa) — ishchi mutaxassisligi filtri uchun
   tariff: string | null;
   width: number | null;
   height: number | null;
@@ -66,6 +67,7 @@ export async function computeItems(items: ItemInput[], orderTariff?: string): Pr
         name,
         productId: null,
         calcType: "fixed",
+        category: null,
         tariff: item.tariff ?? orderTariff ?? null,
         width: null,
         height: null,
@@ -124,6 +126,7 @@ export async function computeItems(items: ItemInput[], orderTariff?: string): Pr
       name: name === "Mahsulot" ? (product.name as string) : name,
       productId: item.productId,
       calcType,
+      category: (product.category as string | undefined) ?? null,
       tariff: itemTariff ?? null,
       width,
       height,

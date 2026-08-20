@@ -68,16 +68,22 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
   num _qty = 1;
   String? _sizeVariant = 'small';
   String? _condition;
+  late String _tariff;
   bool _saving = false;
   bool _deleting = false;
   String? _error;
 
   bool get _editing => widget.existingItem != null;
+  // Onsite buyurtmalarda tarif order-level (o'zgarmagan) — faqat pickup
+  // itemlari o'z tarifini alohida tanlaydi (talab: har bir item o'z
+  // tarifiga ega).
+  bool get _showTariffPicker => widget.order.serviceType == 'pickup';
 
   @override
   void initState() {
     super.initState();
     final item = widget.existingItem;
+    _tariff = item?.tariff ?? widget.order.tariff ?? 'standart';
     if (item != null) {
       _nameController.text = item.name;
       _condition = item.condition;
@@ -123,7 +129,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
       return num.tryParse(_customPriceController.text.replaceAll(',', '.')) ?? 0;
     }
     num base;
-    final tariffPrice = _product!.priceFor(widget.order.tariff);
+    final tariffPrice = _product!.priceFor(_tariff);
     if (_product!.calcType == 'size') {
       base = (_sizeVariant == 'large' ? tariffPrice.largePrice : tariffPrice.smallPrice) ?? 0;
     } else {
@@ -140,6 +146,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
       return CatalogItemDraft(
         name: name,
         calcType: 'fixed',
+        tariff: _tariff,
         price: num.tryParse(_customPriceController.text.replaceAll(',', '.')) ?? 0,
       );
     }
@@ -147,6 +154,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
       name: name,
       productId: _product!.id,
       calcType: _product!.calcType,
+      tariff: _tariff,
       width: _product!.calcType == 'sqm' && !_sqmDirectMode ? num.tryParse(_widthController.text.replaceAll(',', '.')) : null,
       height: _product!.calcType == 'sqm' && !_sqmDirectMode ? num.tryParse(_heightController.text.replaceAll(',', '.')) : null,
       qty: _product!.calcType == 'size' ? null : _measuredQty,
@@ -262,6 +270,37 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                     ),
                     const SizedBox(height: 16),
 
+                    if (_showTariffPicker) ...[
+                      const Text('Tarif', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Har bir mahsulot o\'z tarifiga ega bo\'ladi',
+                        style: TextStyle(fontSize: 11.5, color: AppColors.gray),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final entry in kTariffConfig.entries)
+                            ChoiceChip(
+                              label: Text(entry.value.label),
+                              selected: _tariff == entry.key,
+                              onSelected: (_) => setState(() {
+                                _tariff = entry.key;
+                                _product = null;
+                              }),
+                              selectedColor: entry.value.color,
+                              labelStyle: TextStyle(
+                                color: _tariff == entry.key ? Colors.white : AppColors.ink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     if (!_customMode) ...[
                       const Text('Katalogdan tanlang', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
                       const SizedBox(height: 8),
@@ -270,7 +309,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                         error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
                         data: (allProducts) {
                           final products = allProducts
-                              .where((p) => p.appliesToTariff(widget.order.tariff) && p.matchesSpecializations(specializations))
+                              .where((p) => p.appliesToTariff(_tariff) && p.matchesSpecializations(specializations))
                               .toList();
                           if (products.isEmpty) {
                             return Padding(
@@ -280,7 +319,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                                     ? "Katalogda hali mahsulot yo'q — admin panelda qo'shiladi"
                                     : specializations.isNotEmpty
                                         ? "Sizning mutaxassisligingizga mos mahsulot yo'q"
-                                        : "Bu tarif (${kTariffConfig[widget.order.tariff]?.label ?? widget.order.tariff}) uchun mahsulot yo'q",
+                                        : "Bu tarif (${kTariffConfig[_tariff]?.label ?? _tariff}) uchun mahsulot yo'q",
                                 style: const TextStyle(color: AppColors.gray, fontSize: 12.5),
                               ),
                             );
@@ -420,7 +459,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
 
   Widget _buildCalcInputs() {
     final calcType = _product!.calcType;
-    final tariffPrice = _product!.priceFor(widget.order.tariff);
+    final tariffPrice = _product!.priceFor(_tariff);
 
     if (calcType == 'sqm') {
       return Column(

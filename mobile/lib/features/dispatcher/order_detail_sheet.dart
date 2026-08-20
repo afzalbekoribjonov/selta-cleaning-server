@@ -325,9 +325,11 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _locationController;
-  late String _tariff;
+  String? _tariff;
   bool _saving = false;
   String? _error;
+
+  bool get _isOnsite => widget.order.serviceType == 'onsite';
 
   @override
   void initState() {
@@ -358,7 +360,7 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
             customerName: _nameController.text.trim(),
             phone: '+998$digits',
             location: _locationController.text.trim(),
-            tariff: _tariff,
+            tariff: _isOnsite ? _tariff : null,
           );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -388,21 +390,23 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
             ),
             const SizedBox(height: 12),
             TextField(controller: _locationController, maxLines: 2, decoration: const InputDecoration(labelText: "Mo'ljal")),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final entry in kTariffConfig.entries)
-                  ChoiceChip(
-                    label: Text(entry.value.label),
-                    selected: _tariff == entry.key,
-                    onSelected: (_) => setState(() => _tariff = entry.key),
-                    selectedColor: entry.value.color,
-                    labelStyle: TextStyle(color: _tariff == entry.key ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700),
-                  ),
-              ],
-            ),
+            if (_isOnsite) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in kTariffConfig.entries)
+                    ChoiceChip(
+                      label: Text(entry.value.label),
+                      selected: _tariff == entry.key,
+                      onSelected: (_) => setState(() => _tariff = entry.key),
+                      selectedColor: entry.value.color,
+                      labelStyle: TextStyle(color: _tariff == entry.key ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700),
+                    ),
+                ],
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 10),
               Text(_error!, style: const TextStyle(color: AppColors.danger)),

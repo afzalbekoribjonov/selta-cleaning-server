@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
+import '../../core/constants.dart';
 import '../../core/models/order_item.dart';
 
 const _conditionLabels = {
@@ -55,6 +56,10 @@ class ItemDetailRow extends StatelessWidget {
     final failed = item.qcStatus == 'failed';
     final measurement = itemMeasurementLabel(item);
     final conditionLabel = _conditionLabels[item.condition];
+    // Talab #8: har bir tarif uchun kun-asosidagi rang bosqichi — faqat
+    // hali yakunlanmagan pickup itemlarida ko'rsatiladi.
+    final showColorDot = item.status != null && !item.isDone && item.tariff != null && item.createdAt != null;
+    final colorStage = showColorDot ? colorStageFor(item.tariff, item.createdAt!) : null;
 
     return InkWell(
       borderRadius: BorderRadius.circular(10),
@@ -67,6 +72,14 @@ class ItemDetailRow extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (colorStage != null) ...[
+                  Container(
+                    margin: const EdgeInsets.only(top: 4, right: 6),
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(color: kColorStageColors[colorStage], shape: BoxShape.circle),
+                  ),
+                ],
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
@@ -77,7 +90,15 @@ class ItemDetailRow extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Text(
+                        item.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: item.isDone ? AppColors.success : AppColors.ink,
+                          decoration: item.isDone ? TextDecoration.lineThrough : null,
+                        ),
+                      ),
                       if (measurement.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 1),
