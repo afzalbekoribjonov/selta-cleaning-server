@@ -42,7 +42,15 @@ export function DeleteOrderDialog({
   })
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 px-4">
+    // Bu dialog ko'pincha OrderDetailDrawer (o'zi ham modal) ustiga ochiladi.
+    // Drawer'ning tashqi orqa foni o'zining onClose'ini bosishda chaqiradi —
+    // shu yerdagi bosishlar (masalan "Davom etish") yuqoriga "bubbling"
+    // bo'lib ketib, butun drawer'ni yopib qo'ymasligi uchun shu yerning o'zida
+    // to'xtatiladi.
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 px-4"
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="w-full max-w-sm rounded-3xl bg-surface p-6 shadow-2xl">
         <h2 className="flex items-center gap-2 text-lg font-heading font-bold text-ink">
           <Trash2 size={18} className="text-danger" />

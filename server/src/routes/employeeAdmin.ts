@@ -9,6 +9,28 @@ export const employeeAdminRouter = Router();
 
 const FIXED_DEPARTMENTS = new Set(["dispatcher", "worker", "delivery", "qc"]);
 
+/**
+ * `employees/{id}/private/credentials.firebaseUid` yaratilishida shunchaki
+ * tasodifiy UUID sifatida yoziladi (adminCreateEmployee) — haqiqiy Firebase
+ * Auth foydalanuvchisi FAQAT xodim birinchi marta PIN bilan kirganda
+ * (`loginWithPin` -> `createCustomToken` -> mijozda `signInWithCustomToken`)
+ * "dangasa" (lazy) ravishda yaratiladi. Agar xodim hali birov marta ham
+ * kirmagan bo'lsa, bu UID uchun Auth yozuvi umuman yo'q — `revokeRefreshTokens`
+ * shunday holatda `auth/user-not-found` bilan yiqiladi. Bu funksiya buni
+ * xavfsiz yutadi: tokenni bekor qilishning o'zi ma'nosiz bo'lib qoladi
+ * (bekor qiladigan sessiya yo'q), asosiy amal (bo'shatish/PIN/kasb
+ * o'zgartirish) esa muvaffaqiyatli bo'lgan bo'lishi kerak.
+ */
+async function safeRevokeRefreshTokens(uid: string): Promise<void> {
+  try {
+    await auth.revokeRefreshTokens(uid);
+  } catch (err) {
+    if ((err as { code?: string })?.code !== "auth/user-not-found") {
+      console.error(`revokeRefreshTokens(${uid}) failed:`, err);
+    }
+  }
+}
+
 function slugifyDepartmentLabel(label: string): string {
   const slug = label
     .trim()
@@ -206,7 +228,7 @@ employeeAdminRouter.post("/adminChangeEmployeeDepartment", withAuth, requireAdmi
     const credentialsSnap = await employeeRef.collection("private").doc("credentials").get();
     const uid = credentialsSnap.data()?.firebaseUid;
     if (uid) {
-      await auth.revokeRefreshTokens(uid);
+      await safeRevokeRefreshTokens(uid);
     }
 
     res.json({ ok: true, ...result });
@@ -233,7 +255,7 @@ employeeAdminRouter.post("/adminSetEmployeePin", withAuth, requireAdmin, async (
     // PIN o'zgargach eski sessiya darhol ishlamay qolishi kerak (reja qarori #5).
     const uid = snap.data()?.firebaseUid;
     if (uid) {
-      await auth.revokeRefreshTokens(uid);
+      await safeRevokeRefreshTokens(uid);
     }
 
     res.json({ ok: true });
@@ -261,7 +283,7 @@ employeeAdminRouter.post("/adminTerminateEmployee", withAuth, requireAdmin, asyn
 
     const uid = credentialsSnap.data()?.firebaseUid;
     if (uid) {
-      await auth.revokeRefreshTokens(uid);
+      await safeRevokeRefreshTokens(uid);
     }
 
     res.json({ ok: true });
