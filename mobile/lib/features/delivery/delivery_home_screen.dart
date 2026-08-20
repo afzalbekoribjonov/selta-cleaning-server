@@ -89,6 +89,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
                     return OrderCard(
                       order: order,
                       onTap: () => openDeliveryOrderDetailSheet(context, order),
+                      emphasizePrice: stage == 'ready',
                       actions: [
                         CardActionButton(icon: Icons.call_rounded, label: "Qo'ng'iroq", onTap: () => callPhone(order.phone)),
                         if (order.status == 'ready' && order.gpsCoords != null && order.gpsCoords!.isNotEmpty)

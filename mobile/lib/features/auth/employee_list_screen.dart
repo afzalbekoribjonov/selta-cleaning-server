@@ -142,12 +142,14 @@ class _EmptyState extends StatelessWidget {
               isOther ? "Boshqa kasbdagi xodim yo'q" : "Bu bo'limda hali xodim yo'q",
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Admin panel orqali xodim qo\'shilishi kerak',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.grayDark, fontSize: 13),
-            ),
+            if (!isOther) ...[
+              const SizedBox(height: 4),
+              const Text(
+                'Admin panel orqali xodim qo\'shilishi kerak',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.grayDark, fontSize: 13),
+              ),
+            ],
           ],
         ),
       ),

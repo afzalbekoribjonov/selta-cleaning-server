@@ -33,7 +33,24 @@ class _OrderDetailSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final itemsAsync = ref.watch(_itemsProvider(order.id));
+    // Ochilganda berilgan `order` faqat boshlang'ich hujjat — masalan
+    // "Jamoa biriktirish" shu varaq ustida ochilgan pastki varaqda amalga
+    // oshirilsa, u yopilgach shu yerdagi holat yangilanmay ("Jamoa
+    // biriktirish" tugmasi hamon ko'rinib) qolar edi. Endi joriy ro'yxatdan
+    // jonli holatni kuzatib boramiz — topilmasa (masalan sahifalanган eski
+    // buyurtma) boshlang'ich qiymatga qaytadi.
+    final recentOrders = ref.watch(recentOrdersProvider).value;
+    Order? matched;
+    if (recentOrders != null) {
+      for (final o in recentOrders) {
+        if (o.id == order.id) {
+          matched = o;
+          break;
+        }
+      }
+    }
+    final liveOrder = matched ?? order;
+    final itemsAsync = ref.watch(_itemsProvider(liveOrder.id));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.88,
@@ -55,15 +72,15 @@ class _OrderDetailSheet extends ConsumerWidget {
                   controller: scrollController,
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
                   children: [
-                    _Header(order: order),
+                    _Header(order: liveOrder),
                     const SizedBox(height: 20),
-                    _InfoCard(order: order),
-                    if (order.serviceType == 'onsite' && order.status == 'new') ...[
+                    _InfoCard(order: liveOrder),
+                    if (liveOrder.serviceType == 'onsite' && liveOrder.status == 'new') ...[
                       const SizedBox(height: 14),
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
-                          onPressed: () => openTeamAssignSheet(context, order.id),
+                          onPressed: () => openTeamAssignSheet(context, liveOrder.id),
                           icon: const Icon(Icons.groups_rounded),
                           label: const Text('Jamoa biriktirish'),
                           style: OutlinedButton.styleFrom(
@@ -78,12 +95,12 @@ class _OrderDetailSheet extends ConsumerWidget {
                     itemsAsync.when(
                       loading: () => const Padding(padding: EdgeInsets.all(6), child: LinearProgressIndicator()),
                       error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
-                      data: (items) => _ItemsSummaryCard(order: order, items: items),
+                      data: (items) => _ItemsSummaryCard(order: liveOrder, items: items),
                     ),
                     const SizedBox(height: 20),
-                    _ProgressChecklist(order: order),
+                    _ProgressChecklist(order: liveOrder),
                     const SizedBox(height: 20),
-                    CommentsSection(orderId: order.id),
+                    CommentsSection(orderId: liveOrder.id),
                   ],
                 ),
               ),

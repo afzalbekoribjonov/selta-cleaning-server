@@ -4,16 +4,27 @@ import '../../../app/theme.dart';
 import '../../../core/constants.dart';
 import '../../../core/models/order.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../../core/utils/money_utils.dart';
 
 /// Buyurtma kartasi — status bo'yicha chap chiziq, tarif rangli belgi,
 /// muddati o'tgan buyurtmalar qizil bilan ajratiladi (talab: "kechikayotgan
-/// buyurtmalar qizil bo'lib... ko'rinib turishi shart").
+/// buyurtmalar qizil bo'lib... ko'rinib turishi shart"). Buyurtma summasi
+/// har doim ko'rinadi; `emphasizePrice` bilan (masalan Dastavchik "tayyor"
+/// bosqichida — mijozdan pul yig'ish kerak bo'lganda) katta va yorqinroq
+/// ko'rsatiladi.
 class OrderCard extends StatelessWidget {
   final Order order;
   final VoidCallback onTap;
   final List<Widget>? actions;
+  final bool emphasizePrice;
 
-  const OrderCard({super.key, required this.order, required this.onTap, this.actions});
+  const OrderCard({
+    super.key,
+    required this.order,
+    required this.onTap,
+    this.actions,
+    this.emphasizePrice = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +122,43 @@ class OrderCard extends StatelessWidget {
                                   fontSize: 12,
                                   fontWeight: overdue ? FontWeight.w800 : FontWeight.w500,
                                 ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (emphasizePrice) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.09),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.payments_rounded, size: 17, color: AppColors.success),
+                                const SizedBox(width: 7),
+                                const Text(
+                                  "Yig'ish kerak",
+                                  style: TextStyle(fontSize: 12, color: AppColors.grayDark, fontWeight: FontWeight.w600),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  formatMoneyUz(order.totalPrice),
+                                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.success),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.payments_rounded, size: 14, color: AppColors.gray),
+                              const SizedBox(width: 5),
+                              Text(
+                                formatMoneyUz(order.totalPrice),
+                                style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w800),
                               ),
                             ],
                           ),
