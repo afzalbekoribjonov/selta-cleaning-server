@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../core/models/order.dart';
+import '../../core/models/order_item.dart';
+import '../../core/services/auth_service.dart' show authStateProvider;
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/launch_utils.dart';
@@ -17,8 +20,24 @@ const _stages = [
   ('ready', 'Yetkazishga tayyor', Icons.done_all_rounded),
 ];
 
-/// Dastavchik paneli — olib ketish (new -> picked_up -> brought_in) va
-/// yetkazib berish (ready -> done) bosqichlarini boshqaradi.
+final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
+  ref.watch(authStateProvider);
+  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
+});
+
+/// "Yetkazishga tayyor" endi order-level status emas — har bir item
+/// mustaqil ravishda "ready"ga yetadi (talab #9). Shu bosqichdagi
+/// buyurtmalar — "brought_in"da turgan VA kamida bitta "ready" itemga
+/// ega bo'lganlar.
+bool _hasReadyItem(WidgetRef ref, Order order) {
+  final items = ref.watch(_itemsProvider(order.id)).valueOrNull ?? const <OrderItem>[];
+  return items.any((i) => i.status == 'ready');
+}
+
+/// Dastavchik paneli — olib ketish (new -> picked_up -> brought_in)
+/// bosqichini boshqaradi; yetkazib berish endi ITEM-darajasida (talab
+/// #9: qisman yetkazish) — "Yetkazishga tayyor" tabida kamida bitta
+/// "ready" itemga ega buyurtmalar ko'rsatiladi.
 class DeliveryHomeScreen extends ConsumerStatefulWidget {
   const DeliveryHomeScreen({super.key});
 
@@ -63,7 +82,9 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
               loading: () => const SeltaLoadingView(),
               error: (err, _) => Center(child: Text('Xatolik: $err')),
               data: (orders) {
-                var filtered = orders.where((o) => o.serviceType == 'pickup' && o.status == stage).toList();
+                var filtered = stage == 'ready'
+                    ? orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in' && _hasReadyItem(ref, o)).toList()
+                    : orders.where((o) => o.serviceType == 'pickup' && o.status == stage).toList();
 
                 if (_search.isNotEmpty) {
                   filtered = filtered.where((o) {
@@ -92,7 +113,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
                       emphasizePrice: stage == 'ready',
                       actions: [
                         CardActionButton(icon: Icons.call_rounded, label: "Qo'ng'iroq", onTap: () => callPhone(order.phone)),
-                        if (order.status == 'ready' && order.gpsCoords != null && order.gpsCoords!.isNotEmpty)
+                        if (stage == 'ready' && order.gpsCoords != null && order.gpsCoords!.isNotEmpty)
                           CardActionButton(icon: Icons.navigation_rounded, label: "Yo'lga chiqish", filled: true, onTap: () => navigateToGps(order.gpsCoords!)),
                       ],
                     );
@@ -108,15 +129,14 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
         error: (_, __) => null,
         data: (orders) {
           final pickupOrders = orders.where((o) => o.serviceType == 'pickup').toList();
+          final broughtIn = pickupOrders.where((o) => o.status == 'brought_in').toList();
+          int countFor(String s) =>
+              s == 'ready' ? broughtIn.where((o) => _hasReadyItem(ref, o)).length : pickupOrders.where((o) => o.status == s).length;
           return NavigationBar(
             selectedIndex: _stageIndex,
             onDestinationSelected: (i) => setState(() => _stageIndex = i),
             destinations: [
-              for (final (s, label, icon) in _stages)
-                NavigationDestination(
-                  icon: _BadgedIcon(icon: icon, count: pickupOrders.where((o) => o.status == s).length),
-                  label: label,
-                ),
+              for (final (s, label, icon) in _stages) NavigationDestination(icon: _BadgedIcon(icon: icon, count: countFor(s)), label: label),
             ],
           );
         },

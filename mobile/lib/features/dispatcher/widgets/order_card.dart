@@ -29,7 +29,9 @@ class OrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = statusOf(order.status);
-    final tariff = tariffOf(order.tariff);
+    // Pickup buyurtmalarda tarif endi item-darajasida — order.tariff faqat
+    // onsite uchun mavjud, shuning uchun pill faqat shunda ko'rsatiladi.
+    final tariff = order.tariff != null ? tariffOf(order.tariff) : null;
     final overdue = order.isOverdue;
 
     return Material(
@@ -69,8 +71,10 @@ class OrderCard extends StatelessWidget {
                               '#${order.orderNumber}',
                               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.ink),
                             ),
-                            const SizedBox(width: 8),
-                            _Pill(label: tariff.label, color: tariff.color, background: tariff.background),
+                            if (tariff != null) ...[
+                              const SizedBox(width: 8),
+                              _Pill(label: tariff.label, color: tariff.color, background: tariff.background),
+                            ],
                             const Spacer(),
                             _Pill(label: status.label, color: status.color, background: status.background, icon: status.icon),
                           ],

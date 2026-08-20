@@ -119,7 +119,9 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = statusOf(order.status);
-    final tariff = tariffOf(order.tariff);
+    // Pickup buyurtmalarda tarif endi item-darajasida — order.tariff faqat
+    // onsite uchun mavjud.
+    final tariff = order.tariff != null ? tariffOf(order.tariff) : null;
     return Row(
       children: [
         Expanded(
@@ -131,8 +133,10 @@ class _Header extends StatelessWidget {
               Row(
                 children: [
                   _pill(status.label, status.color, status.background),
-                  const SizedBox(width: 8),
-                  _pill(tariff.label, tariff.color, tariff.background),
+                  if (tariff != null) ...[
+                    const SizedBox(width: 8),
+                    _pill(tariff.label, tariff.color, tariff.background),
+                  ],
                 ],
               ),
             ],

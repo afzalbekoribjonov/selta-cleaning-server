@@ -13,6 +13,7 @@ import '../../core/utils/launch_utils.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
+import '../shared/item_action_row.dart';
 import '../shared/item_detail_row.dart';
 
 void openDeliveryOrderDetailSheet(BuildContext context, Order order) {
@@ -24,11 +25,14 @@ void openDeliveryOrderDetailSheet(BuildContext context, Order order) {
   );
 }
 
-const _nextStage = {'new': 'picked_up', 'picked_up': 'brought_in', 'ready': 'done'};
+// "brought_in"dan keyin buyurtma o'zi bosqichma-bosqich o'zgarmaydi —
+// har bir item mustaqil ravishda ITEM_PIPELINE bo'ylab ishlov olinadi
+// (talab #9: qisman yetkazish), shu jumladan "ready -> done" ham
+// ItemActionRow orqali item-darajasida amalga oshadi.
+const _nextStage = {'new': 'picked_up', 'picked_up': 'brought_in'};
 const _actionLabel = {
   'new': 'Qabul qilindi',
   'picked_up': "Sexga yetkazildi",
-  'ready': 'Mijozga yetkazildi',
 };
 
 final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
@@ -47,29 +51,6 @@ class _DeliveryOrderDetailSheet extends ConsumerStatefulWidget {
 class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailSheet> {
   bool _advancing = false;
   String? _error;
-
-  Future<num?> _promptCollectedAmount() async {
-    final controller = TextEditingController();
-    return showDialog<num>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Mijozdan qabul qilingan summa"),
-        content: TextField(
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          autofocus: true,
-          decoration: const InputDecoration(hintText: "Masalan: 150000 (ixtiyoriy)", suffixText: "so'm"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text("O'tkazib yuborish")),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(num.tryParse(controller.text.replaceAll(',', '.')) ?? 0),
-            child: const Text('Tasdiqlash'),
-          ),
-        ],
-      ),
-    );
-  }
 
   /// "Olib ketildi"ga o'tishdan oldin GPS majburiy — mijoz manzilida
   /// turgan chog'da qurilma joylashuvi buyurtmaga saqlanadi.
@@ -103,7 +84,6 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
     if (next == null) return;
 
     String? gpsCoords;
-    num? collectedAmount;
 
     if (widget.order.status == 'new') {
       setState(() {
@@ -117,11 +97,6 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
       }
     }
 
-    if (widget.order.status == 'ready') {
-      collectedAmount = await _promptCollectedAmount();
-      if (!mounted) return;
-    }
-
     setState(() {
       _advancing = true;
       _error = null;
@@ -130,7 +105,6 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
       await ref.read(ordersRepositoryProvider).changeOrderStatus(
             orderId: widget.order.id,
             toStatus: next,
-            collectedAmount: collectedAmount,
             gpsCoords: gpsCoords,
           );
       if (mounted) Navigator.of(context).pop();
@@ -194,7 +168,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                     Row(
                       children: [
                         CardActionButton(icon: Icons.call_rounded, label: "Qo'ng'iroq", onTap: () => callPhone(order.phone)),
-                        if (order.status == 'ready' && order.gpsCoords != null && order.gpsCoords!.isNotEmpty) ...[
+                        if (order.status == 'brought_in' && order.gpsCoords != null && order.gpsCoords!.isNotEmpty) ...[
                           const SizedBox(width: 8),
                           CardActionButton(icon: Icons.navigation_rounded, label: "Yo'lga chiqish", filled: true, onTap: () => navigateToGps(order.gpsCoords!)),
                         ],
@@ -206,6 +180,14 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                         loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
                         error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
                         data: (items) => _PickupItemsCard(order: order, items: items),
+                      ),
+                    ],
+                    if (order.status == 'brought_in') ...[
+                      const SizedBox(height: 16),
+                      itemsAsync.when(
+                        loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
+                        error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
+                        data: (items) => _DeliverableItemsCard(order: order, items: items),
                       ),
                     ],
                     if (actionLabel != null) ...[
@@ -290,6 +272,33 @@ class _PickupItemsCard extends StatelessWidget {
                 editable: true,
                 onTap: () => openCatalogItemSheet(context, order, existingItem: item),
               ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Sexga keldi"dan keyin har bir mahsulot mustaqil ishlov olinadi —
+/// dastavchik shu yerda faqat "ready" bo'lganlarini alohida mijozga
+/// yetkazadi (talab #9: qisman yetkazish, ItemActionRow shu tugmani
+/// o'zida taqdim etadi).
+class _DeliverableItemsCard extends StatelessWidget {
+  final Order order;
+  final List<OrderItem> items;
+  const _DeliverableItemsCard({required this.order, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+          const SizedBox(height: 4),
+          for (final item in items) ItemActionRow(order: order, item: item),
         ],
       ),
     );
