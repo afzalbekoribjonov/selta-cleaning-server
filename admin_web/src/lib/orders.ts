@@ -19,7 +19,9 @@ export interface Order {
   location: string
   gpsCoords: string | null
   serviceType: 'pickup' | 'onsite'
-  tariff: 'express' | 'comfort' | 'standart' | 'premium'
+  // Faqat onsite buyurtmalarda mavjud — pickup'da tarif item-darajasiga
+  // ko'chirildi (server/src/routes/orders.ts: createOrder).
+  tariff: 'express' | 'comfort' | 'standart' | 'premium' | null
   status: string
   assignedTeam: string[]
   totalArea: number
@@ -46,7 +48,7 @@ function toOrder(doc: QueryDocumentSnapshot): Order {
     location: data.location ?? '',
     gpsCoords: data.gpsCoords ?? null,
     serviceType: data.serviceType ?? 'pickup',
-    tariff: data.tariff ?? 'standart',
+    tariff: data.tariff ?? null,
     status: data.status ?? 'new',
     assignedTeam: data.assignedTeam ?? [],
     totalArea: data.totalArea ?? 0,

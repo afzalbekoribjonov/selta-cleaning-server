@@ -13,7 +13,8 @@ export function StatusBadge({ status }: { status: string }) {
   )
 }
 
-export function TariffBadge({ tariff }: { tariff: string }) {
+export function TariffBadge({ tariff }: { tariff: string | null }) {
+  if (!tariff) return null
   const info = TARIFF_CONFIG[tariff] ?? TARIFF_CONFIG.standart
   return (
     <span
