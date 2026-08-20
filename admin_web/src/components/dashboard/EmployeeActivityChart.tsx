@@ -9,7 +9,7 @@ import type { Order } from '@/lib/orders'
 type DeptKey = 'createdBy' | 'washedBy' | 'deliveredBy'
 
 const TABS: { key: DeptKey; label: string }[] = [
-  { key: 'createdBy', label: 'Dispetcher' },
+  { key: 'createdBy', label: 'Sotuv menejeri' },
   { key: 'washedBy', label: 'Ishchi' },
   { key: 'deliveredBy', label: 'Dastavchik' },
 ]

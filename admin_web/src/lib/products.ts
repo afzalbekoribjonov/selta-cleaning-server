@@ -3,14 +3,18 @@ import { db } from './firebase'
 
 export type CalcType = 'sqm' | 'meter' | 'kg' | 'count' | 'size'
 
+export interface TariffPrice {
+  unitPrice: number | null
+  smallPrice: number | null
+  largePrice: number | null
+}
+
 export interface Product {
   id: string
   name: string
   calcType: CalcType
-  unitPrice: number | null
-  smallPrice: number | null
-  largePrice: number | null
   tariffs: string[]
+  pricesByTariff: Record<string, TariffPrice>
 }
 
 export const CALC_TYPE_CONFIG: Record<CalcType, { label: string; unitLabel: string }> = {
@@ -23,14 +27,21 @@ export const CALC_TYPE_CONFIG: Record<CalcType, { label: string; unitLabel: stri
 
 function toProduct(doc: QueryDocumentSnapshot<DocumentData>): Product {
   const data = doc.data()
+  const pricesByTariff: Record<string, TariffPrice> = {}
+  const raw = (data.pricesByTariff ?? {}) as Record<string, Partial<TariffPrice>>
+  for (const [tariff, p] of Object.entries(raw)) {
+    pricesByTariff[tariff] = {
+      unitPrice: p.unitPrice ?? null,
+      smallPrice: p.smallPrice ?? null,
+      largePrice: p.largePrice ?? null,
+    }
+  }
   return {
     id: doc.id,
     name: data.name ?? '',
     calcType: (data.calcType ?? 'count') as CalcType,
-    unitPrice: data.unitPrice ?? null,
-    smallPrice: data.smallPrice ?? null,
-    largePrice: data.largePrice ?? null,
     tariffs: data.tariffs ?? [],
+    pricesByTariff,
   }
 }
 

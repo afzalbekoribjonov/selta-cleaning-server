@@ -159,7 +159,7 @@ function MostActiveSection() {
         <Spinner className="py-4" />
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <ActivityColumn title="Dispetcher — buyurtma yaratgan" rows={stats.dispatcher} employees={employees} />
+          <ActivityColumn title="Sotuv menejeri — buyurtma yaratgan" rows={stats.dispatcher} employees={employees} />
           <ActivityColumn title="Ishchi — yuvgan" rows={stats.worker} employees={employees} />
           <ActivityColumn title="Dastavchik — yetkazgan" rows={stats.delivery} employees={employees} />
         </div>

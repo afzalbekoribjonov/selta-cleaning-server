@@ -26,7 +26,7 @@ void openDeliveryOrderDetailSheet(BuildContext context, Order order) {
 
 const _nextStage = {'new': 'picked_up', 'picked_up': 'brought_in', 'ready': 'done'};
 const _actionLabel = {
-  'new': 'Olib ketildi',
+  'new': 'Qabul qilindi',
   'picked_up': "Sexga yetkazildi",
   'ready': 'Mijozga yetkazildi',
 };

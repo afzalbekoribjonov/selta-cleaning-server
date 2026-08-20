@@ -13,7 +13,7 @@ import 'delivery_order_detail_sheet.dart';
 
 const _stages = [
   ('new', 'Yangi', Icons.move_to_inbox_rounded),
-  ('picked_up', 'Olib ketilgan', Icons.local_shipping_rounded),
+  ('picked_up', 'Qabul qilindi', Icons.local_shipping_rounded),
   ('ready', 'Yetkazishga tayyor', Icons.done_all_rounded),
 ];
 

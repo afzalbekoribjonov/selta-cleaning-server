@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, X, Pencil, Trash2, Package, Percent } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { useProducts, useConditionSurcharges } from '@/hooks/useProducts'
-import { CALC_TYPE_CONFIG, type Product, type CalcType } from '@/lib/products'
+import { CALC_TYPE_CONFIG, type Product, type CalcType, type TariffPrice } from '@/lib/products'
 import { TARIFF_CONFIG } from '@/lib/status-config'
 import { Spinner } from '@/components/ui/Spinner'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -12,9 +12,11 @@ function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
 }
 
-function priceLabel(p: Product): string {
-  if (p.calcType === 'size') return `Kichik: ${formatMoney(p.smallPrice ?? 0)} / Katta: ${formatMoney(p.largePrice ?? 0)}`
-  return `${formatMoney(p.unitPrice ?? 0)} ${CALC_TYPE_CONFIG[p.calcType].unitLabel.replace(/^so'm\s*\/\s*/, '/ ')}`
+function tariffPriceLabel(p: Product, tariff: string): string {
+  const price = p.pricesByTariff[tariff]
+  if (!price) return "narx belgilanmagan"
+  if (p.calcType === 'size') return `Kichik: ${formatMoney(price.smallPrice ?? 0)} / Katta: ${formatMoney(price.largePrice ?? 0)}`
+  return `${formatMoney(price.unitPrice ?? 0)} ${CALC_TYPE_CONFIG[p.calcType].unitLabel.replace(/^so'm\s*\/\s*/, '/ ')}`
 }
 
 export default function ProductsPage() {
@@ -84,7 +86,18 @@ export default function ProductsPage() {
                         ))}
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-ink">{priceLabel(p)}</td>
+                    <td className="px-5 py-3 text-ink">
+                      <div className="space-y-1">
+                        {p.tariffs.map((t) => (
+                          <div key={t} className="flex items-center gap-1.5 text-xs">
+                            <span className="font-bold" style={{ color: TARIFF_CONFIG[t]?.color }}>
+                              {TARIFF_CONFIG[t]?.label ?? t}:
+                            </span>
+                            <span>{tariffPriceLabel(p, t)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
                         <button
@@ -199,31 +212,56 @@ function SurchargeField({ label, value, onChange }: { label: string; value: stri
   )
 }
 
+interface TariffPriceDraft {
+  unitPrice: string
+  smallPrice: string
+  largePrice: string
+}
+
+function draftFromPrice(p?: TariffPrice): TariffPriceDraft {
+  return {
+    unitPrice: p?.unitPrice != null ? String(p.unitPrice) : '',
+    smallPrice: p?.smallPrice != null ? String(p.smallPrice) : '',
+    largePrice: p?.largePrice != null ? String(p.largePrice) : '',
+  }
+}
+
 function ProductFormDialog({ product, onClose }: { product?: Product; onClose: () => void }) {
   useEscapeClose(onClose)
   const queryClient = useQueryClient()
   const editing = !!product
   const [name, setName] = useState(product?.name ?? '')
   const [calcType, setCalcType] = useState<CalcType>(product?.calcType ?? 'sqm')
-  const [unitPrice, setUnitPrice] = useState(product?.unitPrice != null ? String(product.unitPrice) : '')
-  const [smallPrice, setSmallPrice] = useState(product?.smallPrice != null ? String(product.smallPrice) : '')
-  const [largePrice, setLargePrice] = useState(product?.largePrice != null ? String(product.largePrice) : '')
   const [tariffs, setTariffs] = useState<string[]>(product?.tariffs ?? [])
+  const [prices, setPrices] = useState<Record<string, TariffPriceDraft>>(() => {
+    const initial: Record<string, TariffPriceDraft> = {}
+    for (const t of product?.tariffs ?? []) {
+      initial[t] = draftFromPrice(product?.pricesByTariff[t])
+    }
+    return initial
+  })
   const [error, setError] = useState<string | null>(null)
 
   function toggleTariff(key: string) {
     setTariffs((prev) => (prev.includes(key) ? prev.filter((t) => t !== key) : [...prev, key]))
+    setPrices((prev) => (prev[key] ? prev : { ...prev, [key]: draftFromPrice() }))
+  }
+
+  function updatePrice(tariff: string, field: keyof TariffPriceDraft, value: string) {
+    setPrices((prev) => ({ ...prev, [tariff]: { ...(prev[tariff] ?? draftFromPrice()), [field]: value } }))
   }
 
   const mutation = useMutation({
     mutationFn: () => {
-      const body: Record<string, unknown> = { name: name.trim(), calcType, tariffs }
-      if (calcType === 'size') {
-        body.smallPrice = Number(smallPrice) || 0
-        body.largePrice = Number(largePrice) || 0
-      } else {
-        body.unitPrice = Number(unitPrice) || 0
+      const pricesByTariff: Record<string, unknown> = {}
+      for (const t of tariffs) {
+        const draft = prices[t] ?? draftFromPrice()
+        pricesByTariff[t] =
+          calcType === 'size'
+            ? { smallPrice: Number(draft.smallPrice) || 0, largePrice: Number(draft.largePrice) || 0 }
+            : { unitPrice: Number(draft.unitPrice) || 0 }
       }
+      const body: Record<string, unknown> = { name: name.trim(), calcType, tariffs, pricesByTariff }
       if (editing) {
         return apiPost('/adminUpdateProduct', { ...body, productId: product!.id })
       }
@@ -286,9 +324,11 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-ink">Tariflar</label>
+            <label className="mb-1.5 block text-sm font-semibold text-ink">
+              Ushbu mahsulot uchun mavjud tariflarni tanlash va narxini belgilash
+            </label>
             <p className="mb-2 text-xs text-gray-dark">
-              Xodimlar bu mahsulotni faqat tanlangan tarifdagi buyurtmalarga qo'sha oladi.
+              Tanlangan har bir tarif uchun alohida narx kiritiladi — xodimlar bu mahsulotni faqat shu tarifdagi buyurtmalarga qo'sha oladi.
             </p>
             <div className="flex flex-wrap gap-2">
               {Object.entries(TARIFF_CONFIG).map(([key, info]) => {
@@ -312,39 +352,57 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
             </div>
           </div>
 
-          {calcType === 'size' ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-ink">Kichik narx (so'm)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={smallPrice}
-                  onChange={(e) => setSmallPrice(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-ink">Katta narx (so'm)</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={largePrice}
-                  onChange={(e) => setLargePrice(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
-                />
-              </div>
-            </div>
-          ) : (
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-ink">Narx ({CALC_TYPE_CONFIG[calcType].unitLabel})</label>
-              <input
-                type="number"
-                min={0}
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
-                className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
-              />
+          {tariffs.length > 0 && (
+            <div className="space-y-3">
+              {tariffs.map((t) => {
+                const info = TARIFF_CONFIG[t]
+                const draft = prices[t] ?? draftFromPrice()
+                return (
+                  <div key={t} className="rounded-xl border border-border p-3">
+                    <span
+                      className="mb-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold"
+                      style={{ color: info?.color, backgroundColor: info?.bg }}
+                    >
+                      {info?.label ?? t}
+                    </span>
+                    {calcType === 'size' ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="mb-1.5 block text-xs font-semibold text-ink">Kichik narx (so'm)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={draft.smallPrice}
+                            onChange={(e) => updatePrice(t, 'smallPrice', e.target.value)}
+                            className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-xs font-semibold text-ink">Katta narx (so'm)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={draft.largePrice}
+                            onChange={(e) => updatePrice(t, 'largePrice', e.target.value)}
+                            className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold text-ink">Narx ({CALC_TYPE_CONFIG[calcType].unitLabel})</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={draft.unitPrice}
+                          onChange={(e) => updatePrice(t, 'unitPrice', e.target.value)}
+                          className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 

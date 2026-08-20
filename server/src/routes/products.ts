@@ -16,42 +16,63 @@ const VALID_TARIFFS = new Set(["express", "comfort", "standart", "premium"]);
  * mahsulotlarni ko'radi. O'qish to'g'ridan-to'g'ri Firestore orqali
  * (firestore.rules: isSignedIn()), faqat yozish shu yerdan — admin.
  */
-function validateProductBody(body: Record<string, unknown>): string[] {
-  const { name, calcType, unitPrice, smallPrice, largePrice, tariffs } = body;
+interface TariffPriceInput {
+  unitPrice?: number;
+  smallPrice?: number;
+  largePrice?: number;
+}
+
+/**
+ * Har bir tanlangan tarif — to'liq alohida narx tuzilmasiga ega (talab:
+ * "Har tarif — to'liq alohida narx"). `pricesByTariff` faqat `tariffs`
+ * ro'yxatidagi kalitlarni saqlaydi — chekindan chiqarilgan tariflar
+ * uchun eski narxlar avtomatik tashlab yuboriladi.
+ */
+function validateProductBody(body: Record<string, unknown>): { tariffs: string[]; pricesByTariff: Record<string, TariffPriceInput> } {
+  const { name, calcType, tariffs, pricesByTariff } = body;
   if (!(name as string)?.toString()?.trim()) {
     throw new ApiError(400, "invalid-argument", "Mahsulot nomi majburiy");
   }
   if (!CALC_TYPES.has(calcType as string)) {
     throw new ApiError(400, "invalid-argument", "Hisoblash turi noto'g'ri");
   }
-  if (calcType === "size") {
-    if (typeof smallPrice !== "number" || typeof largePrice !== "number" || smallPrice < 0 || largePrice < 0) {
-      throw new ApiError(400, "invalid-argument", "Kichik va katta narxlar kiritilishi shart");
-    }
-  } else {
-    if (typeof unitPrice !== "number" || unitPrice < 0) {
-      throw new ApiError(400, "invalid-argument", "Narx kiritilishi shart");
-    }
-  }
   if (!Array.isArray(tariffs) || tariffs.length === 0 || !tariffs.every((t) => VALID_TARIFFS.has(t))) {
     throw new ApiError(400, "invalid-argument", "Kamida bitta tarif tanlang");
   }
-  return tariffs as string[];
+  if (typeof pricesByTariff !== "object" || pricesByTariff === null) {
+    throw new ApiError(400, "invalid-argument", "Har bir tarif uchun narx kiritilishi shart");
+  }
+
+  const cleaned: Record<string, TariffPriceInput> = {};
+  for (const t of tariffs as string[]) {
+    const p = (pricesByTariff as Record<string, TariffPriceInput>)[t];
+    if (calcType === "size") {
+      if (typeof p?.smallPrice !== "number" || typeof p?.largePrice !== "number" || p.smallPrice < 0 || p.largePrice < 0) {
+        throw new ApiError(400, "invalid-argument", "Har bir tarif uchun kichik va katta narxlar kiritilishi shart");
+      }
+      cleaned[t] = { smallPrice: p.smallPrice, largePrice: p.largePrice };
+    } else {
+      if (typeof p?.unitPrice !== "number" || p.unitPrice < 0) {
+        throw new ApiError(400, "invalid-argument", "Har bir tarif uchun narx kiritilishi shart");
+      }
+      cleaned[t] = { unitPrice: p.unitPrice };
+    }
+  }
+
+  return { tariffs: tariffs as string[], pricesByTariff: cleaned };
 }
 
 productsRouter.post("/adminCreateProduct", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
-    const { name, calcType, unitPrice, smallPrice, largePrice } = req.body ?? {};
-    const tariffs = validateProductBody(req.body ?? {});
+    const { name, calcType } = req.body ?? {};
+    const { tariffs, pricesByTariff } = validateProductBody(req.body ?? {});
 
     const ref = db.collection("products").doc();
     await ref.set({
       name: (name as string).trim(),
       calcType,
-      unitPrice: calcType === "size" ? null : unitPrice,
-      smallPrice: calcType === "size" ? smallPrice : null,
-      largePrice: calcType === "size" ? largePrice : null,
       tariffs,
+      pricesByTariff,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       createdBy: req.auth!.uid,
@@ -65,9 +86,9 @@ productsRouter.post("/adminCreateProduct", withAuth, requireAdmin, async (req: A
 
 productsRouter.post("/adminUpdateProduct", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
-    const { productId, name, calcType, unitPrice, smallPrice, largePrice } = req.body ?? {};
+    const { productId, name, calcType } = req.body ?? {};
     if (!productId) throw new ApiError(400, "invalid-argument", "productId majburiy");
-    const tariffs = validateProductBody(req.body ?? {});
+    const { tariffs, pricesByTariff } = validateProductBody(req.body ?? {});
 
     const ref = db.collection("products").doc(productId);
     const snap = await ref.get();
@@ -76,10 +97,8 @@ productsRouter.post("/adminUpdateProduct", withAuth, requireAdmin, async (req: A
     await ref.update({
       name: (name as string).trim(),
       calcType,
-      unitPrice: calcType === "size" ? null : unitPrice,
-      smallPrice: calcType === "size" ? smallPrice : null,
-      largePrice: calcType === "size" ? largePrice : null,
       tariffs,
+      pricesByTariff,
       updatedAt: FieldValue.serverTimestamp(),
     });
 

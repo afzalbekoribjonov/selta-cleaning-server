@@ -5,6 +5,7 @@ export interface ItemInput {
   name?: string;
   productId?: string | null;
   calcType?: string;
+  tariff?: string; // berilmasa `orderTariff` ishlatiladi (joyida-yuvish buyurtmalari uchun barcha itemlar order tarifini meros oladi)
   width?: number;
   height?: number;
   qty?: number;
@@ -17,6 +18,7 @@ export interface ComputedItem {
   name: string;
   productId: string | null;
   calcType: string;
+  tariff: string | null;
   width: number | null;
   height: number | null;
   qty: number | null;
@@ -34,10 +36,13 @@ export interface ComputedItem {
  * ishonmaydi (faqat calcType='fixed', ya'ni katalogsiz qo'lda kiritilgan
  * itemlar uchun klient narxi qabul qilinadi).
  *
- * `orderTariff` berilsa — mahsulot shu tarifga tegishli emasligini ham
- * tekshiradi (klient UI faqat mos mahsulotlarni ko'rsatadi, lekin serverda
- * ham tasdiqlanadi — boshqa tarifga tegishli mahsulot hech qachon
- * qo'shilmasligini kafolatlaydi).
+ * Har bir item o'zining tarifiga ega bo'lishi mumkin (`item.tariff`) —
+ * berilmasa `orderTariff`dan meros oladi. Narx katalogdagi shu tarif
+ * uchun belgilangan narx tuzilmasidan (`product.pricesByTariff`)
+ * olinadi — har bir tarif to'liq alohida narxga ega (talab: "Har
+ * tarif — to'liq alohida narx"). Tarif ham mahsulot shu tarifga
+ * tegishli emasligini tekshirish uchun ishlatiladi (klient UI faqat
+ * mos mahsulotlarni ko'rsatadi, lekin serverda ham tasdiqlanadi).
  */
 export async function computeItems(items: ItemInput[], orderTariff?: string): Promise<ComputedItem[]> {
   const productIds = [...new Set(items.map((i) => i.productId).filter((id): id is string => !!id))];
@@ -61,6 +66,7 @@ export async function computeItems(items: ItemInput[], orderTariff?: string): Pr
         name,
         productId: null,
         calcType: "fixed",
+        tariff: item.tariff ?? orderTariff ?? null,
         width: null,
         height: null,
         qty: null,
@@ -76,10 +82,14 @@ export async function computeItems(items: ItemInput[], orderTariff?: string): Pr
     const product = products.get(item.productId);
     if (!product) throw new ApiError(404, "not-found", `Mahsulot topilmadi: ${item.productId}`);
 
+    const itemTariff = item.tariff ?? orderTariff;
     const productTariffs = (product.tariffs as string[] | undefined) ?? [];
-    if (orderTariff && productTariffs.length > 0 && !productTariffs.includes(orderTariff)) {
+    if (itemTariff && productTariffs.length > 0 && !productTariffs.includes(itemTariff)) {
       throw new ApiError(400, "invalid-argument", `"${product.name}" mahsuloti bu tarifga tegishli emas`);
     }
+
+    const pricesByTariff = (product.pricesByTariff as Record<string, { unitPrice?: number; smallPrice?: number; largePrice?: number }> | undefined) ?? {};
+    const tariffPrice = (itemTariff && pricesByTariff[itemTariff]) || {};
 
     let base = 0;
     let unitPrice: number | null = null;
@@ -90,10 +100,10 @@ export async function computeItems(items: ItemInput[], orderTariff?: string): Pr
 
     if (calcType === "size") {
       sizeVariant = item.sizeVariant === "large" ? "large" : "small";
-      unitPrice = sizeVariant === "large" ? Number(product.largePrice) || 0 : Number(product.smallPrice) || 0;
+      unitPrice = sizeVariant === "large" ? Number(tariffPrice.largePrice) || 0 : Number(tariffPrice.smallPrice) || 0;
       base = unitPrice;
     } else {
-      unitPrice = Number(product.unitPrice) || 0;
+      unitPrice = Number(tariffPrice.unitPrice) || 0;
       if (calcType === "sqm" && item.width && item.height) {
         width = Number(item.width);
         height = Number(item.height);
@@ -114,6 +124,7 @@ export async function computeItems(items: ItemInput[], orderTariff?: string): Pr
       name: name === "Mahsulot" ? (product.name as string) : name,
       productId: item.productId,
       calcType,
+      tariff: itemTariff ?? null,
       width,
       height,
       qty,

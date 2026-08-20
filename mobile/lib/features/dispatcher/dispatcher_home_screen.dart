@@ -25,7 +25,7 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
     final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
 
     return Scaffold(
-      appBar: EmployeeAppBar(departmentLabel: 'Dispetcher', employeeName: fullName),
+      appBar: EmployeeAppBar(departmentLabel: 'Sotuv menejeri', employeeName: fullName),
       body: IndexedStack(
         index: _index,
         children: [

@@ -4,7 +4,7 @@
  */
 export const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   new: { label: 'Yangi', color: '#2F80D6', bg: '#E8F1FC' },
-  picked_up: { label: 'Olib ketildi', color: '#0E9488', bg: '#E3F8F6' },
+  picked_up: { label: 'Qabul qilindi', color: '#0E9488', bg: '#E3F8F6' },
   brought_in: { label: 'Sexga keldi', color: '#7A7482', bg: '#F1EFF3' },
   washing: { label: 'Yuvilmoqda', color: '#2F80D6', bg: '#E8F1FC' },
   packing: { label: 'Upakovka', color: '#8A5A00', bg: '#FBF0DC' },

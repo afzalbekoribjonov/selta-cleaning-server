@@ -122,10 +122,11 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
       return num.tryParse(_customPriceController.text.replaceAll(',', '.')) ?? 0;
     }
     num base;
+    final tariffPrice = _product!.priceFor(widget.order.tariff);
     if (_product!.calcType == 'size') {
-      base = (_sizeVariant == 'large' ? _product!.largePrice : _product!.smallPrice) ?? 0;
+      base = (_sizeVariant == 'large' ? tariffPrice.largePrice : tariffPrice.smallPrice) ?? 0;
     } else {
-      base = (_product!.unitPrice ?? 0) * _measuredQty;
+      base = (tariffPrice.unitPrice ?? 0) * _measuredQty;
     }
     final surcharges = ref.read(conditionSurchargesProvider).valueOrNull ?? const ConditionSurcharges();
     final percent = surcharges.percentFor(_condition);
@@ -408,6 +409,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
 
   Widget _buildCalcInputs() {
     final calcType = _product!.calcType;
+    final tariffPrice = _product!.priceFor(widget.order.tariff);
 
     if (calcType == 'sqm') {
       return Column(
@@ -453,7 +455,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
               ],
             ),
           const SizedBox(height: 6),
-          Text('Jami: ${_measuredQty.toStringAsFixed(2)} m² × ${(_product!.unitPrice ?? 0).toStringAsFixed(0)} so\'m',
+          Text('Jami: ${_measuredQty.toStringAsFixed(2)} m² × ${(tariffPrice.unitPrice ?? 0).toStringAsFixed(0)} so\'m',
               style: const TextStyle(fontSize: 12, color: AppColors.grayDark)),
         ],
       );
@@ -470,7 +472,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
               Expanded(
                 child: _SizeOption(
                   label: 'Kichik',
-                  price: _product!.smallPrice ?? 0,
+                  price: tariffPrice.smallPrice ?? 0,
                   selected: _sizeVariant == 'small',
                   onTap: () => setState(() => _sizeVariant = 'small'),
                 ),
@@ -479,7 +481,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
               Expanded(
                 child: _SizeOption(
                   label: 'Katta',
-                  price: _product!.largePrice ?? 0,
+                  price: tariffPrice.largePrice ?? 0,
                   selected: _sizeVariant == 'large',
                   onTap: () => setState(() => _sizeVariant = 'large'),
                 ),
@@ -516,7 +518,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
             const SizedBox(width: 12),
             _StepButton(icon: Icons.add_rounded, onTap: () => setState(() => _qty = _qty + step)),
             const SizedBox(width: 12),
-            Text('× ${(_product!.unitPrice ?? 0).toStringAsFixed(0)} so\'m', style: const TextStyle(fontSize: 12, color: AppColors.grayDark)),
+            Text('× ${(tariffPrice.unitPrice ?? 0).toStringAsFixed(0)} so\'m', style: const TextStyle(fontSize: 12, color: AppColors.grayDark)),
           ],
         ),
       ],

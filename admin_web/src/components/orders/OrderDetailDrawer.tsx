@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore'
-import { X, User, Phone, MapPin, Calendar, Clock, Star, Trash2 } from 'lucide-react'
+import { X, User, Phone, MapPin, Calendar, Clock, Star, Trash2, Navigation } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { isOverdue, type Order } from '@/lib/orders'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
@@ -108,6 +108,17 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
             <InfoRow icon={User} text={order.customerName || "Noma'lum mijoz"} />
             <InfoRow icon={Phone} text={order.phone} />
             <InfoRow icon={MapPin} text={order.location} />
+            {order.gpsCoords && (
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.gpsCoords)}&travelmode=driving`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-[25px] mt-0.5 inline-flex items-center gap-1.5 text-xs font-bold text-brand-primary hover:underline"
+              >
+                <Navigation size={12} />
+                Xaritada ochish
+              </a>
+            )}
             <InfoRow
               icon={Calendar}
               text={order.dueDate ? `Muddat: ${formatDateUz(order.dueDate)}${overdue ? ' — kechikmoqda' : ''}` : 'Muddat belgilanmagan'}

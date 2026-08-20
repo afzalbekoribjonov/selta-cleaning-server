@@ -21,7 +21,7 @@ class DepartmentInfo {
 
 const Map<Department, DepartmentInfo> kDepartmentConfig = {
   Department.dispatcher: DepartmentInfo(
-    label: 'Dispetcher',
+    label: 'Sotuv menejeri',
     description: 'Buyurtmalarni qabul qilish va boshqarish',
     icon: Icons.headset_mic_rounded,
   ),
@@ -69,7 +69,7 @@ const Map<String, StatusInfo> kStatusConfig = {
     background: Color(0xFFE8F1FC),
   ),
   'picked_up': StatusInfo(
-    label: 'Olib ketildi',
+    label: 'Qabul qilindi',
     icon: Icons.inventory_2_rounded,
     color: Color(0xFF0E9488),
     background: Color(0xFFE3F8F6),
