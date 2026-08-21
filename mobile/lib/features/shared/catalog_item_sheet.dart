@@ -43,14 +43,43 @@ Future<void> openCatalogItemSheet(BuildContext context, Order order, {OrderItem?
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => _CatalogItemSheet(order: order, existingItem: existingItem),
+    builder: (context) => _CatalogItemSheet(
+      serviceType: order.serviceType,
+      orderTariff: order.tariff,
+      orderId: order.id,
+      existingItem: existingItem,
+    ),
+  );
+}
+
+/// Sotuv menejerining "Yangi buyurtma" formasida — buyurtma hali
+/// yaratilmagan bo'lsa ham mahsulot qo'shish (talab #3: itemlar inline,
+/// har biri o'z tarifi bilan) — server chaqirilmaydi, `onAdd` orqali
+/// mahalliy ro'yxatga qo'shiladi, buyurtma "Tasdiqlash"da bir yo'la
+/// yaratiladi.
+Future<void> openDraftItemSheet(BuildContext context, {required void Function(CatalogItemDraft draft) onAdd}) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => _CatalogItemSheet(serviceType: 'pickup', onLocalAdd: onAdd),
   );
 }
 
 class _CatalogItemSheet extends ConsumerStatefulWidget {
-  final Order order;
+  final String serviceType;
+  final String? orderTariff;
+  final String? orderId;
   final OrderItem? existingItem;
-  const _CatalogItemSheet({required this.order, this.existingItem});
+  final void Function(CatalogItemDraft draft)? onLocalAdd;
+
+  const _CatalogItemSheet({
+    required this.serviceType,
+    this.orderTariff,
+    this.orderId,
+    this.existingItem,
+    this.onLocalAdd,
+  });
 
   @override
   ConsumerState<_CatalogItemSheet> createState() => _CatalogItemSheetState();
@@ -77,13 +106,13 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
   // Onsite buyurtmalarda tarif order-level (o'zgarmagan) — faqat pickup
   // itemlari o'z tarifini alohida tanlaydi (talab: har bir item o'z
   // tarifiga ega).
-  bool get _showTariffPicker => widget.order.serviceType == 'pickup';
+  bool get _showTariffPicker => widget.serviceType == 'pickup';
 
   @override
   void initState() {
     super.initState();
     final item = widget.existingItem;
-    _tariff = item?.tariff ?? widget.order.tariff ?? 'standart';
+    _tariff = item?.tariff ?? widget.orderTariff ?? 'standart';
     if (item != null) {
       _nameController.text = item.name;
       _condition = item.condition;
@@ -164,20 +193,25 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
   }
 
   Future<void> _save() async {
+    final draft = _buildDraft();
+    if (widget.orderId == null) {
+      widget.onLocalAdd!(draft);
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
     setState(() {
       _error = null;
       _saving = true;
     });
     try {
-      final draft = _buildDraft();
       if (_editing) {
         await ref.read(ordersRepositoryProvider).updateOrderItem(
-              orderId: widget.order.id,
+              orderId: widget.orderId!,
               itemId: widget.existingItem!.id,
               item: draft,
             );
       } else {
-        await ref.read(ordersRepositoryProvider).addOrderItems(orderId: widget.order.id, items: [draft]);
+        await ref.read(ordersRepositoryProvider).addOrderItems(orderId: widget.orderId!, items: [draft]);
       }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -203,7 +237,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
 
     setState(() => _deleting = true);
     try {
-      await ref.read(ordersRepositoryProvider).deleteOrderItem(orderId: widget.order.id, itemId: widget.existingItem!.id);
+      await ref.read(ordersRepositoryProvider).deleteOrderItem(orderId: widget.orderId!, itemId: widget.existingItem!.id);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       setState(() {

@@ -45,13 +45,17 @@ class OrdersRepository {
     return token;
   }
 
+  /// `tariff` faqat "onsite" uchun (pickup'da har bir item o'z tarifini
+  /// `items` ro'yxati orqali olib keladi — talab #3: inline mahsulot
+  /// qo'shish, har biri o'z tarifi bilan).
   Future<({String orderId, int orderNumber})> createOrder({
     required String customerName,
     required String phone,
     required String location,
     required String serviceType,
-    required String tariff,
+    String? tariff,
     String? gpsCoords,
+    List<CatalogItemDraft>? items,
   }) async {
     final result = await _api.post(
       '/createOrder',
@@ -61,8 +65,9 @@ class OrdersRepository {
         'phone': phone,
         'location': location,
         'serviceType': serviceType,
-        'tariff': tariff,
+        if (tariff != null) 'tariff': tariff,
         if (gpsCoords != null) 'gpsCoords': gpsCoords,
+        if (items != null && items.isNotEmpty) 'items': items.map((e) => e.toJson()).toList(),
       },
     );
     return (orderId: result['orderId'] as String, orderNumber: (result['orderNumber'] as num).toInt());
