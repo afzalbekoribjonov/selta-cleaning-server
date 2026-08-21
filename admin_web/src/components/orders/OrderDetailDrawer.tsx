@@ -4,7 +4,7 @@ import { X, User, Phone, MapPin, Calendar, Clock, Star, Trash2, Navigation } fro
 import { db } from '@/lib/firebase'
 import { isOverdue, type Order } from '@/lib/orders'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
-import { STATUS_CONFIG } from '@/lib/status-config'
+import { STATUS_CONFIG, TARIFF_CONFIG, colorStageFor, COLOR_STAGE_HEX } from '@/lib/status-config'
 import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -17,6 +17,11 @@ interface OrderItem {
   area: number
   price: number
   qcStatus: string
+  qcNote: string | null
+  // Faqat pickup buyurtma itemlarida mavjud (talab: item-level pipeline).
+  status: string | null
+  tariff: string | null
+  createdAt: Date | null
 }
 
 interface StatusEvent {
@@ -58,6 +63,10 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
     area: (d.area as number) ?? 0,
     price: (d.price as number) ?? 0,
     qcStatus: (d.qcStatus as string) ?? 'pending',
+    qcNote: (d.qcNote as string | undefined) ?? null,
+    status: (d.status as string | undefined) ?? null,
+    tariff: (d.tariff as string | undefined) ?? null,
+    createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? null,
   }))
 
   const history = useSubcollection<StatusEvent>(order.id, 'statusHistory', 'changedAt', (id, d) => ({
@@ -119,11 +128,13 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
                 Xaritada ochish
               </a>
             )}
-            <InfoRow
-              icon={Calendar}
-              text={order.dueDate ? `Muddat: ${formatDateUz(order.dueDate)}${overdue ? ' — kechikmoqda' : ''}` : 'Muddat belgilanmagan'}
-              danger={overdue}
-            />
+            {order.serviceType === 'onsite' && (
+              <InfoRow
+                icon={Calendar}
+                text={order.dueDate ? `Muddat: ${formatDateUz(order.dueDate)}${overdue ? ' — kechikmoqda' : ''}` : 'Muddat belgilanmagan'}
+                danger={overdue}
+              />
+            )}
             <InfoRow icon={Clock} text={`Qabul qilindi: ${formatDateTimeUz(order.createdAt)}`} />
             <InfoRow icon={User} text={`Xizmat turi: ${order.serviceType === 'onsite' ? 'Joyida yuvish' : 'Olib kelish'}`} />
           </section>
@@ -134,16 +145,40 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
               <p className="text-sm text-gray-dark">Hali mahsulot belgilanmagan</p>
             ) : (
               <div className="space-y-2">
-                {items.map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 text-sm">
-                    <span className="rounded-md bg-brand-primary/10 px-2 py-0.5 text-xs font-bold text-brand-primary">
-                      {order.orderNumber}/{item.itemNumber}
-                    </span>
-                    <span className="flex-1 font-medium text-ink">{item.name}</span>
-                    {item.area > 0 && <span className="text-xs text-gray-dark">{item.area} m²</span>}
-                    <QcDot status={item.qcStatus} />
-                  </div>
-                ))}
+                {items.map((item) => {
+                  const done = item.status === 'done'
+                  const showColorDot = !!item.status && !done && !!item.tariff && !!item.createdAt
+                  const colorStage = showColorDot ? colorStageFor(item.tariff, item.createdAt!) : null
+                  const statusInfo = item.status ? STATUS_CONFIG[item.status] : null
+                  const tariffInfo = item.tariff ? TARIFF_CONFIG[item.tariff] : null
+                  return (
+                    <div key={item.id}>
+                      <div className="flex items-center gap-2 text-sm">
+                        {colorStage && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: COLOR_STAGE_HEX[colorStage] }} />}
+                        <span className="shrink-0 rounded-md bg-brand-primary/10 px-2 py-0.5 text-xs font-bold text-brand-primary">
+                          {order.orderNumber}/{item.itemNumber}
+                        </span>
+                        <span className={`flex-1 font-medium ${done ? 'text-success line-through' : 'text-ink'}`}>{item.name}</span>
+                        {item.area > 0 && <span className="text-xs text-gray-dark">{item.area} m²</span>}
+                        {tariffInfo && (
+                          <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ color: tariffInfo.color, backgroundColor: tariffInfo.bg }}>
+                            {tariffInfo.label}
+                          </span>
+                        )}
+                        {statusInfo ? (
+                          <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ color: statusInfo.color, backgroundColor: statusInfo.bg }}>
+                            {statusInfo.label}
+                          </span>
+                        ) : (
+                          <QcDot status={item.qcStatus} />
+                        )}
+                      </div>
+                      {item.status === 'returned' && item.qcNote && (
+                        <p className="ml-4 mt-0.5 text-xs font-semibold text-danger">Sabab: {item.qcNote}</p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </section>
