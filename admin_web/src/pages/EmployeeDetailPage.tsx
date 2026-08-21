@@ -39,6 +39,7 @@ import { ChangeDepartmentDialog } from '@/components/employees/ChangeDepartmentD
 import { TasksSection } from '@/components/employees/TasksSection'
 import { AdvancesSection } from '@/components/employees/AdvancesSection'
 import { SpecializationsSection } from '@/components/employees/SpecializationsSection'
+import { DeliverySelfAddedSection } from '@/components/employees/DeliverySelfAddedSection'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -261,6 +262,7 @@ export default function EmployeeDetailPage() {
 
       {dept.isCustom && <TasksSection employee={employee} />}
       {employee.department === 'worker' && <SpecializationsSection employee={employee} />}
+      {employee.department === 'delivery' && <DeliverySelfAddedSection employeeId={employee.id} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm xl:col-span-2">

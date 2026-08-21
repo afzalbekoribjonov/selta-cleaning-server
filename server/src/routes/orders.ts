@@ -269,6 +269,7 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
       }
       if (toStatus === "done") {
         attributionUpdate.deliveredBy = employeeId;
+        attributionUpdate.deliveredByEmployees = FieldValue.arrayUnion(employeeId);
         if (typeof collectedAmount === "number" && collectedAmount > 0) {
           attributionUpdate.collectedAmount = collectedAmount;
         }
@@ -354,9 +355,18 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       }
 
       const itemUpdate: Record<string, unknown> = { status: toStatus, updatedAt: FieldValue.serverTimestamp() };
+      // `washedByEmployees`/`deliveredByEmployees` — order-level denormalizatsiya
+      // (arrayUnion) faqat maosh/faollik statistikasi UCHUN, xodim
+      // ro'yxatlar/hisobotlarda oson topilishi uchun (talab #13/#7) — haqiqiy
+      // maosh hisob-kitobi payroll.ts'da item'larning o'zidan hisoblanadi,
+      // bu yerdagi massiv faqat "qaysi buyurtmalarda qatnashgan" so'rovlari
+      // uchun (collection-group so'rovsiz, qo'shimcha xavfsizlik qoidasi
+      // shart emas).
+      const orderUpdate: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
       if (fromStatus === "washing" && toStatus === "packing") {
         itemUpdate.washedBy = employeeId;
         itemUpdate.washedAt = FieldValue.serverTimestamp();
+        orderUpdate.washedByEmployees = FieldValue.arrayUnion(employeeId);
       }
       if (toStatus === "ready") {
         itemUpdate.qcStatus = "passed";
@@ -373,6 +383,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       if (toStatus === "done") {
         itemUpdate.deliveredBy = employeeId;
         itemUpdate.deliveredAt = FieldValue.serverTimestamp();
+        orderUpdate.deliveredByEmployees = FieldValue.arrayUnion(employeeId);
         if (typeof collectedAmount === "number" && collectedAmount > 0) {
           itemUpdate.collectedAmount = collectedAmount;
         }
@@ -383,7 +394,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       if (toStatus === "done" && order.status !== "done") {
         const allDone = itemsSnap.docs.every((d) => (d.id === itemId ? true : d.data().status === "done"));
         if (allDone) {
-          tx.update(orderRef, { status: "done", updatedAt: FieldValue.serverTimestamp() });
+          orderUpdate.status = "done";
           tx.set(orderRef.collection("statusHistory").doc(), {
             fromStatus: order.status,
             toStatus: "done",
@@ -393,6 +404,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
           });
         }
       }
+      tx.update(orderRef, orderUpdate);
     });
 
     if (toStatus === "ready") {
@@ -505,10 +517,14 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
         nextNumber++;
       }
 
+      // Dastavchik o'zi qo'shgan mahsulotlar sotuv menejeri oldindan
+      // qo'shganlaridan farqli o'laroq alohida qayd etiladi (talab #7) —
+      // admin panelda dastavchik profilida oyma-oy statistikaga asos.
       tx.update(orderRef, {
         totalArea: FieldValue.increment(addedArea),
         totalPrice: FieldValue.increment(addedPrice),
         updatedAt: FieldValue.serverTimestamp(),
+        ...(role === "delivery" ? { deliveryAddedByEmployees: FieldValue.arrayUnion(employeeId) } : {}),
       });
     });
 

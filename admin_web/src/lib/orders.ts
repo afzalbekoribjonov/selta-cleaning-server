@@ -30,6 +30,11 @@ export interface Order {
   pickedUpBy?: string
   washedBy?: string
   deliveredBy?: string
+  // Pickup buyurtmalarda yuvish/yetkazish item-darajasida — bu massivlar
+  // "qaysi xodimlar qatnashgan" so'rovlari uchun (server: changeItemStatus).
+  washedByEmployees: string[]
+  deliveredByEmployees: string[]
+  deliveryAddedByEmployees: string[]
   collectedAmount?: number
   hasFailedItem?: boolean
   qcRating?: number
@@ -57,6 +62,9 @@ function toOrder(doc: QueryDocumentSnapshot): Order {
     pickedUpBy: data.pickedUpBy ?? undefined,
     washedBy: data.washedBy ?? undefined,
     deliveredBy: data.deliveredBy ?? undefined,
+    washedByEmployees: data.washedByEmployees ?? [],
+    deliveredByEmployees: data.deliveredByEmployees ?? [],
+    deliveryAddedByEmployees: data.deliveryAddedByEmployees ?? [],
     collectedAmount: data.collectedAmount ?? undefined,
     hasFailedItem: data.hasFailedItem ?? undefined,
     qcRating: data.qcRating ?? undefined,

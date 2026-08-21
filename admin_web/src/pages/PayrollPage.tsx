@@ -133,7 +133,7 @@ function MostActiveSection() {
 
   const stats = useMemo(() => {
     const list = orders ?? []
-    const count = (key: 'createdBy' | 'washedBy' | 'deliveredBy') => {
+    const countByEquality = (key: 'createdBy') => {
       const tally: Record<string, number> = {}
       for (const o of list) {
         const id = o[key]
@@ -142,10 +142,21 @@ function MostActiveSection() {
       }
       return Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 5)
     }
+    // Pickup buyurtmalarda yuvish/yetkazish item-darajasida — bir
+    // buyurtmada bir nechta xodim qatnashishi mumkin, shuning uchun
+    // massiv bo'yicha sanaladi (onsite uchun ham ishlaydi, chunki
+    // changeOrderStatus done bosqichida ham shu massivga yozadi).
+    const countByArray = (key: 'washedByEmployees' | 'deliveredByEmployees') => {
+      const tally: Record<string, number> = {}
+      for (const o of list) {
+        for (const id of o[key]) tally[id] = (tally[id] ?? 0) + 1
+      }
+      return Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    }
     return {
-      dispatcher: count('createdBy'),
-      worker: count('washedBy'),
-      delivery: count('deliveredBy'),
+      dispatcher: countByEquality('createdBy'),
+      worker: countByArray('washedByEmployees'),
+      delivery: countByArray('deliveredByEmployees'),
     }
   }, [orders])
 

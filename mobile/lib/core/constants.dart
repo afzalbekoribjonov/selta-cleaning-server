@@ -135,19 +135,6 @@ const Map<String, StatusInfo> kStatusConfig = {
 StatusInfo statusOf(String? status) =>
     kStatusConfig[status] ?? kStatusConfig['new']!;
 
-/// Xodim bo'limiga mos ravishda buyurtmada qaysi maydon unga tegishli
-/// ekanini bildiradi (profil statistikasi uchun) — admin_web'dagi
-/// DEPARTMENT_ATTRIBUTION_FIELD bilan bir xil mantiq.
-String? attributionFieldFor(Department department) {
-  switch (department) {
-    case Department.dispatcher:
-      return 'createdBy';
-    case Department.worker:
-      return 'washedBy';
-    case Department.delivery:
-      return 'deliveredBy';
-  }
-}
 
 /// Har bir xizmat turi uchun order-level status ketma-ketligi — sotuv
 /// menejeri progress-checklist'ida "bajarilgan / qolgan" ko'rsatish uchun.

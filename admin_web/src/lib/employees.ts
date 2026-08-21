@@ -29,10 +29,15 @@ export function formatTenure(hiredAt: Date, until: Date): string {
   return parts.join(' ')
 }
 
-/** Bo'lim bo'yicha buyurtmada qaysi maydon shu xodimga tegishli ekanini bildiradi. */
-export const DEPARTMENT_ATTRIBUTION_FIELD: Record<string, 'createdBy' | 'washedBy' | 'deliveredBy' | 'qcRatedBy'> = {
-  dispatcher: 'createdBy',
-  worker: 'washedBy',
-  delivery: 'deliveredBy',
-  qc: 'qcRatedBy',
+/**
+ * Bo'lim bo'yicha buyurtmada qaysi maydon shu xodimga tegishli ekanini
+ * bildiradi. Ishchi/dastavchik uchun endi ARRAY maydon — pickup
+ * buyurtmalarida yuvish/yetkazish item-darajasida bo'lgani uchun bir
+ * buyurtmada bir nechta turli xodim qatnashishi mumkin (order.ts:
+ * changeItemStatus shu massivlarga arrayUnion qiladi).
+ */
+export const DEPARTMENT_ATTRIBUTION_FIELD: Record<string, { field: string; mode: 'equal' | 'array-contains' }> = {
+  dispatcher: { field: 'createdBy', mode: 'equal' },
+  worker: { field: 'washedByEmployees', mode: 'array-contains' },
+  delivery: { field: 'deliveredByEmployees', mode: 'array-contains' },
 }

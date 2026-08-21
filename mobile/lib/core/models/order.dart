@@ -19,6 +19,12 @@ class Order {
   final String? washedBy;
   final String? deliveredBy;
   final String? qcRatedBy;
+  // Pickup buyurtmalarda yuvish/yetkazish item-darajasida (har xil item
+  // turli xodimga tegishli bo'lishi mumkin) — shu massivlar statistika/
+  // faollik so'rovlari uchun (changeItemStatus: arrayUnion).
+  final List<String> washedByEmployees;
+  final List<String> deliveredByEmployees;
+  final List<String> deliveryAddedByEmployees;
   final DateTime createdAt;
   final DateTime? dueDate;
   final int? qcRating;
@@ -41,6 +47,9 @@ class Order {
     this.washedBy,
     this.deliveredBy,
     this.qcRatedBy,
+    this.washedByEmployees = const [],
+    this.deliveredByEmployees = const [],
+    this.deliveryAddedByEmployees = const [],
     required this.createdAt,
     this.dueDate,
     this.qcRating,
@@ -66,6 +75,9 @@ class Order {
       washedBy: data['washedBy']?.toString(),
       deliveredBy: data['deliveredBy']?.toString(),
       qcRatedBy: data['qcRatedBy']?.toString(),
+      washedByEmployees: (data['washedByEmployees'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      deliveredByEmployees: (data['deliveredByEmployees'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      deliveryAddedByEmployees: (data['deliveryAddedByEmployees'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
       qcRating: (data['qcRating'] as num?)?.toInt(),

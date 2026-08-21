@@ -9,6 +9,7 @@ import '../../core/services/auth_service.dart' show authStateProvider;
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/widgets/selta_loader.dart';
+import '../dispatcher/widgets/order_card.dart';
 import '../shared/employee_app_bar.dart';
 import '../shared/item_action_row.dart';
 import '../shared/team_jobs_section.dart';
@@ -99,6 +100,29 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
                   if (ca == null || cb == null) return 0;
                   return ca.compareTo(cb);
                 });
+
+                // Talab #11: buyurtma raqami bo'yicha qidiruv joriy
+                // bosqich (tab)ga cheklanmasin — boshqa bosqichdagi
+                // buyurtma ham topilishi va ochilishi kerak.
+                final searchNumber = RegExp(r'^\d+$').hasMatch(_search) ? int.tryParse(_search) : null;
+                if (filtered.isEmpty && searchNumber != null) {
+                  final elsewhere = orders.where((o) => o.orderNumber == searchNumber && o.serviceType == 'pickup').toList();
+                  if (elsewhere.isNotEmpty) {
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 8),
+                          child: Text('Boshqa bosqichda topildi', style: TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                        ),
+                        for (final order in elsewhere) ...[
+                          OrderCard(order: order, onTap: () => openWorkerOrderDetailSheet(context, order)),
+                          const SizedBox(height: 10),
+                        ],
+                      ],
+                    );
+                  }
+                }
 
                 if (filtered.isEmpty) {
                   return Center(

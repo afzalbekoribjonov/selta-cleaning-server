@@ -121,6 +121,29 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
                 return b.createdAt.compareTo(a.createdAt);
               });
 
+              // Talab #11: buyurtma raqami bo'yicha qidiruv joriy tab/filtr
+              // bilan cheklanmasin — masalan "Kechikkan" filtri yoqilgan
+              // holda ham istalgan buyurtma raqami topilishi kerak.
+              final searchDigits = RegExp(r'^\d+$').hasMatch(_search) ? int.tryParse(_search) : null;
+              if (filtered.isEmpty && searchDigits != null) {
+                final elsewhere = orders.where((o) => o.orderNumber == searchDigits).toList();
+                if (elsewhere.isNotEmpty) {
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text('Boshqa holatda topildi', style: TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                      ),
+                      for (final order in elsewhere) ...[
+                        OrderCard(order: order, onTap: () => openOrderDetailSheet(context, order)),
+                        const SizedBox(height: 10),
+                      ],
+                    ],
+                  );
+                }
+              }
+
               if (filtered.isEmpty) {
                 return const _EmptyState();
               }

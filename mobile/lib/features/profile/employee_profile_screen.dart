@@ -21,15 +21,16 @@ String _resolveDepartmentLabel(String? key, String? customLabel) {
 const _categoryLabels = {'gilam': 'Gilam', 'parda': 'Parda', 'boshqa': 'Boshqa'};
 String _categoryLabel(String key) => _categoryLabels[key] ?? key;
 
-int _attributedCount(String field, Order o, String employeeId) {
-  final actor = switch (field) {
-    'createdBy' => o.createdBy,
-    'washedBy' => o.washedBy,
-    'deliveredBy' => o.deliveredBy,
-    'qcRatedBy' => o.qcRatedBy,
-    _ => null,
+/// Pickup buyurtmalarda yuvish/yetkazish item-darajasida bo'lgani uchun
+/// ishchi/dastavchik uchun massiv (array-contains mantig'i) tekshiriladi
+/// — admin_web'dagi DEPARTMENT_ATTRIBUTION_FIELD bilan bir xil.
+int _attributedCount(Department department, Order o, String employeeId) {
+  final matches = switch (department) {
+    Department.dispatcher => o.createdBy == employeeId,
+    Department.worker => o.washedByEmployees.contains(employeeId),
+    Department.delivery => o.deliveredByEmployees.contains(employeeId),
   };
-  return actor == employeeId ? 1 : 0;
+  return matches ? 1 : 0;
 }
 
 /// Xodim ismini bosgach ochiladigan sahifa (talab #6) — yuqori o'ngdagi
@@ -175,17 +176,16 @@ class _MonthlyStatsCard extends ConsumerWidget {
     for (final d in Department.values) {
       if (d.name == departmentKey) dept = d;
     }
-    final field = dept != null ? attributionFieldFor(dept) : null;
     final claims = ref.watch(employeeClaimsProvider).value;
 
-    if (field == null || claims == null) {
+    if (dept == null || claims == null) {
       return const _StatTile(
         icon: Icons.info_outline_rounded,
         label: "Bu kasb uchun buyurtma statistikasi yo'q",
         value: '—',
       );
     }
-    final resolvedField = field;
+    final resolvedDept = dept;
     final employeeId = claims.employeeId;
 
     final ordersAsync = ref.watch(recentOrdersProvider);
@@ -197,8 +197,8 @@ class _MonthlyStatsCard extends ConsumerWidget {
         final monthStart = DateTime(now.year, now.month, 1);
         final monthCount = orders
             .where((o) => !o.createdAt.isBefore(monthStart))
-            .fold<int>(0, (s, o) => s + _attributedCount(resolvedField, o, employeeId));
-        final totalCount = orders.fold<int>(0, (s, o) => s + _attributedCount(resolvedField, o, employeeId));
+            .fold<int>(0, (s, o) => s + _attributedCount(resolvedDept, o, employeeId));
+        final totalCount = orders.fold<int>(0, (s, o) => s + _attributedCount(resolvedDept, o, employeeId));
 
         return Row(
           children: [
