@@ -296,16 +296,16 @@ function ProductFormDialog({ product, onClose }: { product?: Product; onClose: (
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
-      <div className="w-full max-w-md rounded-3xl bg-surface p-6 shadow-2xl">
-        <div className="mb-5 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4 py-8">
+      <div className="flex max-h-full w-full max-w-md flex-col rounded-3xl bg-surface shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-5">
           <h2 className="text-lg font-heading font-bold text-ink">{editing ? 'Mahsulotni tahrirlash' : 'Yangi mahsulot'}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-bg" aria-label="Yopish">
             <X size={20} />
           </button>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5" onSubmit={handleSubmit}>
           <div>
             <label className="mb-1.5 block text-sm font-semibold text-ink">Mahsulot nomi</label>
             <input

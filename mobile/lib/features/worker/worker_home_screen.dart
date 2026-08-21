@@ -11,7 +11,6 @@ import '../../core/services/orders_repository.dart';
 import '../../core/widgets/selta_loader.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/employee_app_bar.dart';
-import '../shared/item_action_row.dart';
 import '../shared/team_jobs_section.dart';
 import 'worker_order_detail_sheet.dart';
 
@@ -32,10 +31,14 @@ typedef _OrderItemPair = ({Order order, OrderItem item});
 
 /// Ishchi paneli — talab #3/#5/#8/#10: har bir mahsulot mustaqil ravishda
 /// pending -> washing -> packing -> ready/returned bosqichlaridan o'tadi.
-/// "Sifat nazorati" bo'limi olib tashlangan — "packing" bosqichida
-/// istalgan ishchi ✅/❌ bosa oladi. "pending"/"washing" bosqichlarida
-/// xodim faqat o'z mutaxassisligiga mos mahsulotlarni ko'radi (talab #6),
-/// "packing"/"returned"da esa hammaga ochiq.
+/// Ro'yxatda BUYURTMA kartalari ko'rsatiladi (bir buyurtma — bir karta,
+/// item-item emas) — karta ochilganda o'sha buyurtmaning barcha
+/// mahsulotlari (har xil bosqichda bo'lsa ham) ko'rinadi. "Sifat
+/// nazorati" bo'limi olib tashlangan — "packing" bosqichida upakovkachi
+/// huquqi bor ishchi ✅/❌ bosa oladi. "pending"/"washing" bosqichlarida
+/// xodim faqat o'z mutaxassisligiga mos mahsuloti bor buyurtmalarni
+/// ko'radi (talab #6) — lavozimi bo'lmagan xodim hech narsa o'zgartira
+/// olmaydi (ItemActionRow shuni ta'minlaydi).
 class WorkerHomeScreen extends ConsumerStatefulWidget {
   const WorkerHomeScreen({super.key});
 
@@ -84,22 +87,20 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
               data: (orders) {
                 final activeOrders = orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in').toList();
                 final pairs = _watchAllItems(ref, activeOrders);
-                var filtered = _forStage(pairs, stage, specializations);
+                // Talab: bu bosqichda bitta buyurtma uchun BITTA karta —
+                // item-item emas. Karta bosilganda buyurtma ichidagi
+                // BARCHA mahsulotlar (boshqa bosqichdagilar ham) ko'rinadi.
+                var filtered = _ordersForStage(pairs, stage, specializations);
 
                 if (_search.isNotEmpty) {
-                  filtered = filtered.where((p) {
-                    return p.order.customerName.toLowerCase().contains(_search) ||
-                        p.order.phone.toLowerCase().contains(_search) ||
-                        p.order.orderNumber.toString().contains(_search);
+                  filtered = filtered.where((o) {
+                    return o.customerName.toLowerCase().contains(_search) ||
+                        o.phone.toLowerCase().contains(_search) ||
+                        o.orderNumber.toString().contains(_search);
                   }).toList();
                 }
 
-                filtered.sort((a, b) {
-                  final ca = a.item.createdAt;
-                  final cb = b.item.createdAt;
-                  if (ca == null || cb == null) return 0;
-                  return ca.compareTo(cb);
-                });
+                filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
                 // Talab #11: buyurtma raqami bo'yicha qidiruv joriy
                 // bosqich (tab)ga cheklanmasin — boshqa bosqichdagi
@@ -127,7 +128,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
                 if (filtered.isEmpty) {
                   return Center(
                     child: Text(
-                      stage == 'returned' ? "Qaytarilgan mahsulot yo'q" : 'Bu bosqichda mahsulot yo\'q',
+                      stage == 'returned' ? "Qaytarilgan mahsulot yo'q" : 'Bu bosqichda buyurtma yo\'q',
                       style: const TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600),
                     ),
                   );
@@ -136,10 +137,10 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 4),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
-                    final pair = filtered[i];
-                    return _WorkerItemCard(pair: pair);
+                    final order = filtered[i];
+                    return OrderCard(order: order, onTap: () => openWorkerOrderDetailSheet(context, order));
                   },
                 );
               },
@@ -160,7 +161,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
             destinations: [
               for (final s in _workerStages)
                 NavigationDestination(
-                  icon: _BadgedIcon(icon: _stageIcons[s]!, count: _forStage(pairs, s, specializations).length),
+                  icon: _BadgedIcon(icon: _stageIcons[s]!, count: _ordersForStage(pairs, s, specializations).length),
                   label: kStatusConfig[s]!.label,
                 ),
             ],
@@ -186,57 +187,22 @@ List<_OrderItemPair> _watchAllItems(WidgetRef ref, List<Order> orders) {
   return pairs;
 }
 
-List<_OrderItemPair> _forStage(List<_OrderItemPair> pairs, String stage, List<String> specializations) {
+/// Shu bosqichda kamida bitta mos itemga ega BUYURTMALAR ro'yxati (bir
+/// buyurtma — bir karta, item-item emas). Karta ochilganda esa
+/// (worker_order_detail_sheet) o'sha buyurtmaning BARCHA itemlari, qaysi
+/// bosqichda bo'lishidan qat'i nazar, ko'rinadi.
+List<Order> _ordersForStage(List<_OrderItemPair> pairs, String stage, List<String> specializations) {
   final restrictBySpecialization = stage == 'pending' || stage == 'washing';
-  return pairs.where((p) {
-    if (p.item.status != stage) return false;
+  final orders = <String, Order>{};
+  for (final p in pairs) {
+    if (p.item.status != stage) continue;
     if (restrictBySpecialization && specializations.isNotEmpty) {
-      return p.item.category == null || specializations.contains(p.item.category);
+      final matches = p.item.category == null || specializations.contains(p.item.category);
+      if (!matches) continue;
     }
-    return true;
-  }).toList();
-}
-
-class _WorkerItemCard extends StatelessWidget {
-  final _OrderItemPair pair;
-  const _WorkerItemCard({required this.pair});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: () => openWorkerOrderDetailSheet(context, pair.order),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '#${pair.order.orderNumber} — ${pair.order.customerName}',
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.grayDark),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ItemActionRow(order: pair.order, item: pair.item),
-          ],
-        ),
-      ),
-    );
+    orders[p.order.id] = p.order;
   }
+  return orders.values.toList();
 }
 
 class _BadgedIcon extends StatelessWidget {

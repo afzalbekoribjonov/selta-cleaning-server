@@ -10,6 +10,10 @@ import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { DeleteOrderDialog } from './DeleteOrderDialog'
 
+function formatMoney(value: number): string {
+  return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
+}
+
 interface OrderItem {
   id: string
   itemNumber: number
@@ -112,6 +116,11 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
           </div>
         </div>
 
+        <div className="border-b border-border bg-brand-primary/5 px-6 py-4">
+          <div className="text-xs font-semibold text-gray-dark">Umumiy summa</div>
+          <div className="font-heading text-3xl font-extrabold text-brand-primary">{formatMoney(order.totalPrice)}</div>
+        </div>
+
         <div className="space-y-5 p-6">
           <section className="rounded-2xl border border-border bg-surface p-4">
             <InfoRow icon={User} text={order.customerName || "Noma'lum mijoz"} />
@@ -160,6 +169,7 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
                         </span>
                         <span className={`flex-1 font-medium ${done ? 'text-success line-through' : 'text-ink'}`}>{item.name}</span>
                         {item.area > 0 && <span className="text-xs text-gray-dark">{item.area} m²</span>}
+                        <span className="shrink-0 text-xs font-bold text-ink">{formatMoney(item.price)}</span>
                         {tariffInfo && (
                           <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ color: tariffInfo.color, backgroundColor: tariffInfo.bg }}>
                             {tariffInfo.label}

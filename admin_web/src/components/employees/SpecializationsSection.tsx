@@ -37,7 +37,10 @@ export function SpecializationsSection({ employee }: { employee: Employee }) {
       <p className="mb-4 text-xs text-gray-dark">Qaysi mahsulot toifalarini ishlashi mumkinligi — buyurtma yaratishda salary usuli tavsiyasiga ham ta'sir qiladi</p>
 
       {employee.specializations.length === 0 && !employee.canPack ? (
-        <p className="py-4 text-center text-sm text-gray-dark">Hali lavozim belgilanmagan</p>
+        <div className="rounded-xl bg-warning-bg py-4 text-center text-sm">
+          <p className="font-semibold text-ink">Hali lavozim belgilanmagan</p>
+          <p className="mt-1 text-xs text-gray-dark">Lavozimsiz xodim buyurtma holatini o'zgartira olmaydi — mobil ilovada barcha amallar bloklangan bo'ladi</p>
+        </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           {employee.specializations.map((s) => (

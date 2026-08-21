@@ -126,8 +126,21 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
 
   @override
   Widget build(BuildContext context) {
-    final department = ref.watch(currentEmployeeProvider).valueOrNull?['department'] as String?;
+    final employeeData = ref.watch(currentEmployeeProvider).valueOrNull;
+    final department = employeeData?['department'] as String?;
+    final specializations =
+        (employeeData?['specializations'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    final canPack = employeeData?['canPack'] as bool? ?? false;
     final status = widget.item.status;
+
+    // Talab: xodimda lavozim (mutaxassislik/upakovkachi) bo'lmasa,
+    // buyurtma holatini o'zgartira olmaydi. Yuvish bilan bog'liq
+    // o'tishlar mahsulot toifasiga mos mutaxassislikni, upakovka esa
+    // "upakovkachi" huquqini talab qiladi — server ham xuddi shu
+    // qoidani tekshiradi (orders.ts: assertWorkerLavozim).
+    final category = widget.item.category;
+    final hasWashingLavozim = specializations.isNotEmpty && (category == null || specializations.contains(category));
+    final isWorker = department == 'worker';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,37 +157,49 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
             child: LinearProgressIndicator(minHeight: 2),
           )
         else ...[
-          if (status == 'pending' && department == 'worker')
-            _ActionButton(label: 'Yuvishni boshlash', icon: Icons.local_laundry_service_rounded, onTap: () => _changeStatus('washing')),
-          if (status == 'washing' && department == 'worker')
-            _ActionButton(label: "Upakovkaga o'tkazish", icon: Icons.inventory_rounded, onTap: () => _changeStatus('packing')),
-          if (status == 'packing' && department == 'worker')
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _confirmFail,
-                      icon: const Icon(Icons.close_rounded, size: 16, color: AppColors.danger),
-                      label: const Text('Rad etish', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.danger)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _confirmPass,
-                      icon: const Icon(Icons.check_rounded, size: 16),
-                      label: const Text('Tasdiqlash', style: TextStyle(fontWeight: FontWeight.w700)),
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.success),
-                    ),
-                  ),
-                ],
+          if ((status == 'pending' || status == 'washing' || status == 'returned') && isWorker) ...[
+            if (hasWashingLavozim)
+              _ActionButton(
+                label: status == 'washing' ? "Upakovkaga o'tkazish" : 'Yuvishni boshlash',
+                icon: status == 'washing' ? Icons.inventory_rounded : Icons.local_laundry_service_rounded,
+                onTap: () => _changeStatus(status == 'washing' ? 'packing' : 'washing'),
+              )
+            else
+              _LavozimHint(
+                text: specializations.isEmpty
+                    ? "Sizga hali lavozim (mutaxassislik) belgilanmagan — admin bilan bog'laning"
+                    : "Bu mahsulot toifasi sizning mutaxassisligingizga mos emas",
               ),
-            ),
-          if (status == 'returned' && department == 'worker')
-            _ActionButton(label: 'Yuvishni boshlash', icon: Icons.replay_rounded, onTap: () => _changeStatus('washing')),
+          ],
+          if (status == 'packing' && isWorker) ...[
+            if (canPack)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _confirmFail,
+                        icon: const Icon(Icons.close_rounded, size: 16, color: AppColors.danger),
+                        label: const Text('Rad etish', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700)),
+                        style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.danger)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _confirmPass,
+                        icon: const Icon(Icons.check_rounded, size: 16),
+                        label: const Text('Tasdiqlash', style: TextStyle(fontWeight: FontWeight.w700)),
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.success),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              const _LavozimHint(text: "Sizga upakovkachi huquqi berilmagan — admin bilan bog'laning"),
+          ],
           if (status == 'ready' && department == 'delivery')
             _ActionButton(label: 'Mijozga yetkazildi', icon: Icons.check_circle_rounded, onTap: _confirmDeliver),
         ],
@@ -185,6 +210,27 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
           ),
         const Divider(height: 1),
       ],
+    );
+  }
+}
+
+class _LavozimHint extends StatelessWidget {
+  final String text;
+  const _LavozimHint({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.warning),
+          const SizedBox(width: 6),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 11.5, color: AppColors.warning, fontWeight: FontWeight.w600))),
+        ],
+      ),
     );
   }
 }

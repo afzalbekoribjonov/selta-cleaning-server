@@ -8,6 +8,10 @@ import { Spinner } from '@/components/ui/Spinner'
 import { formatDateUz } from '@/lib/date-utils'
 import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
 
+function formatMoney(value: number): string {
+  return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
+}
+
 export default function OrdersPage() {
   const [view, setView] = useState<'active' | 'all'>('active')
   const [search, setSearch] = useState('')
@@ -147,6 +151,7 @@ export default function OrdersPage() {
                   <th className="px-5 py-3 font-semibold">Tarif</th>
                   <th className="px-5 py-3 font-semibold">Holat</th>
                   <th className="px-5 py-3 font-semibold">Muddat</th>
+                  <th className="px-5 py-3 text-right font-semibold">Summa</th>
                 </tr>
               </thead>
               <tbody>
@@ -174,6 +179,7 @@ export default function OrdersPage() {
                         {o.dueDate ? formatDateUz(o.dueDate) : '—'}
                         {overdue && ' · kechikmoqda'}
                       </td>
+                      <td className="px-5 py-3 text-right font-extrabold text-brand-primary">{formatMoney(o.totalPrice)}</td>
                     </tr>
                   )
                 })}

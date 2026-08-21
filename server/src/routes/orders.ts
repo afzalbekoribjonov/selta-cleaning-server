@@ -313,6 +313,35 @@ const ITEM_MANUAL_TRANSITIONS: Record<string, string[]> = {
   "ready->done": ["delivery"],
 };
 
+/**
+ * Ishchi lavozimi (mutaxassislik/upakovkachi) bo'yicha o'tishni bloklaydi
+ * — "Xodimda lavozim bo'lishi kerak buyurtmani holatini o'zgartirishi
+ * uchun" talabi. Yuvish bilan bog'liq o'tishlar mahsulot toifasiga mos
+ * mutaxassislikni, upakovka o'tishlari esa "upakovkachi" huquqini talab
+ * qiladi — lavozimi umuman bo'lmagan ishchi hech narsani o'zgartira
+ * olmaydi. Faqat role==="worker" uchun chaqiriladi (admin bypass qiladi).
+ */
+const WASHING_TRANSITIONS = new Set(["pending->washing", "washing->packing", "returned->washing"]);
+const PACKING_TRANSITIONS = new Set(["packing->ready", "packing->returned"]);
+
+function assertWorkerLavozim(
+  lavozim: { specializations: string[]; canPack: boolean },
+  transitionKey: string,
+  category: string | null,
+) {
+  if (WASHING_TRANSITIONS.has(transitionKey)) {
+    if (lavozim.specializations.length === 0) {
+      throw new ApiError(403, "permission-denied", "Sizga hali lavozim (mutaxassislik) belgilanmagan — admin bilan bog'laning");
+    }
+    if (category && !lavozim.specializations.includes(category)) {
+      throw new ApiError(403, "permission-denied", "Bu mahsulot toifasi sizning mutaxassisligingizga mos emas");
+    }
+  }
+  if (PACKING_TRANSITIONS.has(transitionKey) && !lavozim.canPack) {
+    throw new ApiError(403, "permission-denied", "Sizga upakovkachi huquqi berilmagan — admin bilan bog'laning");
+  }
+}
+
 ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role!;
@@ -324,6 +353,18 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
 
     const orderRef = db.collection("orders").doc(orderId);
     const itemRef = orderRef.collection("items").doc(itemId);
+
+    // Transaction ichida oddiy (non-transactional) o'qish qilmaslik uchun
+    // — lavozim ma'lumoti oldindan olinadi (qayta urinishlarda bekorga
+    // qayta so'ralmasligi uchun ham).
+    let workerLavozim: { specializations: string[]; canPack: boolean } | null = null;
+    if (role === "worker") {
+      const empSnap = await db.collection("employees").doc(employeeId).get();
+      workerLavozim = {
+        specializations: (empSnap.data()?.specializations as string[] | undefined) ?? [],
+        canPack: (empSnap.data()?.canPack as boolean | undefined) ?? false,
+      };
+    }
 
     let orderNumber = 0;
     let itemName = "";
@@ -349,9 +390,13 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       if (!isValidItemTransition(fromStatus, toStatus)) {
         throw new ApiError(412, "failed-precondition", `${fromStatus} -> ${toStatus} o'tishi ruxsat etilmagan`);
       }
-      const allowedRoles = ITEM_MANUAL_TRANSITIONS[`${fromStatus}->${toStatus}`] ?? [];
+      const transitionKey = `${fromStatus}->${toStatus}`;
+      const allowedRoles = ITEM_MANUAL_TRANSITIONS[transitionKey] ?? [];
       if (role !== "admin" && !allowedRoles.includes(role)) {
         throw new ApiError(403, "permission-denied", "Bu o'tish uchun ruxsatingiz yo'q");
+      }
+      if (role === "worker" && workerLavozim) {
+        assertWorkerLavozim(workerLavozim, transitionKey, (item.category as string | undefined) ?? null);
       }
 
       const itemUpdate: Record<string, unknown> = { status: toStatus, updatedAt: FieldValue.serverTimestamp() };
