@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore'
 import { X, User, Phone, MapPin, Calendar, Clock, Star, Trash2, Navigation } from 'lucide-react'
 import { db } from '@/lib/firebase'
-import { isOverdue, type Order } from '@/lib/orders'
+import { isOverdue, subscribeOrder, type Order } from '@/lib/orders'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
 import { STATUS_CONFIG, TARIFF_CONFIG, colorStageFor, COLOR_STAGE_HEX } from '@/lib/status-config'
 import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { Spinner } from '@/components/ui/Spinner'
 import { DeleteOrderDialog } from './DeleteOrderDialog'
 
 function formatMoney(value: number): string {
@@ -47,20 +48,66 @@ interface Comment {
 
 function useSubcollection<T>(orderId: string, name: string, orderField: string, mapper: (id: string, data: Record<string, unknown>) => T) {
   const [items, setItems] = useState<T[]>([])
+  const [loading, setLoading] = useState(true)
   useEffect(() => {
+    setLoading(true)
     const q = query(collection(db, 'orders', orderId, name), orderBy(orderField, 'asc'))
-    return onSnapshot(q, (snap) => setItems(snap.docs.map((d) => mapper(d.id, d.data()))))
+    return onSnapshot(q, (snap) => {
+      setItems(snap.docs.map((d) => mapper(d.id, d.data())))
+      setLoading(false)
+    })
   }, [orderId, name, orderField, mapper])
-  return items
+  return { items, loading }
 }
 
-export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: () => void }) {
+/**
+ * Ochilgan payt list'dan olingan statik obyekt bilan boshlanadi (flash
+ * bo'lmasligi uchun), so'ng buyurtmaning o'zini real-vaqtli kuzatib,
+ * jonli ma'lumotga o'tadi — boshqa joydan (mobil ilova va h.k.)
+ * o'zgartirilgan status/summa darrov ko'rinishi uchun. Buyurtma
+ * o'chirilsa (`null`), drawer avtomatik yopiladi.
+ */
+function useLiveOrder(initialOrder: Order, onDeleted: (orderId: string) => void) {
+  const [order, setOrder] = useState(initialOrder)
+  const onDeletedRef = useRef(onDeleted)
+  onDeletedRef.current = onDeleted
+
+  useEffect(() => {
+    setOrder(initialOrder)
+    return subscribeOrder(initialOrder.id, (live) => {
+      if (live) {
+        setOrder(live)
+      } else {
+        onDeletedRef.current(initialOrder.id)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrder.id])
+
+  return order
+}
+
+export function OrderDetailDrawer({
+  order: initialOrder,
+  onClose,
+  onDeleted,
+}: {
+  order: Order
+  onClose: () => void
+  /** Buyurtma o'chirilgach chaqiriladi (masalan chaqiruvchi sahifadagi
+   * statik ro'yxatdan ham olib tashlash uchun) — drawer avtomatik yopiladi. */
+  onDeleted?: (orderId: string) => void
+}) {
   useEscapeClose(onClose)
   const employees = useEmployeesMap()
+  const order = useLiveOrder(initialOrder, (orderId) => {
+    onDeleted?.(orderId)
+    onClose()
+  })
   const overdue = isOverdue(order)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
-  const items = useSubcollection<OrderItem>(order.id, 'items', 'itemNumber', (id, d) => ({
+  const { items, loading: itemsLoading } = useSubcollection<OrderItem>(order.id, 'items', 'itemNumber', (id, d) => ({
     id,
     itemNumber: (d.itemNumber as number) ?? 0,
     name: (d.name as string) ?? '',
@@ -73,7 +120,7 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
     createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? null,
   }))
 
-  const history = useSubcollection<StatusEvent>(order.id, 'statusHistory', 'changedAt', (id, d) => ({
+  const { items: history, loading: historyLoading } = useSubcollection<StatusEvent>(order.id, 'statusHistory', 'changedAt', (id, d) => ({
     id,
     fromStatus: (d.fromStatus as string | null) ?? null,
     toStatus: (d.toStatus as string) ?? '',
@@ -82,7 +129,7 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
     note: d.note as string | undefined,
   }))
 
-  const comments = useSubcollection<Comment>(order.id, 'comments', 'createdAt', (id, d) => ({
+  const { items: comments, loading: commentsLoading } = useSubcollection<Comment>(order.id, 'comments', 'createdAt', (id, d) => ({
     id,
     authorId: (d.authorId as string) ?? '',
     authorName: d.authorName as string | undefined,
@@ -150,7 +197,9 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
 
           <section className="rounded-2xl border border-border bg-surface p-4">
             <h3 className="mb-3 text-sm font-extrabold text-ink">Mahsulotlar ({items.length})</h3>
-            {items.length === 0 ? (
+            {itemsLoading ? (
+              <Spinner className="py-4" />
+            ) : items.length === 0 ? (
               <p className="text-sm text-gray-dark">Hali mahsulot belgilanmagan</p>
             ) : (
               <div className="space-y-2">
@@ -211,7 +260,9 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
 
           <section className="rounded-2xl border border-border bg-surface p-4">
             <h3 className="mb-3 text-sm font-extrabold text-ink">Tarix (kim, qachon o'zgartirgan)</h3>
-            {history.length === 0 ? (
+            {historyLoading ? (
+              <Spinner className="py-4" />
+            ) : history.length === 0 ? (
               <p className="text-sm text-gray-dark">Hali o'zgarish yo'q</p>
             ) : (
               <div className="space-y-3">
@@ -241,7 +292,9 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
 
           <section className="rounded-2xl border border-border bg-surface p-4">
             <h3 className="mb-3 text-sm font-extrabold text-ink">Izohlar ({comments.length})</h3>
-            {comments.length === 0 ? (
+            {commentsLoading ? (
+              <Spinner className="py-4" />
+            ) : comments.length === 0 ? (
               <p className="text-sm text-gray-dark">Hali izoh yo'q</p>
             ) : (
               <div className="space-y-2">
@@ -260,7 +313,16 @@ export function OrderDetailDrawer({ order, onClose }: { order: Order; onClose: (
         </div>
       </div>
 
-      {deleteOpen && <DeleteOrderDialog order={order} onClose={() => setDeleteOpen(false)} onDeleted={onClose} />}
+      {deleteOpen && (
+        <DeleteOrderDialog
+          order={order}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => {
+            onDeleted?.(order.id)
+            onClose()
+          }}
+        />
+      )}
     </div>
   )
 }

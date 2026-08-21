@@ -204,7 +204,13 @@ export default function OrdersPage() {
         )}
       </section>
 
-      {selectedOrder && <OrderDetailDrawer order={selectedOrder} onClose={() => setSelectedOrder(null)} />}
+      {selectedOrder && (
+        <OrderDetailDrawer
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onDeleted={(orderId) => setAllOrders((prev) => prev.filter((o) => o.id !== orderId))}
+        />
+      )}
     </div>
   )
 }

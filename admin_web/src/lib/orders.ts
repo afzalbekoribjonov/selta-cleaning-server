@@ -1,5 +1,6 @@
 import {
   collection,
+  doc,
   query,
   orderBy,
   limit,
@@ -7,6 +8,7 @@ import {
   getDocs,
   onSnapshot,
   type QueryDocumentSnapshot,
+  type DocumentSnapshot,
   Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -43,10 +45,10 @@ export interface Order {
   dueDate: Date | null
 }
 
-function toOrder(doc: QueryDocumentSnapshot): Order {
-  const data = doc.data()
+function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
+  const data = snap.data() ?? {}
   return {
-    id: doc.id,
+    id: snap.id,
     orderNumber: data.orderNumber ?? 0,
     customerName: data.customerName ?? '',
     phone: data.phone ?? '',
@@ -72,6 +74,19 @@ function toOrder(doc: QueryDocumentSnapshot): Order {
     createdAt: (data.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
     dueDate: (data.dueDate as Timestamp | undefined)?.toDate() ?? null,
   }
+}
+
+/**
+ * Bitta buyurtmani real-vaqtli kuzatadi — OrderDetailDrawer shu orqali
+ * ochilgan payt statik (list'dan olingan) obyektdan emas, doim jonli
+ * hujjatdan o'qiydi. Buni qilmasa, drawer ochiq turganda buyurtma
+ * boshqa joydan (mobil ilova, boshqa admin) o'zgartirilsa — status,
+ * summa va h.k. eskirgan holicha qolib ketardi.
+ */
+export function subscribeOrder(orderId: string, callback: (order: Order | null) => void): () => void {
+  return onSnapshot(doc(db, 'orders', orderId), (snap) => {
+    callback(snap.exists() ? toOrder(snap) : null)
+  })
 }
 
 export function isOverdue(order: Order): boolean {
