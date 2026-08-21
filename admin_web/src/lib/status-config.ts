@@ -17,11 +17,13 @@ export const STATUS_CONFIG: Record<string, { label: string; color: string; bg: s
   returned: { label: 'Qaytarilgan', color: '#D64545', bg: '#FCEAEA' },
 }
 
+// Tarif rangi — mobil ilova (app/theme.dart) bilan bir xil sxema:
+// Standart=binafsha, Comfort=ko'k, Express=sariq, Premium=qizil.
 export const TARIFF_CONFIG: Record<string, { label: string; days: string; color: string; bg: string }> = {
-  express: { label: 'Express', days: '4 kunlik', color: '#E8590C', bg: '#FFF0E6' },
-  comfort: { label: 'Comfort', days: '7 kunlik', color: '#0E9488', bg: '#E3F8F6' },
-  standart: { label: 'Standart', days: '12 kunlik', color: '#7A7482', bg: '#F1EFF3' },
-  premium: { label: 'Premium', days: '4 kunlik', color: '#A07A00', bg: '#FEF6DC' },
+  express: { label: 'Express', days: '4 kunlik', color: '#CA8A04', bg: '#FEF3C7' },
+  comfort: { label: 'Comfort', days: '7 kunlik', color: '#2F80D6', bg: '#E8F1FC' },
+  standart: { label: 'Standart', days: '12 kunlik', color: '#8C5AC3', bg: '#F1E9F8' },
+  premium: { label: 'Premium', days: '4 kunlik', color: '#DC2626', bg: '#FCEAEA' },
 }
 
 /**

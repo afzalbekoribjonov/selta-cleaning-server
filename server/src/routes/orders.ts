@@ -55,7 +55,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       throw new ApiError(403, "permission-denied", "Faqat sotuv menejeri yangi buyurtma qo'sha oladi");
     }
 
-    const { customerName, phone, location, serviceType, tariff, gpsCoords, items } = req.body ?? {};
+    const { customerName, phone, location, serviceType, tariff, gpsCoords, items, notedItems, estimatedPrice } = req.body ?? {};
     if (!customerName?.trim() || !phone?.trim() || !location?.trim()) {
       throw new ApiError(400, "invalid-argument", "Ism, telefon va mo'ljal majburiy");
     }
@@ -66,6 +66,16 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
     if (isOnsite && !tariff) {
       throw new ApiError(400, "invalid-argument", "Tarif tanlanishi shart");
     }
+
+    // Talab: onsite buyurtmada mijoz aytgan mahsulot nomlarini va
+    // taxminiy summani ixtiyoriy ravishda yozib qo'yish — jamoa mijoz
+    // uyida haqiqiy mahsulotlarni aniqlashtirib qo'shguncha ma'lumot
+    // uchun. Ikkalasi ham majburiy emas.
+    const cleanNotedItems =
+      Array.isArray(notedItems)
+        ? notedItems.map((s) => String(s).trim()).filter((s) => s.length > 0)
+        : [];
+    const cleanEstimatedPrice = typeof estimatedPrice === "number" && estimatedPrice > 0 ? estimatedPrice : null;
 
     let computedItems: Awaited<ReturnType<typeof computeItems>> = [];
     if (!isOnsite && Array.isArray(items) && items.length > 0) {
@@ -104,6 +114,8 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         dueDate: isOnsite ? computeDueDate(now, tariff) : null,
+        notedItems: cleanNotedItems,
+        estimatedPrice: cleanEstimatedPrice,
       });
 
       tx.set(orderRef.collection("statusHistory").doc(), {

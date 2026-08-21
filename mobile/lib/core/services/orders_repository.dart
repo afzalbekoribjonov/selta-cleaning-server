@@ -56,6 +56,8 @@ class OrdersRepository {
     String? tariff,
     String? gpsCoords,
     List<CatalogItemDraft>? items,
+    List<String>? notedItems,
+    num? estimatedPrice,
   }) async {
     final result = await _api.post(
       '/createOrder',
@@ -68,6 +70,8 @@ class OrdersRepository {
         if (tariff != null) 'tariff': tariff,
         if (gpsCoords != null) 'gpsCoords': gpsCoords,
         if (items != null && items.isNotEmpty) 'items': items.map((e) => e.toJson()).toList(),
+        if (notedItems != null && notedItems.isNotEmpty) 'notedItems': notedItems,
+        if (estimatedPrice != null) 'estimatedPrice': estimatedPrice,
       },
     );
     return (orderId: result['orderId'] as String, orderNumber: (result['orderNumber'] as num).toInt());

@@ -29,6 +29,13 @@ class Order {
   final DateTime? dueDate;
   final int? qcRating;
   final String? qcRatingNote;
+  // Faqat onsite buyurtmalarda — sotuv menejeri buyurtma yaratishda
+  // ixtiyoriy ravishda mijoz aytgan mahsulot nomlarini va taxminiy
+  // summani yozib qo'yishi mumkin (majburiy emas). Jamoa mijoz uyida
+  // haqiqiy mahsulotlarni aniqlashtirib qo'shguncha shu qaydlar
+  // ma'lumot uchun ko'rsatiladi.
+  final List<String> notedItems;
+  final num? estimatedPrice;
 
   const Order({
     required this.id,
@@ -54,6 +61,8 @@ class Order {
     this.dueDate,
     this.qcRating,
     this.qcRatingNote,
+    this.notedItems = const [],
+    this.estimatedPrice,
   });
 
   factory Order.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -82,6 +91,8 @@ class Order {
       dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
       qcRating: (data['qcRating'] as num?)?.toInt(),
       qcRatingNote: data['qcRatingNote']?.toString(),
+      notedItems: (data['notedItems'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      estimatedPrice: data['estimatedPrice'] as num?,
     );
   }
 

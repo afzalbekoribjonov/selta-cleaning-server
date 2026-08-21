@@ -11,6 +11,7 @@ import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_detail_row.dart';
+import '../shared/sales_manager_notes_card.dart';
 import '../shared/team_assign_sheet.dart';
 
 void openOrderDetailSheet(BuildContext context, Order order) {
@@ -75,6 +76,10 @@ class _OrderDetailSheet extends ConsumerWidget {
                     _Header(order: liveOrder),
                     const SizedBox(height: 20),
                     _InfoCard(order: liveOrder),
+                    if (liveOrder.notedItems.isNotEmpty || liveOrder.estimatedPrice != null) ...[
+                      const SizedBox(height: 14),
+                      SalesManagerNotesCard(order: liveOrder),
+                    ],
                     if (liveOrder.serviceType == 'onsite' && liveOrder.status == 'new') ...[
                       const SizedBox(height: 14),
                       SizedBox(

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore'
-import { X, User, Phone, MapPin, Calendar, Clock, Star, Trash2, Navigation } from 'lucide-react'
+import { X, User, Phone, MapPin, Calendar, Clock, Star, Trash2, Navigation, StickyNote } from 'lucide-react'
 import { db } from '@/lib/firebase'
 import { isOverdue, subscribeOrder, type Order } from '@/lib/orders'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
@@ -194,6 +194,27 @@ export function OrderDetailDrawer({
             <InfoRow icon={Clock} text={`Qabul qilindi: ${formatDateTimeUz(order.createdAt)}`} />
             <InfoRow icon={User} text={`Xizmat turi: ${order.serviceType === 'onsite' ? 'Joyida yuvish' : 'Olib kelish'}`} />
           </section>
+
+          {(order.notedItems.length > 0 || order.estimatedPrice != null) && (
+            <section className="rounded-2xl border border-brand-accent/40 bg-brand-accent/10 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <StickyNote size={16} className="text-ink" />
+                <h3 className="text-sm font-extrabold text-ink">Sotuv menejeri qaydlari</h3>
+              </div>
+              {order.notedItems.length > 0 && (
+                <ol className="space-y-1">
+                  {order.notedItems.map((name, i) => (
+                    <li key={i} className="text-sm font-semibold text-ink">
+                      {i + 1}. {name}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {order.estimatedPrice != null && (
+                <p className="mt-2 text-sm font-extrabold text-brand-primary">Taxminiy summa: {formatMoney(order.estimatedPrice)}</p>
+              )}
+            </section>
+          )}
 
           <section className="rounded-2xl border border-border bg-surface p-4">
             <h3 className="mb-3 text-sm font-extrabold text-ink">Mahsulotlar ({items.length})</h3>

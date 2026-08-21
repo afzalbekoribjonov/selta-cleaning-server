@@ -44,14 +44,12 @@ const heroGradient = LinearGradient(
   colors: [AppColors.secondary, AppColors.primary],
 );
 
-/// Tarif rangi — har biri o'z ma'nosiga ega (talab: "har bir tarif o'zini
-/// ma'no jihatdan ranglariga ega bo'ladi"):
-///  - Express (4 kun)   -> to'q sariq: tezlik/shoshilinchlik
-///  - Comfort (7 kun)   -> teal: osoyishta/muvozanatli
-///  - Standart (12 kun) -> neytral kulrang: bazaviy/tejamkor
-///  - Premium (4 kun)   -> brend urg'u rangi (oltin sariq): eksklyuziv/yuqori
-///    sifat xizmat — bir xil tezlikdagi Express'dan xizmat darajasi bilan
-///    ajralib turishini ranggi orqali ham ko'rsatadi.
+/// Tarif rangi — foydalanuvchi tasdiqlagan aniq sxema (mobil va admin
+/// panelda bir xil, admin_web/src/lib/status-config.ts'ga qarang):
+///  - Standart -> binafsha/fialetiviy (brend ikkinchi darajali rangi)
+///  - Comfort  -> ko'k
+///  - Express  -> sariq
+///  - Premium  -> qizil
 class TariffInfo {
   final String label;
   final String daysLabel;
@@ -77,26 +75,26 @@ const Map<String, TariffInfo> kTariffConfig = {
   'express': TariffInfo(
     label: 'Express',
     daysLabel: '4 kunlik',
-    color: Color(0xFFE8590C),
-    background: Color(0xFFFFF0E6),
+    color: Color(0xFFCA8A04),
+    background: Color(0xFFFEF3C7),
   ),
   'comfort': TariffInfo(
     label: 'Comfort',
     daysLabel: '7 kunlik',
-    color: Color(0xFF0E9488),
-    background: Color(0xFFE3F8F6),
+    color: AppColors.info,
+    background: Color(0xFFE8F1FC),
   ),
   'standart': TariffInfo(
     label: 'Standart',
     daysLabel: '12 kunlik',
-    color: AppColors.grayDark,
-    background: Color(0xFFF1EFF3),
+    color: AppColors.secondary,
+    background: Color(0xFFF1E9F8),
   ),
   'premium': TariffInfo(
     label: 'Premium',
     daysLabel: '4 kunlik',
-    color: Color(0xFFA07A00),
-    background: Color(0xFFFEF6DC),
+    color: AppColors.danger,
+    background: Color(0xFFFCEAEA),
   ),
 };
 

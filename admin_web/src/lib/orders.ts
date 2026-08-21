@@ -43,6 +43,11 @@ export interface Order {
   qcRatingNote?: string
   createdAt: Date
   dueDate: Date | null
+  // Faqat onsite — sotuv menejeri ixtiyoriy ravishda yozgan mahsulot
+  // nomlari (vergul bilan ajratilgan matndan ro'yxatga aylantirilgan)
+  // va taxminiy summa (server: createOrder).
+  notedItems: string[]
+  estimatedPrice: number | null
 }
 
 function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
@@ -73,6 +78,8 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     qcRatingNote: data.qcRatingNote ?? undefined,
     createdAt: (data.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
     dueDate: (data.dueDate as Timestamp | undefined)?.toDate() ?? null,
+    notedItems: data.notedItems ?? [],
+    estimatedPrice: data.estimatedPrice ?? null,
   }
 }
 

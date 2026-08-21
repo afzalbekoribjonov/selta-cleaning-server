@@ -137,6 +137,31 @@ class ItemDetailRow extends StatelessWidget {
                 ],
               ],
             ),
+            // Talab: har bir mahsulotning tarifi va qaysi jarayonda
+            // ekanligi aniq ko'rinib turishi kerak — faqat pickup
+            // itemlarida mavjud (onsite itemlarida tariff/status yo'q).
+            if (item.tariff != null || item.status != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 4),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    if (item.tariff != null)
+                      _Badge(
+                        label: kTariffConfig[item.tariff]?.label ?? item.tariff!,
+                        color: kTariffConfig[item.tariff]?.color ?? AppColors.grayDark,
+                        background: kTariffConfig[item.tariff]?.background ?? AppColors.bg,
+                      ),
+                    if (item.status != null)
+                      _Badge(
+                        label: kStatusConfig[item.status]?.label ?? item.status!,
+                        color: kStatusConfig[item.status]?.color ?? AppColors.grayDark,
+                        background: kStatusConfig[item.status]?.background ?? AppColors.bg,
+                      ),
+                  ],
+                ),
+              ),
             if (failed)
               Padding(
                 padding: const EdgeInsets.only(left: 8, top: 3),
@@ -148,6 +173,22 @@ class ItemDetailRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color background;
+  const _Badge({required this.label, required this.color, required this.background});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(8)),
+      child: Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
     );
   }
 }

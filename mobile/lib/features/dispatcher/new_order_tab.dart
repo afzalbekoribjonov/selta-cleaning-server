@@ -47,6 +47,8 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
   final _phoneController = TextEditingController();
   final _locationController = TextEditingController();
   final _commentController = TextEditingController();
+  final _notedItemsController = TextEditingController();
+  final _estimatedPriceController = TextEditingController();
   final _phoneFocus = FocusNode();
   String? _serviceType;
   String _onsiteTariff = 'standart';
@@ -64,6 +66,8 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
     _phoneController.dispose();
     _locationController.dispose();
     _commentController.dispose();
+    _notedItemsController.dispose();
+    _estimatedPriceController.dispose();
     _phoneFocus.dispose();
     super.dispose();
   }
@@ -87,6 +91,12 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
     setState(() => _saving = true);
     try {
       final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+      final notedItems = _notedItemsController.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final estimatedPrice = num.tryParse(_estimatedPriceController.text.replaceAll(',', '.'));
       final result = await ref.read(ordersRepositoryProvider).createOrder(
             customerName: _nameController.text.trim(),
             phone: '+998$digits',
@@ -94,6 +104,8 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
             serviceType: _serviceType!,
             tariff: _isPickup ? null : _onsiteTariff,
             items: _isPickup ? _draftItems : null,
+            notedItems: _isPickup ? null : notedItems,
+            estimatedPrice: _isPickup ? null : estimatedPrice,
           );
 
       final commentText = _commentController.text.trim();
@@ -118,6 +130,8 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
       _phoneController.clear();
       _locationController.clear();
       _commentController.clear();
+      _notedItemsController.clear();
+      _estimatedPriceController.clear();
       setState(() {
         _serviceType = null;
         _onsiteTariff = 'standart';
@@ -208,6 +222,26 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
                       onTap: () => setState(() => _onsiteTariff = entry.key),
                     ),
                 ],
+              ),
+              const SizedBox(height: 20),
+              const _Label("Mahsulot nomlari (ixtiyoriy)"),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  "Mijoz aytgan mahsulotlarni vergul bilan ajratib yozing — masalan: Gilam, Parda, Yakandoz. Jamoa mijoz uyida haqiqiy mahsulotlarni aniqlashtirib qo'shadi.",
+                  style: TextStyle(fontSize: 11.5, color: AppColors.gray),
+                ),
+              ),
+              TextFormField(
+                controller: _notedItemsController,
+                decoration: const InputDecoration(hintText: 'Gilam, Parda, Yakandoz'),
+              ),
+              const SizedBox(height: 16),
+              const _Label('Taxminiy umumiy summa (ixtiyoriy)'),
+              TextFormField(
+                controller: _estimatedPriceController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(hintText: 'Masalan: 500000', suffixText: "so'm"),
               ),
             ],
             if (_isPickup) ...[

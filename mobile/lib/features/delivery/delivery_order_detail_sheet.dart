@@ -150,7 +150,23 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(16)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Umumiy summa', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.grayDark)),
+                          Text(
+                            "${order.totalPrice.toStringAsFixed(0)} so'm",
+                            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
@@ -174,7 +190,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                         ],
                       ],
                     ),
-                    if (order.status == 'new') ...[
+                    if (order.status == 'new' || order.status == 'picked_up') ...[
                       const SizedBox(height: 16),
                       itemsAsync.when(
                         loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),

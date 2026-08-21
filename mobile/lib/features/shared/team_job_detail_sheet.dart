@@ -11,6 +11,7 @@ import '../../core/utils/date_utils.dart';
 import 'catalog_item_sheet.dart';
 import 'comments_section.dart';
 import 'item_detail_row.dart';
+import 'sales_manager_notes_card.dart';
 
 void openTeamJobDetailSheet(BuildContext context, Order order) {
   showModalBottomSheet(
@@ -140,6 +141,10 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                         ],
                       ),
                     ),
+                    if (order.notedItems.isNotEmpty || order.estimatedPrice != null) ...[
+                      const SizedBox(height: 16),
+                      SalesManagerNotesCard(order: order),
+                    ],
                     const SizedBox(height: 20),
                     itemsAsync.when(
                       loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
