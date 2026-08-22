@@ -39,9 +39,13 @@ const Map<Department, DepartmentInfo> kDepartmentConfig = {
 
 /// Buyurtma holati konfiguratsiyasi. Ikkita xizmat turi ikkita alohida
 /// pipeline'ga ega:
-///  Olib kelish (order-level): new -> picked_up -> brought_in -> done
-///    ("brought_in" bosqichida har bir ITEM mustaqil ravishda o'zining
-///    pipeline'i bo'ylab ishlov olinadi — pastdagi kItemPipeline'ga qarang)
+///  Olib kelish (order-level): new -> brought_in -> done — dastavchik
+///    mijozdan olgach, alohida "picked_up" bosqichisiz to'g'ridan-to'g'ri
+///    "brought_in"ga o'tadi (bu oraliq bosqich qo'shimcha ish talab qilgani
+///    uchun olib tashlangan; "picked_up" qiymati faqat eski buyurtmalar
+///    tarixi uchun konfiguratsiyada qolgan). "brought_in" bosqichida har
+///    bir ITEM mustaqil ravishda o'zining pipeline'i bo'ylab ishlov
+///    olinadi — pastdagi kItemPipeline'ga qarang.
 ///  Joyida yuvish: new -> team_assigned -> in_progress -> done
 class StatusInfo {
   final String label;
@@ -177,4 +181,16 @@ const Map<ColorStage, Color> kColorStageColors = {
   ColorStage.green: AppColors.success,
   ColorStage.yellow: AppColors.warning,
   ColorStage.red: AppColors.danger,
+};
+
+/// Buyurtma "Manba"si (talab: marketing statistikasi) — sotuv menejeri
+/// buyurtma yaratishda ixtiyoriy ravishda tanlaydi. server/src/lib/
+/// orderSources.ts va admin_web/src/lib/order-sources.ts bilan bir xil
+/// kalitlar.
+const Map<String, String> kOrderSourceConfig = {
+  'instagram': 'Instagram',
+  'telegram': 'Telegram',
+  'referral': 'Tanish orqali',
+  'car_branding': 'Mashina brandi',
+  'ad_banner': 'Reklama banneri',
 };

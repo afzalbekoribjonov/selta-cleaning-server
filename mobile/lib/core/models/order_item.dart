@@ -35,6 +35,9 @@ class OrderItem {
   final DateTime? washedAt;
   final String? deliveredBy;
   final DateTime? deliveredAt;
+  // Faqat ko'rsatish uchun (server: changeItemStatus) — haqiqiy
+  // hisobdorlik har doim `deliveredBy` (employeeId)dan.
+  final String? deliveredByName;
   final num? collectedAmount;
 
   const OrderItem({
@@ -64,6 +67,7 @@ class OrderItem {
     this.washedAt,
     this.deliveredBy,
     this.deliveredAt,
+    this.deliveredByName,
     this.collectedAmount,
   });
 
@@ -96,6 +100,7 @@ class OrderItem {
       washedAt: (data['washedAt'] as Timestamp?)?.toDate(),
       deliveredBy: data['deliveredBy']?.toString(),
       deliveredAt: (data['deliveredAt'] as Timestamp?)?.toDate(),
+      deliveredByName: data['deliveredByName']?.toString(),
       collectedAmount: data['collectedAmount'] as num?,
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../core/constants.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show describeApiError, employeeClaimsProvider;
 import '../../core/services/employee_repository.dart';
@@ -51,6 +52,7 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
   final _estimatedPriceController = TextEditingController();
   final _phoneFocus = FocusNode();
   String? _serviceType;
+  String? _source;
   String _onsiteTariff = 'standart';
   final List<CatalogItemDraft> _draftItems = [];
   bool _saving = false;
@@ -106,6 +108,7 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
             items: _isPickup ? _draftItems : null,
             notedItems: _isPickup ? null : notedItems,
             estimatedPrice: _isPickup ? null : estimatedPrice,
+            source: _source,
           );
 
       final commentText = _commentController.text.trim();
@@ -134,6 +137,7 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
       _estimatedPriceController.clear();
       setState(() {
         _serviceType = null;
+        _source = null;
         _onsiteTariff = 'standart';
         _draftItems.clear();
         _saving = false;
@@ -182,6 +186,29 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
               controller: _locationController,
               maxLines: 2,
               validator: (v) => (v == null || v.trim().isEmpty) ? "Mo'ljal majburiy" : null,
+            ),
+            const SizedBox(height: 20),
+            const _Label('Manba (ixtiyoriy)'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in kOrderSourceConfig.entries)
+                  ChoiceChip(
+                    label: Text(entry.value),
+                    selected: _source == entry.key,
+                    onSelected: (v) => setState(() => _source = v ? entry.key : null),
+                    labelStyle: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                      color: _source == entry.key ? Colors.white : AppColors.ink,
+                    ),
+                    selectedColor: AppColors.primary,
+                    backgroundColor: AppColors.surface,
+                    side: BorderSide(color: _source == entry.key ? AppColors.primary : AppColors.border),
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
             const _Label('Xizmat turi'),

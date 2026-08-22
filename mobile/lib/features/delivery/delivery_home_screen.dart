@@ -14,9 +14,11 @@ import '../shared/employee_app_bar.dart';
 import '../shared/team_jobs_section.dart';
 import 'delivery_order_detail_sheet.dart';
 
+// Talab: dastavchik mijozdan olgach, alohida "Qabul qilindi" bosqichisiz
+// to'g'ridan-to'g'ri ishchilar navbatiga o'tadi — bu oraliq bosqich
+// qo'shimcha ish talab qilgani uchun tab sifatida olib tashlandi.
 const _stages = [
   ('new', 'Yangi', Icons.move_to_inbox_rounded),
-  ('picked_up', 'Qabul qilindi', Icons.local_shipping_rounded),
   ('ready', 'Yetkazishga tayyor', Icons.done_all_rounded),
 ];
 
@@ -34,8 +36,8 @@ bool _hasReadyItem(WidgetRef ref, Order order) {
   return items.any((i) => i.status == 'ready');
 }
 
-/// Dastavchik paneli — olib ketish (new -> picked_up -> brought_in)
-/// bosqichini boshqaradi; yetkazib berish endi ITEM-darajasida (talab
+/// Dastavchik paneli — olib ketish (new -> brought_in, bitta bosqichda,
+/// GPS bilan) jarayonini boshqaradi; yetkazib berish endi ITEM-darajasida (talab
 /// #9: qisman yetkazish) — "Yetkazishga tayyor" tabida kamida bitta
 /// "ready" itemga ega buyurtmalar ko'rsatiladi.
 class DeliveryHomeScreen extends ConsumerStatefulWidget {

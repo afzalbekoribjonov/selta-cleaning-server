@@ -8,6 +8,7 @@ import {
   CalendarRange,
   Receipt,
   Package,
+  Megaphone,
   Settings,
   Menu,
   X,
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { to: '/monthly-report', label: 'Oylik hisobot', icon: CalendarRange },
   { to: '/expenses', label: 'Chiqimlar', icon: Receipt },
   { to: '/products', label: 'Mahsulotlar', icon: Package },
+  { to: '/marketing', label: 'Marketing statistikasi', icon: Megaphone },
   { to: '/settings', label: 'Sozlamalar', icon: Settings },
 ]
 

@@ -58,6 +58,7 @@ class OrdersRepository {
     List<CatalogItemDraft>? items,
     List<String>? notedItems,
     num? estimatedPrice,
+    String? source,
   }) async {
     final result = await _api.post(
       '/createOrder',
@@ -72,6 +73,7 @@ class OrdersRepository {
         if (items != null && items.isNotEmpty) 'items': items.map((e) => e.toJson()).toList(),
         if (notedItems != null && notedItems.isNotEmpty) 'notedItems': notedItems,
         if (estimatedPrice != null) 'estimatedPrice': estimatedPrice,
+        if (source != null) 'source': source,
       },
     );
     return (orderId: result['orderId'] as String, orderNumber: (result['orderNumber'] as num).toInt());
@@ -105,6 +107,7 @@ class OrdersRepository {
     String? note,
     num? collectedAmount,
     String? gpsCoords,
+    String? actorName,
   }) async {
     await _api.post(
       '/changeOrderStatus',
@@ -115,6 +118,7 @@ class OrdersRepository {
         if (note != null) 'note': note,
         if (collectedAmount != null) 'collectedAmount': collectedAmount,
         if (gpsCoords != null) 'gpsCoords': gpsCoords,
+        if (actorName != null) 'actorName': actorName,
       },
     );
   }
@@ -226,6 +230,7 @@ class OrdersRepository {
     required String toStatus,
     String? qcNote,
     num? collectedAmount,
+    String? actorName,
   }) async {
     await _api.post(
       '/changeItemStatus',
@@ -236,6 +241,7 @@ class OrdersRepository {
         'toStatus': toStatus,
         if (qcNote != null) 'qcNote': qcNote,
         if (collectedAmount != null) 'collectedAmount': collectedAmount,
+        if (actorName != null) 'actorName': actorName,
       },
     );
   }

@@ -30,6 +30,8 @@ export interface Order {
   totalPrice: number
   createdBy: string
   pickedUpBy?: string
+  pickedUpAt?: Date
+  pickedUpByName?: string
   washedBy?: string
   deliveredBy?: string
   // Pickup buyurtmalarda yuvish/yetkazish item-darajasida — bu massivlar
@@ -48,6 +50,9 @@ export interface Order {
   // va taxminiy summa (server: createOrder).
   notedItems: string[]
   estimatedPrice: number | null
+  // Talab: marketing statistikasi — sotuv menejeri buyurtma yaratishda
+  // ixtiyoriy ravishda tanlaydi.
+  source: string | null
 }
 
 function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
@@ -67,6 +72,8 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     totalPrice: data.totalPrice ?? 0,
     createdBy: data.createdBy ?? '',
     pickedUpBy: data.pickedUpBy ?? undefined,
+    pickedUpAt: (data.pickedUpAt as Timestamp | undefined)?.toDate(),
+    pickedUpByName: data.pickedUpByName ?? undefined,
     washedBy: data.washedBy ?? undefined,
     deliveredBy: data.deliveredBy ?? undefined,
     washedByEmployees: data.washedByEmployees ?? [],
@@ -80,6 +87,7 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     dueDate: (data.dueDate as Timestamp | undefined)?.toDate() ?? null,
     notedItems: data.notedItems ?? [],
     estimatedPrice: data.estimatedPrice ?? null,
+    source: data.source ?? null,
   }
 }
 

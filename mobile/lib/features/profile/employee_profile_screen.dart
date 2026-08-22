@@ -7,8 +7,11 @@ import '../../core/models/order.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/widgets/confirm_logout.dart';
 import '../../core/widgets/selta_loader.dart';
+import '../delivery/delivery_daily_orders_screen.dart';
+import '../delivery/delivery_daily_stats.dart';
 
 String _resolveDepartmentLabel(String? key, String? customLabel) {
   if (key == null) return '';
@@ -93,6 +96,10 @@ class EmployeeProfileScreen extends ConsumerWidget {
                     const Text('Bu oy statistikasi', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
                     const SizedBox(height: 12),
                     _MonthlyStatsCard(departmentKey: departmentKey),
+                    if (departmentKey == 'delivery') ...[
+                      const SizedBox(height: 28),
+                      const _DeliveryDailyStatsSection(),
+                    ],
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
@@ -208,6 +215,105 @@ class _MonthlyStatsCard extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Dastavchi uchun "Bugun"/"Kecha" — faqat shu xodimning O'ZI olib
+/// kelgan/yetkazgan buyurtmalari (boshqa dastavchiklarniki emas, talab).
+class _DeliveryDailyStatsSection extends ConsumerWidget {
+  const _DeliveryDailyStatsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final claims = ref.watch(employeeClaimsProvider).valueOrNull;
+    final ordersAsync = ref.watch(recentOrdersProvider);
+
+    if (claims == null) return const SizedBox.shrink();
+
+    return ordersAsync.when(
+      loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Center(child: SeltaLoader(size: 32))),
+      error: (_, __) => const Text("Statistikani yuklab bo'lmadi", style: TextStyle(color: AppColors.grayDark)),
+      data: (orders) {
+        final today = DateTime.now();
+        final yesterday = today.subtract(const Duration(days: 1));
+        final todayStats = computeDeliveryDayStats(ref, orders, claims.employeeId, today);
+        final yesterdayStats = computeDeliveryDayStats(ref, orders, claims.employeeId, yesterday);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DayStatsCard(title: 'Bugun', day: today, stats: todayStats),
+            const SizedBox(height: 12),
+            _DayStatsCard(title: 'Kecha', day: yesterday, stats: yesterdayStats),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DayStatsCard extends StatelessWidget {
+  final String title;
+  final DateTime day;
+  final DeliveryDayStats stats;
+  const _DayStatsCard({required this.title, required this.day, required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 8),
+          _StatLine(label: 'Sana', value: formatDateUz(day)),
+          _StatLine(
+            label: 'Olib kelindi',
+            value: '${stats.pickedUpOrders.length} ta; ${stats.pickedUpTotal.toStringAsFixed(0)} so\'m',
+          ),
+          _StatLine(
+            label: 'Yetgazildi',
+            value: '${stats.deliveredItemCount} ta; ${stats.deliveredTotal.toStringAsFixed(0)} so\'m',
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => openDeliveryDailyOrdersScreen(context, day: day, initialFilter: 'picked_up'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              label: const Text("Ularni ko'rish", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatLine extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StatLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 90, child: Text('$label:', style: const TextStyle(fontSize: 12.5, color: AppColors.grayDark, fontWeight: FontWeight.w600))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 12.5, color: AppColors.ink, fontWeight: FontWeight.w700))),
+        ],
+      ),
     );
   }
 }

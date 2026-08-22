@@ -170,6 +170,15 @@ class ItemDetailRow extends StatelessWidget {
                   style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
+            // Talab: qaysi dastavchik yetkazgani ko'rinib turishi kerak.
+            if (item.isDone && item.deliveredByName != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 8, top: 3),
+                child: Text(
+                  'Yetkazdi: ${item.deliveredByName}',
+                  style: const TextStyle(color: AppColors.grayDark, fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
+              ),
           ],
         ),
       ),

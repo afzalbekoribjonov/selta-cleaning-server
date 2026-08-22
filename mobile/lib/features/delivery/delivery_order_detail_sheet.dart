@@ -7,6 +7,7 @@ import '../../core/constants.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
+import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/launch_utils.dart';
@@ -25,15 +26,15 @@ void openDeliveryOrderDetailSheet(BuildContext context, Order order) {
   );
 }
 
-// "brought_in"dan keyin buyurtma o'zi bosqichma-bosqich o'zgarmaydi —
-// har bir item mustaqil ravishda ITEM_PIPELINE bo'ylab ishlov olinadi
-// (talab #9: qisman yetkazish), shu jumladan "ready -> done" ham
-// ItemActionRow orqali item-darajasida amalga oshadi.
-const _nextStage = {'new': 'picked_up', 'picked_up': 'brought_in'};
-const _actionLabel = {
-  'new': 'Qabul qilindi',
-  'picked_up': "Sexga yetkazildi",
-};
+// Talab: dastavchik mijozdan olgach, alohida "Qabul qilindi" bosqichisiz
+// to'g'ridan-to'g'ri "brought_in"ga (ishchilar navbatiga) o'tadi — oraliq
+// bosqich qo'shimcha ish talab qilgani uchun olib tashlandi. "brought_in"dan
+// keyin esa buyurtma o'zi bosqichma-bosqich o'zgarmaydi — har bir item
+// mustaqil ravishda ITEM_PIPELINE bo'ylab ishlov olinadi (talab #9: qisman
+// yetkazish), shu jumladan "ready -> done" ham ItemActionRow orqali
+// item-darajasida amalga oshadi.
+const _nextStage = {'new': 'brought_in'};
+const _actionLabel = {'new': 'Qabul qilindi'};
 
 final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
   ref.watch(authStateProvider);
@@ -102,10 +103,12 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
       _error = null;
     });
     try {
+      final actorName = ref.read(currentEmployeeProvider).valueOrNull?['fullName'] as String?;
       await ref.read(ordersRepositoryProvider).changeOrderStatus(
             orderId: widget.order.id,
             toStatus: next,
             gpsCoords: gpsCoords,
+            actorName: actorName,
           );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -177,6 +180,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                           _row(Icons.phone_rounded, order.phone),
                           _row(Icons.location_on_rounded, order.location),
                           if (order.dueDate != null) _row(Icons.event_rounded, 'Muddat: ${formatDateUz(order.dueDate!)}', color: order.isOverdue ? AppColors.danger : null),
+                          if (order.pickedUpByName != null) _row(Icons.local_shipping_rounded, 'Olib keldi: ${order.pickedUpByName}'),
                         ],
                       ),
                     ),

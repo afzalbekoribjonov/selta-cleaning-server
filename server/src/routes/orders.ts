@@ -5,6 +5,7 @@ import { computeDueDate, isValidTransition, isValidItemTransition, type ServiceT
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 import { computeItems, type ItemInput } from "../lib/pricing";
+import { isValidOrderSource } from "../lib/orderSources";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -55,7 +56,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       throw new ApiError(403, "permission-denied", "Faqat sotuv menejeri yangi buyurtma qo'sha oladi");
     }
 
-    const { customerName, phone, location, serviceType, tariff, gpsCoords, items, notedItems, estimatedPrice } = req.body ?? {};
+    const { customerName, phone, location, serviceType, tariff, gpsCoords, items, notedItems, estimatedPrice, source } = req.body ?? {};
     if (!customerName?.trim() || !phone?.trim() || !location?.trim()) {
       throw new ApiError(400, "invalid-argument", "Ism, telefon va mo'ljal majburiy");
     }
@@ -76,6 +77,12 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         ? notedItems.map((s) => String(s).trim()).filter((s) => s.length > 0)
         : [];
     const cleanEstimatedPrice = typeof estimatedPrice === "number" && estimatedPrice > 0 ? estimatedPrice : null;
+
+    // Talab: "Manba" — marketing statistikasi uchun, ixtiyoriy.
+    if (source != null && !isValidOrderSource(source)) {
+      throw new ApiError(400, "invalid-argument", "Manba qiymati noto'g'ri");
+    }
+    const cleanSource = isValidOrderSource(source) ? source : null;
 
     let computedItems: Awaited<ReturnType<typeof computeItems>> = [];
     if (!isOnsite && Array.isArray(items) && items.length > 0) {
@@ -116,6 +123,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         dueDate: isOnsite ? computeDueDate(now, tariff) : null,
         notedItems: cleanNotedItems,
         estimatedPrice: cleanEstimatedPrice,
+        source: cleanSource,
       });
 
       tx.set(orderRef.collection("statusHistory").doc(), {
@@ -224,7 +232,12 @@ ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
  */
 const MANUAL_TRANSITIONS: Record<ServiceType, Record<string, string[]>> = {
   pickup: {
-    "new->picked_up": ["delivery"],
+    // Talab: dastavchik mijozdan olgach, alohida "Qabul qilindi"
+    // bosqichisiz to'g'ridan-to'g'ri "brought_in"ga o'tadi ("Qabul
+    // qilindi" filteri qo'shimcha ish talab qilgani uchun olib
+    // tashlandi). "picked_up->brought_in" faqat eski (bu o'zgarishdan
+    // oldin yaratilgan) "picked_up" holatidagi buyurtmalar uchun saqlanadi.
+    "new->brought_in": ["delivery"],
     "picked_up->brought_in": ["delivery"],
   },
   onsite: {
@@ -238,7 +251,7 @@ const MANUAL_TRANSITIONS: Record<ServiceType, Record<string, string[]>> = {
 
 ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res) => {
   try {
-    const { orderId, toStatus, note, collectedAmount, gpsCoords } = req.body ?? {};
+    const { orderId, toStatus, note, collectedAmount, gpsCoords, actorName } = req.body ?? {};
     const role = req.auth!.role!;
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
 
@@ -267,9 +280,16 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
 
       // Maosh hisob-kitobi uchun (talab #13) — qaysi xodim buyurtmani olib
       // ketgani/yetkazgani shu holat o'tishlari orqali qayd etiladi.
+      // `pickedUpByName` — faqat ko'rsatish uchun, mijozdan kelgan (comments'
+      // `authorName`'i bilan bir xil ishonch darajasi: haqiqiy `pickedUpBy`
+      // har doim server tomonidan tasdiqlangan `employeeId`dan olinadi).
       const attributionUpdate: Record<string, unknown> = {};
-      if (toStatus === "picked_up") {
+      if (fromStatus === "new" && toStatus === "brought_in") {
         attributionUpdate.pickedUpBy = employeeId;
+        attributionUpdate.pickedUpAt = FieldValue.serverTimestamp();
+        if (typeof actorName === "string" && actorName.trim()) {
+          attributionUpdate.pickedUpByName = actorName.trim();
+        }
         // Dastavchik mijoz manzilida bo'lgan chog'da GPS majburiy — keyinroq
         // "Yo'lga chiqish" tugmasi shu koordinata orqali marshrut tuzadi.
         // "lat,lng" ko'rinishidagi satr sifatida saqlanadi (order.gpsCoords
@@ -358,7 +378,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
   try {
     const role = req.auth!.role!;
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
-    const { orderId, itemId, toStatus, qcNote, collectedAmount } = req.body ?? {};
+    const { orderId, itemId, toStatus, qcNote, collectedAmount, actorName } = req.body ?? {};
     if (!orderId || !itemId || !toStatus) {
       throw new ApiError(400, "invalid-argument", "orderId, itemId va toStatus majburiy");
     }
@@ -440,6 +460,9 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       if (toStatus === "done") {
         itemUpdate.deliveredBy = employeeId;
         itemUpdate.deliveredAt = FieldValue.serverTimestamp();
+        if (typeof actorName === "string" && actorName.trim()) {
+          itemUpdate.deliveredByName = actorName.trim();
+        }
         orderUpdate.deliveredByEmployees = FieldValue.arrayUnion(employeeId);
         if (typeof collectedAmount === "number" && collectedAmount > 0) {
           itemUpdate.collectedAmount = collectedAmount;

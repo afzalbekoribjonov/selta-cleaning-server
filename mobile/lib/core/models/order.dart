@@ -16,6 +16,11 @@ class Order {
   final num totalArea;
   final num totalPrice;
   final String createdBy;
+  final String? pickedUpBy;
+  final DateTime? pickedUpAt;
+  // Faqat ko'rsatish uchun (server: changeOrderStatus) — haqiqiy
+  // hisobdorlik har doim `pickedUpBy` (employeeId)dan.
+  final String? pickedUpByName;
   final String? washedBy;
   final String? deliveredBy;
   final String? qcRatedBy;
@@ -36,6 +41,9 @@ class Order {
   // ma'lumot uchun ko'rsatiladi.
   final List<String> notedItems;
   final num? estimatedPrice;
+  // Talab: marketing statistikasi — sotuv menejeri buyurtma yaratishda
+  // ixtiyoriy ravishda tanlaydi (masalan 'instagram', 'telegram').
+  final String? source;
 
   const Order({
     required this.id,
@@ -51,6 +59,9 @@ class Order {
     this.totalArea = 0,
     this.totalPrice = 0,
     required this.createdBy,
+    this.pickedUpBy,
+    this.pickedUpAt,
+    this.pickedUpByName,
     this.washedBy,
     this.deliveredBy,
     this.qcRatedBy,
@@ -63,6 +74,7 @@ class Order {
     this.qcRatingNote,
     this.notedItems = const [],
     this.estimatedPrice,
+    this.source,
   });
 
   factory Order.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -81,6 +93,9 @@ class Order {
       totalArea: (data['totalArea'] as num?) ?? 0,
       totalPrice: (data['totalPrice'] as num?) ?? 0,
       createdBy: data['createdBy']?.toString() ?? '',
+      pickedUpBy: data['pickedUpBy']?.toString(),
+      pickedUpAt: (data['pickedUpAt'] as Timestamp?)?.toDate(),
+      pickedUpByName: data['pickedUpByName']?.toString(),
       washedBy: data['washedBy']?.toString(),
       deliveredBy: data['deliveredBy']?.toString(),
       qcRatedBy: data['qcRatedBy']?.toString(),
@@ -93,6 +108,7 @@ class Order {
       qcRatingNote: data['qcRatingNote']?.toString(),
       notedItems: (data['notedItems'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       estimatedPrice: data['estimatedPrice'] as num?,
+      source: data['source']?.toString(),
     );
   }
 

@@ -45,12 +45,14 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
       _error = null;
     });
     try {
+      final actorName = ref.read(currentEmployeeProvider).valueOrNull?['fullName'] as String?;
       await ref.read(ordersRepositoryProvider).changeItemStatus(
             orderId: widget.order.id,
             itemId: widget.item.id,
             toStatus: toStatus,
             qcNote: qcNote,
             collectedAmount: collectedAmount,
+            actorName: actorName,
           );
     } catch (e) {
       if (mounted) setState(() => _error = describeApiError(e));

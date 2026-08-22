@@ -9,6 +9,7 @@ import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { Spinner } from '@/components/ui/Spinner'
+import { ORDER_SOURCE_CONFIG } from '@/lib/order-sources'
 import { DeleteOrderDialog } from './DeleteOrderDialog'
 
 function formatMoney(value: number): string {
@@ -27,6 +28,7 @@ interface OrderItem {
   status: string | null
   tariff: string | null
   createdAt: Date | null
+  deliveredByName: string | null
 }
 
 interface StatusEvent {
@@ -118,6 +120,7 @@ export function OrderDetailDrawer({
     status: (d.status as string | undefined) ?? null,
     tariff: (d.tariff as string | undefined) ?? null,
     createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? null,
+    deliveredByName: (d.deliveredByName as string | undefined) ?? null,
   }))
 
   const { items: history, loading: historyLoading } = useSubcollection<StatusEvent>(order.id, 'statusHistory', 'changedAt', (id, d) => ({
@@ -143,9 +146,17 @@ export function OrderDetailDrawer({
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-6 py-4">
           <div>
             <h2 className="text-lg font-heading font-extrabold text-ink">Buyurtma #{order.orderNumber}</h2>
-            <div className="mt-1 flex gap-2">
+            <div className="mt-1 flex flex-wrap gap-2">
               <StatusBadge status={order.status} />
               <TariffBadge tariff={order.tariff} />
+              {order.source && ORDER_SOURCE_CONFIG[order.source] && (
+                <span
+                  className="rounded-full px-2.5 py-1 text-xs font-bold text-white"
+                  style={{ backgroundColor: ORDER_SOURCE_CONFIG[order.source].color }}
+                >
+                  {ORDER_SOURCE_CONFIG[order.source].label}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -193,6 +204,7 @@ export function OrderDetailDrawer({
             )}
             <InfoRow icon={Clock} text={`Qabul qilindi: ${formatDateTimeUz(order.createdAt)}`} />
             <InfoRow icon={User} text={`Xizmat turi: ${order.serviceType === 'onsite' ? 'Joyida yuvish' : 'Olib kelish'}`} />
+            {order.pickedUpByName && <InfoRow icon={Navigation} text={`Olib keldi: ${order.pickedUpByName}`} />}
           </section>
 
           {(order.notedItems.length > 0 || order.estimatedPrice != null) && (
@@ -255,6 +267,9 @@ export function OrderDetailDrawer({
                       </div>
                       {item.status === 'returned' && item.qcNote && (
                         <p className="ml-4 mt-0.5 text-xs font-semibold text-danger">Sabab: {item.qcNote}</p>
+                      )}
+                      {done && item.deliveredByName && (
+                        <p className="ml-4 mt-0.5 text-xs font-semibold text-gray-dark">Yetkazdi: {item.deliveredByName}</p>
                       )}
                     </div>
                   )
