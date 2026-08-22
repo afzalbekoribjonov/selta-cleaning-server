@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, Clock, TrendingUp, AlertTriangle } from 'lucide-react'
+import { ClipboardList, Clock, TrendingUp, AlertTriangle, Truck, PackageCheck } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
 import { StatusBadge, TariffDots } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
@@ -39,7 +39,19 @@ export default function DashboardPage() {
     const today = list.filter((o) => isToday(o.createdAt))
     const todayRevenue = today.reduce((sum, o) => sum + (o.totalPrice || 0), 0)
     const overdue = active.filter((o) => isOrderOverdue(o, itemsByOrder[o.id] ?? []))
-    return { activeCount: active.length, todayCount: today.length, todayRevenue, overdueCount: overdue.length, active }
+
+    // Talab: dastavchiklar bugun jami nechta buyurtma olib kelgani va
+    // nechta mahsulot yetkazganini ko'rsatish — barcha dastavchiklar
+    // bo'yicha yig'indi (talab: "Bugun olindi"/"Bugun yetgazildi").
+    const pickedUpToday = list.filter((o) => o.pickedUpAt && isToday(o.pickedUpAt)).length
+    let deliveredToday = 0
+    for (const o of list) {
+      for (const item of itemsByOrder[o.id] ?? []) {
+        if (item.deliveredAt && isToday(item.deliveredAt)) deliveredToday++
+      }
+    }
+
+    return { activeCount: active.length, todayCount: today.length, todayRevenue, overdueCount: overdue.length, active, pickedUpToday, deliveredToday }
   }, [orders, itemsByOrder])
 
   const activeSorted = useMemo(() => {
@@ -58,13 +70,15 @@ export default function DashboardPage() {
         <p className="text-sm text-gray-dark mt-1">Bugungi holat va faol buyurtmalar</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {loading ? (
           <>
             <StatCard icon={ClipboardList} label="Faol buyurtmalar" value="—" tone="primary" />
             <StatCard icon={Clock} label="Bugungi buyurtmalar" value="—" tone="primary" />
             <StatCard icon={TrendingUp} label="Bugungi tushum" value="—" tone="success" />
             <StatCard icon={AlertTriangle} label="Kechikkan buyurtmalar" value="—" tone="danger" />
+            <StatCard icon={Truck} label="Bugun olindi" value="—" tone="primary" />
+            <StatCard icon={PackageCheck} label="Bugun yetgazildi" value="—" tone="success" />
           </>
         ) : (
           <>
@@ -72,6 +86,8 @@ export default function DashboardPage() {
             <StatCard icon={Clock} label="Bugungi buyurtmalar" numericValue={stats.todayCount} tone="primary" />
             <StatCard icon={TrendingUp} label="Bugungi tushum" numericValue={stats.todayRevenue} format={formatMoney} tone="success" />
             <StatCard icon={AlertTriangle} label="Kechikkan buyurtmalar" numericValue={stats.overdueCount} tone="danger" />
+            <StatCard icon={Truck} label="Bugun olindi" numericValue={stats.pickedUpToday} tone="primary" />
+            <StatCard icon={PackageCheck} label="Bugun yetgazildi" numericValue={stats.deliveredToday} tone="success" />
           </>
         )}
       </div>
