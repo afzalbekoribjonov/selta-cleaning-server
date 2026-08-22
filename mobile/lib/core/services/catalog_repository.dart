@@ -25,3 +25,22 @@ final conditionSurchargesProvider = StreamProvider<ConditionSurcharges>((ref) {
       .snapshots()
       .map((doc) => ConditionSurcharges.fromMap(doc.data()));
 });
+
+/// Buyurtma "Manba"si (talab: marketing statistikasi) — endi admin panel
+/// orqali boshqariladi (avval qattiq kodlangan 5 ta variant edi). Sotuv
+/// menejeri "Yangi buyurtma" formasida shu ro'yxatdan tanlaydi.
+class OrderSource {
+  final String id;
+  final String name;
+  final String color;
+  const OrderSource({required this.id, required this.name, required this.color});
+}
+
+final orderSourcesProvider = StreamProvider<List<OrderSource>>((ref) {
+  ref.watch(authStateProvider);
+  return FirebaseFirestore.instance.collection('orderSources').orderBy('name').snapshots().map(
+        (snap) => snap.docs
+            .map((d) => OrderSource(id: d.id, name: d.data()['name']?.toString() ?? '', color: d.data()['color']?.toString() ?? '#7A7482'))
+            .toList(),
+      );
+});

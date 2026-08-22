@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
-import '../../core/constants.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show describeApiError, employeeClaimsProvider;
+import '../../core/services/catalog_repository.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../shared/catalog_item_sheet.dart';
@@ -190,26 +190,32 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
             const SizedBox(height: 20),
             const _Label('Manba (ixtiyoriy)'),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final entry in kOrderSourceConfig.entries)
-                  ChoiceChip(
-                    label: Text(entry.value),
-                    selected: _source == entry.key,
-                    onSelected: (v) => setState(() => _source = v ? entry.key : null),
-                    labelStyle: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12.5,
-                      color: _source == entry.key ? Colors.white : AppColors.ink,
-                    ),
-                    selectedColor: AppColors.primary,
-                    backgroundColor: AppColors.surface,
-                    side: BorderSide(color: _source == entry.key ? AppColors.primary : AppColors.border),
-                  ),
-              ],
-            ),
+            ref.watch(orderSourcesProvider).when(
+                  loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator()),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (sources) => sources.isEmpty
+                      ? const SizedBox.shrink()
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final s in sources)
+                              ChoiceChip(
+                                label: Text(s.name),
+                                selected: _source == s.id,
+                                onSelected: (v) => setState(() => _source = v ? s.id : null),
+                                labelStyle: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12.5,
+                                  color: _source == s.id ? Colors.white : AppColors.ink,
+                                ),
+                                selectedColor: colorFromHex(s.color),
+                                backgroundColor: AppColors.surface,
+                                side: BorderSide(color: _source == s.id ? colorFromHex(s.color) : AppColors.border),
+                              ),
+                          ],
+                        ),
+                ),
             const SizedBox(height: 20),
             const _Label('Xizmat turi'),
             const SizedBox(height: 8),

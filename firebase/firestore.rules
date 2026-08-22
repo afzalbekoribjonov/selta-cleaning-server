@@ -115,6 +115,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Talab: "Manba" (marketing statistikasi) — admin panelda qo'shiladi/
+    // o'chiriladi, sotuv menejeri buyurtma yaratishda shu ro'yxatdan tanlaydi.
+    match /orderSources/{sourceId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     match /counters/{doc} {
       allow read, write: if false; // faqat createOrder tranzaksiyasi (Admin SDK)
     }

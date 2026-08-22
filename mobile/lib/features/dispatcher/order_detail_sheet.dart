@@ -71,7 +71,9 @@ class _OrderDetailSheet extends ConsumerWidget {
               Expanded(
                 child: ListView(
                   controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                  // Talab: klaviatura chiqqanda eng pastdagi inputlar
+                  // yopilib qolmasligi kerak.
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.of(context).viewInsets.bottom),
                   children: [
                     _Header(order: liveOrder),
                     const SizedBox(height: 20),

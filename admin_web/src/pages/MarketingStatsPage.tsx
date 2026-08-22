@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Megaphone, Table2 } from 'lucide-react'
+import { Megaphone, Table2, Plus, Trash2, Settings2 } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
-import { ORDER_SOURCE_CONFIG } from '@/lib/order-sources'
+import { useOrderSources } from '@/hooks/useOrderSources'
+import { ORDER_SOURCE_COLOR_SWATCHES, type OrderSource } from '@/lib/order-sources'
+import { apiPost, ApiError } from '@/lib/api'
 import { Spinner } from '@/components/ui/Spinner'
 import type { Order } from '@/lib/orders'
 
@@ -54,6 +57,14 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: { payl
 export default function MarketingStatsPage() {
   const [range, setRange] = useState<RangeKey>('week')
   const { orders, loading } = useRecentOrders()
+  const { sources } = useOrderSources()
+
+  // Bo'sh bo'lsa (birinchi marta ochilganda) boshlang'ich 5 ta manbani
+  // bir martalik, xavfsiz (idempotent) tarzda to'ldiradi — server buni
+  // faqat kolleksiya bo'sh bo'lsa amalga oshiradi.
+  useEffect(() => {
+    apiPost('/adminEnsureDefaultOrderSources', {}).catch(() => {})
+  }, [])
 
   const rows = useMemo<Row[]>(() => {
     const list: Order[] = orders ?? []
@@ -62,17 +73,17 @@ export default function MarketingStatsPage() {
 
     const tally: Record<string, number> = {}
     for (const o of inRange) {
-      const key = o.source && ORDER_SOURCE_CONFIG[o.source] ? o.source : UNKNOWN_KEY
+      const key = o.source && sources.some((s) => s.id === o.source) ? o.source : UNKNOWN_KEY
       tally[key] = (tally[key] ?? 0) + 1
     }
     const total = inRange.length
 
-    const sourceRows = Object.entries(ORDER_SOURCE_CONFIG).map(([key, cfg]) => ({
-      key,
-      label: cfg.label,
-      color: cfg.color,
-      count: tally[key] ?? 0,
-      percent: total > 0 ? ((tally[key] ?? 0) / total) * 100 : 0,
+    const sourceRows = sources.map((s) => ({
+      key: s.id,
+      label: s.name,
+      color: s.color,
+      count: tally[s.id] ?? 0,
+      percent: total > 0 ? ((tally[s.id] ?? 0) / total) * 100 : 0,
     }))
     if (tally[UNKNOWN_KEY]) {
       sourceRows.push({
@@ -84,7 +95,7 @@ export default function MarketingStatsPage() {
       })
     }
     return sourceRows.filter((r) => r.count > 0).sort((a, b) => b.count - a.count)
-  }, [orders, range])
+  }, [orders, range, sources])
 
   const totalCount = rows.reduce((s, r) => s + r.count, 0)
   const chartHeight = Math.max(rows.length * 44, 140)
@@ -111,6 +122,8 @@ export default function MarketingStatsPage() {
           </button>
         </div>
       </div>
+
+      <ManageSourcesSection sources={sources} />
 
       {loading ? (
         <Spinner className="py-16" />
@@ -165,6 +178,144 @@ export default function MarketingStatsPage() {
         </>
       )}
     </div>
+  )
+}
+
+/** Talab: manbalar admin panel orqali qo'shilishi/o'chirilishi mumkin
+ * bo'lsin — sotuv menejerining "Manba" tanlovi shu ro'yxatdan keladi. */
+function ManageSourcesSection({ sources }: { sources: OrderSource[] }) {
+  const [open, setOpen] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [name, setName] = useState('')
+  const [color, setColor] = useState(ORDER_SOURCE_COLOR_SWATCHES[0])
+  const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<OrderSource | null>(null)
+  const queryClient = useQueryClient()
+
+  const addMutation = useMutation({
+    mutationFn: () => apiPost('/adminCreateOrderSource', { name: name.trim(), color }),
+    onSuccess: () => {
+      queryClient.invalidateQueries()
+      setName('')
+      setAdding(false)
+      setError(null)
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'Xatolik yuz berdi'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (sourceId: string) => apiPost('/adminDeleteOrderSource', { sourceId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries()
+      setDeleteTarget(null)
+    },
+  })
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Settings2 size={16} className="text-brand-primary" />
+          <h2 className="font-heading font-bold text-ink">Manbalarni boshqarish</h2>
+        </div>
+        <span className="text-xs font-semibold text-gray-dark">{open ? 'Yopish' : `${sources.length} ta — ko'rsatish`}</span>
+      </button>
+
+      {open && (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {sources.map((s) => (
+              <div key={s.id} className="flex items-center gap-2 rounded-full py-1.5 pl-3 pr-1.5 text-xs font-bold text-white" style={{ backgroundColor: s.color }}>
+                {s.name}
+                <button
+                  onClick={() => setDeleteTarget(s)}
+                  className="rounded-full p-1 hover:bg-black/15"
+                  title="O'chirish"
+                  aria-label={`${s.name} manbasini o'chirish`}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+            {sources.length === 0 && <p className="text-sm text-gray-dark">Hali manba qo'shilmagan</p>}
+          </div>
+
+          {adding ? (
+            <div className="rounded-xl border border-border bg-bg p-3.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  autoFocus
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Manba nomi (masalan: TikTok)"
+                  className="min-w-[180px] flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand-primary"
+                />
+                <div className="flex items-center gap-1.5">
+                  {ORDER_SOURCE_COLOR_SWATCHES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setColor(c)}
+                      className={`h-6 w-6 rounded-full ${color === c ? 'ring-2 ring-offset-2 ring-brand-primary' : ''}`}
+                      style={{ backgroundColor: c }}
+                      aria-label={`Rang ${c}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => {
+                    setAdding(false)
+                    setError(null)
+                  }}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  onClick={() => name.trim() && addMutation.mutate()}
+                  disabled={addMutation.isPending || !name.trim()}
+                  className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  {addMutation.isPending ? '...' : 'Qoʻshish'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAdding(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-bold text-brand-primary"
+            >
+              <Plus size={14} />
+              Yangi manba qo'shish
+            </button>
+          )}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4" onClick={() => setDeleteTarget(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-surface p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm text-ink">
+              <strong>{deleteTarget.name}</strong> manbasi o'chirilsinmi? Bu manba bilan yaratilgan buyurtmalarda "Aniqlanmagan" sifatida ko'rinadi.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 rounded-xl border border-border py-2 text-sm font-bold text-ink">
+                Bekor qilish
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                disabled={deleteMutation.isPending}
+                className="flex-1 rounded-xl bg-danger py-2 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {deleteMutation.isPending ? '...' : "O'chirish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 

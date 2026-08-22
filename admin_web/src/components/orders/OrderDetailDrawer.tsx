@@ -8,8 +8,8 @@ import { STATUS_CONFIG, TARIFF_CONFIG, colorStageFor, COLOR_STAGE_HEX } from '@/
 import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { useOrderSources } from '@/hooks/useOrderSources'
 import { Spinner } from '@/components/ui/Spinner'
-import { ORDER_SOURCE_CONFIG } from '@/lib/order-sources'
 import { DeleteOrderDialog } from './DeleteOrderDialog'
 
 function formatMoney(value: number): string {
@@ -46,6 +46,49 @@ interface Comment {
   authorName?: string
   text: string
   createdAt: Date
+}
+
+// Modul darajasida (komponent ichida emas) — har renderda YANGI funksiya
+// obyekti yaratilmasligi uchun. Bu muhim: useSubcollection quyida mapper'ni
+// useEffect'ning dependency arrayiga qo'shadi; agar mapper har safar yangi
+// bo'lsa, effect har renderda qayta ishga tushib, listener'ni cheksiz
+// qayta obuna qilardi — aynan shu "Yuklanmoqda" hech qachon tugamasligi va
+// sekinlik sababi edi.
+function mapOrderItem(id: string, d: Record<string, unknown>): OrderItem {
+  return {
+    id,
+    itemNumber: (d.itemNumber as number) ?? 0,
+    name: (d.name as string) ?? '',
+    area: (d.area as number) ?? 0,
+    price: (d.price as number) ?? 0,
+    qcStatus: (d.qcStatus as string) ?? 'pending',
+    qcNote: (d.qcNote as string | undefined) ?? null,
+    status: (d.status as string | undefined) ?? null,
+    tariff: (d.tariff as string | undefined) ?? null,
+    createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? null,
+    deliveredByName: (d.deliveredByName as string | undefined) ?? null,
+  }
+}
+
+function mapStatusEvent(id: string, d: Record<string, unknown>): StatusEvent {
+  return {
+    id,
+    fromStatus: (d.fromStatus as string | null) ?? null,
+    toStatus: (d.toStatus as string) ?? '',
+    changedBy: (d.changedBy as string) ?? '',
+    changedAt: (d.changedAt as Timestamp | undefined)?.toDate() ?? new Date(),
+    note: d.note as string | undefined,
+  }
+}
+
+function mapComment(id: string, d: Record<string, unknown>): Comment {
+  return {
+    id,
+    authorId: (d.authorId as string) ?? '',
+    authorName: d.authorName as string | undefined,
+    text: (d.text as string) ?? '',
+    createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
+  }
 }
 
 function useSubcollection<T>(orderId: string, name: string, orderField: string, mapper: (id: string, data: Record<string, unknown>) => T) {
@@ -102,43 +145,18 @@ export function OrderDetailDrawer({
 }) {
   useEscapeClose(onClose)
   const employees = useEmployeesMap()
+  const { sources: orderSources } = useOrderSources()
   const order = useLiveOrder(initialOrder, (orderId) => {
     onDeleted?.(orderId)
     onClose()
   })
   const overdue = isOverdue(order)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const sourceInfo = orderSources.find((s) => s.id === order.source)
 
-  const { items, loading: itemsLoading } = useSubcollection<OrderItem>(order.id, 'items', 'itemNumber', (id, d) => ({
-    id,
-    itemNumber: (d.itemNumber as number) ?? 0,
-    name: (d.name as string) ?? '',
-    area: (d.area as number) ?? 0,
-    price: (d.price as number) ?? 0,
-    qcStatus: (d.qcStatus as string) ?? 'pending',
-    qcNote: (d.qcNote as string | undefined) ?? null,
-    status: (d.status as string | undefined) ?? null,
-    tariff: (d.tariff as string | undefined) ?? null,
-    createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? null,
-    deliveredByName: (d.deliveredByName as string | undefined) ?? null,
-  }))
-
-  const { items: history, loading: historyLoading } = useSubcollection<StatusEvent>(order.id, 'statusHistory', 'changedAt', (id, d) => ({
-    id,
-    fromStatus: (d.fromStatus as string | null) ?? null,
-    toStatus: (d.toStatus as string) ?? '',
-    changedBy: (d.changedBy as string) ?? '',
-    changedAt: (d.changedAt as Timestamp | undefined)?.toDate() ?? new Date(),
-    note: d.note as string | undefined,
-  }))
-
-  const { items: comments, loading: commentsLoading } = useSubcollection<Comment>(order.id, 'comments', 'createdAt', (id, d) => ({
-    id,
-    authorId: (d.authorId as string) ?? '',
-    authorName: d.authorName as string | undefined,
-    text: (d.text as string) ?? '',
-    createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
-  }))
+  const { items, loading: itemsLoading } = useSubcollection<OrderItem>(order.id, 'items', 'itemNumber', mapOrderItem)
+  const { items: history, loading: historyLoading } = useSubcollection<StatusEvent>(order.id, 'statusHistory', 'changedAt', mapStatusEvent)
+  const { items: comments, loading: commentsLoading } = useSubcollection<Comment>(order.id, 'comments', 'createdAt', mapComment)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-ink/40" onClick={onClose}>
@@ -149,12 +167,9 @@ export function OrderDetailDrawer({
             <div className="mt-1 flex flex-wrap gap-2">
               <StatusBadge status={order.status} />
               <TariffBadge tariff={order.tariff} />
-              {order.source && ORDER_SOURCE_CONFIG[order.source] && (
-                <span
-                  className="rounded-full px-2.5 py-1 text-xs font-bold text-white"
-                  style={{ backgroundColor: ORDER_SOURCE_CONFIG[order.source].color }}
-                >
-                  {ORDER_SOURCE_CONFIG[order.source].label}
+              {sourceInfo && (
+                <span className="rounded-full px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: sourceInfo.color }}>
+                  {sourceInfo.name}
                 </span>
               )}
             </div>

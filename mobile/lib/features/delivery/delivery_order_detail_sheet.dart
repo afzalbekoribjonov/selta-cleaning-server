@@ -141,7 +141,9 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
               Expanded(
                 child: ListView(
                   controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                  // Talab: klaviatura chiqqanda eng pastdagi inputlar
+                  // yopilib qolmasligi kerak.
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.of(context).viewInsets.bottom),
                   children: [
                     Row(
                       children: [

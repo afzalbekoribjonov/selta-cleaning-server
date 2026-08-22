@@ -5,7 +5,6 @@ import { computeDueDate, isValidTransition, isValidItemTransition, type ServiceT
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 import { computeItems, type ItemInput } from "../lib/pricing";
-import { isValidOrderSource } from "../lib/orderSources";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -78,11 +77,12 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         : [];
     const cleanEstimatedPrice = typeof estimatedPrice === "number" && estimatedPrice > 0 ? estimatedPrice : null;
 
-    // Talab: "Manba" — marketing statistikasi uchun, ixtiyoriy.
-    if (source != null && !isValidOrderSource(source)) {
-      throw new ApiError(400, "invalid-argument", "Manba qiymati noto'g'ri");
-    }
-    const cleanSource = isValidOrderSource(source) ? source : null;
+    // Talab: "Manba" — marketing statistikasi uchun, ixtiyoriy. Admin
+    // panelda dinamik ravishda boshqariladigan (orderSources kolleksiyasi)
+    // hujjat ID'si — bu yerda faqat oddiy shakl tekshiruvi, chunki har
+    // safar yaratishda alohida Firestore o'qish shart emas (client faqat
+    // o'zining jonli ro'yxatidan tanlagan qiymatni yuboradi).
+    const cleanSource = typeof source === "string" && source.trim().length > 0 && source.length <= 100 ? source.trim() : null;
 
     let computedItems: Awaited<ReturnType<typeof computeItems>> = [];
     if (!isOnsite && Array.isArray(items) && items.length > 0) {

@@ -89,7 +89,9 @@ class _TeamAssignSheetState extends ConsumerState<_TeamAssignSheet> {
               const SizedBox(height: 10),
               Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                // Talab: klaviatura chiqqanda eng pastdagi inputlar
+                // yopilib qolmasligi kerak.
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 8 + MediaQuery.of(context).viewInsets.bottom),
                 child: Text('Jamoa biriktirish', style: Theme.of(context).textTheme.titleLarge),
               ),
               Expanded(

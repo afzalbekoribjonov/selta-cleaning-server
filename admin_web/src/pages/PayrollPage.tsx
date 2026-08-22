@@ -6,6 +6,8 @@ import { SALARY_METHODS } from '@/lib/salary-methods'
 import { DEPARTMENTS } from '@/lib/departments'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
+import { useAllOrderItems } from '@/hooks/useAllOrderItems'
+import { computeEmployeeActivity, rangeStart, type ActivityRow, type RangeKey } from '@/lib/employee-activity'
 import { Spinner } from '@/components/ui/Spinner'
 
 function formatMoney(value: number): string {
@@ -127,84 +129,146 @@ export default function PayrollPage() {
   )
 }
 
+type DeptTab = 'delivery' | 'worker' | 'dispatcher'
+const DEPT_TABS: { key: DeptTab; label: string }[] = [
+  { key: 'delivery', label: 'Dastavchik' },
+  { key: 'worker', label: 'Ishchi' },
+  { key: 'dispatcher', label: 'Sotuv menejeri' },
+]
+const RANGE_TABS: { key: RangeKey; label: string }[] = [
+  { key: 'day', label: 'Kunlik' },
+  { key: 'week', label: 'Haftalik' },
+  { key: 'month', label: 'Oylik' },
+]
+
+function primaryMetric(dept: DeptTab, r: ActivityRow): number {
+  if (dept === 'delivery') return r.pickedUpCount + r.deliveredCount
+  if (dept === 'worker') return r.washedCount + r.qcCount
+  return r.ordersCreated
+}
+
+/**
+ * Talab: "Eng faol xodimlar" — bo'lim va davr (kunlik/haftalik/oylik)
+ * bo'yicha filtrlanadigan to'liq ko'rinish. Dashboard'dagi EmployeeActivityChart
+ * bilan bir xil hisoblash manbasi (computeEmployeeActivity) — faqat u
+ * yerda faqat "kunlik" ko'rsatiladi, bu yerda hammasi.
+ */
 function MostActiveSection() {
+  const [dept, setDept] = useState<DeptTab>('delivery')
+  const [range, setRange] = useState<RangeKey>('day')
   const { orders, loading } = useRecentOrders()
   const employees = useEmployeesMap()
 
-  const stats = useMemo(() => {
-    const list = orders ?? []
-    const countByEquality = (key: 'createdBy') => {
-      const tally: Record<string, number> = {}
-      for (const o of list) {
-        const id = o[key]
-        if (!id) continue
-        tally[id] = (tally[id] ?? 0) + 1
-      }
-      return Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 5)
-    }
-    // Pickup buyurtmalarda yuvish/yetkazish item-darajasida — bir
-    // buyurtmada bir nechta xodim qatnashishi mumkin, shuning uchun
-    // massiv bo'yicha sanaladi (onsite uchun ham ishlaydi, chunki
-    // changeOrderStatus done bosqichida ham shu massivga yozadi).
-    const countByArray = (key: 'washedByEmployees' | 'deliveredByEmployees') => {
-      const tally: Record<string, number> = {}
-      for (const o of list) {
-        for (const id of o[key]) tally[id] = (tally[id] ?? 0) + 1
-      }
-      return Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 5)
-    }
-    return {
-      dispatcher: countByEquality('createdBy'),
-      worker: countByArray('washedByEmployees'),
-      delivery: countByArray('deliveredByEmployees'),
-    }
-  }, [orders])
+  const pickupOrderIds = useMemo(() => (orders ?? []).filter((o) => o.serviceType === 'pickup').map((o) => o.id), [orders])
+  const itemsByOrder = useAllOrderItems(pickupOrderIds)
+
+  const rows = useMemo(() => {
+    const start = rangeStart(range)
+    const end = new Date()
+    end.setDate(end.getDate() + 1)
+    const activity = computeEmployeeActivity(orders ?? [], itemsByOrder, employees, start, end)
+    return Object.values(activity)
+      .filter((r) => primaryMetric(dept, r) > 0)
+      .sort((a, b) => primaryMetric(dept, b) - primaryMetric(dept, a))
+  }, [orders, itemsByOrder, employees, dept, range])
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-      <div className="mb-4 flex items-center gap-2">
-        <TrendingUp size={18} className="text-brand-primary" />
-        <h2 className="font-heading font-bold text-ink">Eng faol xodimlar (so'nggi buyurtmalar bo'yicha)</h2>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={18} className="text-brand-primary" />
+          <h2 className="font-heading font-bold text-ink">Eng faol xodimlar</h2>
+        </div>
+        <div className="flex rounded-xl border border-border bg-bg p-1">
+          {RANGE_TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setRange(t.key)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                range === t.key ? 'bg-brand-primary text-white' : 'text-ink/70 hover:text-ink'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
+      <div className="mb-4 flex gap-2">
+        {DEPT_TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setDept(t.key)}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors ${
+              dept === t.key ? 'bg-brand-primary text-white' : 'bg-bg text-ink/70 hover:text-ink'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
-        <Spinner className="py-4" />
+        <Spinner className="py-8" />
+      ) : rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-dark">Bu davrda faollik yo'q</p>
       ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <ActivityColumn title="Sotuv menejeri — buyurtma yaratgan" rows={stats.dispatcher} employees={employees} />
-          <ActivityColumn title="Ishchi — yuvgan" rows={stats.worker} employees={employees} />
-          <ActivityColumn title="Dastavchik — yetkazgan" rows={stats.delivery} employees={employees} />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-gray-dark">
+                <th className="px-3 py-2 font-semibold">Xodim</th>
+                {dept === 'delivery' && (
+                  <>
+                    <th className="px-3 py-2 text-right font-semibold">Sexga olib keldi</th>
+                    <th className="px-3 py-2 text-right font-semibold">Yetgazdi</th>
+                  </>
+                )}
+                {dept === 'worker' && (
+                  <>
+                    <th className="px-3 py-2 text-right font-semibold">Yuvgan</th>
+                    <th className="px-3 py-2 text-right font-semibold">Ishlov bergan (upakovka)</th>
+                  </>
+                )}
+                {dept === 'dispatcher' && (
+                  <>
+                    <th className="px-3 py-2 text-right font-semibold">Buyurtmalar</th>
+                    <th className="px-3 py-2 text-right font-semibold">Summa</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.employeeId} className="border-b border-border last:border-0">
+                  <td className="px-3 py-2.5 font-semibold text-ink">{r.name}</td>
+                  {dept === 'delivery' && (
+                    <>
+                      <td className="px-3 py-2.5 text-right text-ink">
+                        {r.pickedUpCount} ta <span className="text-xs text-gray-dark">({formatMoney(r.pickedUpTotal)})</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-ink">
+                        {r.deliveredCount} ta <span className="text-xs text-gray-dark">({formatMoney(r.deliveredTotal)})</span>
+                      </td>
+                    </>
+                  )}
+                  {dept === 'worker' && (
+                    <>
+                      <td className="px-3 py-2.5 text-right font-bold text-ink">{r.washedCount} ta</td>
+                      <td className="px-3 py-2.5 text-right font-bold text-ink">{r.qcCount} ta</td>
+                    </>
+                  )}
+                  {dept === 'dispatcher' && (
+                    <>
+                      <td className="px-3 py-2.5 text-right font-bold text-ink">{r.ordersCreated} ta</td>
+                      <td className="px-3 py-2.5 text-right font-bold text-brand-primary">{formatMoney(r.ordersCreatedTotal)}</td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
-  )
-}
-
-function ActivityColumn({
-  title,
-  rows,
-  employees,
-}: {
-  title: string
-  rows: [string, number][]
-  employees: Record<string, string>
-}) {
-  return (
-    <div>
-      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-dark">{title}</h3>
-      {rows.length === 0 ? (
-        <p className="text-sm text-gray-dark">Ma'lumot yo'q</p>
-      ) : (
-        <ol className="space-y-1.5">
-          {rows.map(([id, n], i) => (
-            <li key={id} className="flex items-center justify-between text-sm">
-              <span className="text-ink">
-                {i + 1}. {employees[id] ?? "Noma'lum xodim"}
-              </span>
-              <span className="font-bold text-brand-primary">{n}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
   )
 }

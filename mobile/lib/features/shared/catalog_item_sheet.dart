@@ -286,7 +286,10 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
               Expanded(
                 child: ListView(
                   controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                  // Talab: klaviatura chiqqanda eng pastdagi inputlar
+                  // (narx, saqlash tugmasi) yopilib qolmasligi kerak —
+                  // pastki bo'shliq klaviatura balandligiga qarab oshadi.
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.of(context).viewInsets.bottom),
                   children: [
                     Row(
                       children: [

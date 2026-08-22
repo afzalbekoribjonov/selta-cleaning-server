@@ -183,14 +183,3 @@ const Map<ColorStage, Color> kColorStageColors = {
   ColorStage.red: AppColors.danger,
 };
 
-/// Buyurtma "Manba"si (talab: marketing statistikasi) — sotuv menejeri
-/// buyurtma yaratishda ixtiyoriy ravishda tanlaydi. server/src/lib/
-/// orderSources.ts va admin_web/src/lib/order-sources.ts bilan bir xil
-/// kalitlar.
-const Map<String, String> kOrderSourceConfig = {
-  'instagram': 'Instagram',
-  'telegram': 'Telegram',
-  'referral': 'Tanish orqali',
-  'car_branding': 'Mashina brandi',
-  'ad_banner': 'Reklama banneri',
-};

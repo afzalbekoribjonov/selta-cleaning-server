@@ -1,12 +1,31 @@
+import { collection, onSnapshot, orderBy, query, type QueryDocumentSnapshot, type DocumentData } from 'firebase/firestore'
+import { db } from './firebase'
+
 /**
- * Buyurtma "Manba"si (talab: marketing statistikasi) — server/src/lib/
- * orderSources.ts va mobile/lib/core/constants.dart bilan bir xil
- * kalitlar.
+ * Buyurtma "Manba"si (talab: marketing statistikasi) — endi admin panel
+ * orqali qo'shiladi/o'chiriladi (avval qattiq kodlangan 5 ta variant
+ * edi). mobile/lib/core/services/catalog_repository.dart (orderSourcesProvider)
+ * bilan bir xil kolleksiya.
  */
-export const ORDER_SOURCE_CONFIG: Record<string, { label: string; color: string }> = {
-  instagram: { label: 'Instagram', color: '#C13584' },
-  telegram: { label: 'Telegram', color: '#229ED9' },
-  referral: { label: 'Tanish orqali', color: '#1E9E5A' },
-  car_branding: { label: 'Mashina brandi', color: '#8C5AC3' },
-  ad_banner: { label: 'Reklama banneri', color: '#CA8A04' },
+export interface OrderSource {
+  id: string
+  name: string
+  color: string
 }
+
+function toOrderSource(doc: QueryDocumentSnapshot<DocumentData>): OrderSource {
+  const data = doc.data()
+  return { id: doc.id, name: data.name ?? '', color: data.color ?? '#7A7482' }
+}
+
+export function subscribeOrderSources(callback: (sources: OrderSource[]) => void) {
+  const q = query(collection(db, 'orderSources'), orderBy('name'))
+  return onSnapshot(q, (snap) => callback(snap.docs.map(toOrderSource)))
+}
+
+/**
+ * Yangi manba qo'shishda tanlash uchun — CVD-xavfsizligi
+ * `validate_palette.js --pairs all` bilan tekshirilgan (hammasi birga
+ * ishlatilganda ham bir-biridan ajralib turadi).
+ */
+export const ORDER_SOURCE_COLOR_SWATCHES = ['#C13584', '#229ED9', '#1E9E5A', '#8C5AC3', '#CA8A04']

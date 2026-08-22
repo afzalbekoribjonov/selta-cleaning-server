@@ -1,67 +1,65 @@
 import { useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Activity } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Activity, ArrowRight } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
+import { useAllOrderItems } from '@/hooks/useAllOrderItems'
+import { computeEmployeeActivity, startOfToday, type ActivityRow } from '@/lib/employee-activity'
 import { Spinner } from '@/components/ui/Spinner'
-import type { Order } from '@/lib/orders'
 
-type DeptKey = 'createdBy' | 'washedBy' | 'deliveredBy'
+type DeptKey = 'delivery' | 'worker' | 'dispatcher'
 
 const TABS: { key: DeptKey; label: string }[] = [
-  { key: 'createdBy', label: 'Sotuv menejeri' },
-  { key: 'washedBy', label: 'Ishchi' },
-  { key: 'deliveredBy', label: 'Dastavchik' },
+  { key: 'delivery', label: 'Dastavchik' },
+  { key: 'worker', label: 'Ishchi' },
+  { key: 'dispatcher', label: 'Sotuv menejeri' },
 ]
 
-interface Row {
-  name: string
-  count: number
+function formatMoney(value: number): string {
+  return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
 }
 
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: { payload: Row }[] }) {
-  if (!active || !payload?.length) return null
-  const row = payload[0].payload
-  return (
-    <div className="rounded-xl border border-border bg-surface px-3.5 py-2.5 shadow-lg">
-      <div className="text-xs font-bold text-ink">{row.name}</div>
-      <div className="mt-0.5 text-sm font-extrabold text-brand-primary">{row.count} ta buyurtma</div>
-    </div>
-  )
+/** Har bir tabga tegishli birlamchi ko'rsatkich — saralash uchun. */
+function primaryMetric(dept: DeptKey, r: ActivityRow): number {
+  if (dept === 'delivery') return r.pickedUpCount + r.deliveredCount
+  if (dept === 'worker') return r.washedCount + r.qcCount
+  return r.ordersCreated
+}
+
+function hasActivity(dept: DeptKey, r: ActivityRow): boolean {
+  return primaryMetric(dept, r) > 0
 }
 
 /**
- * So'nggi (bounded) buyurtmalar oynasi bo'yicha bo'lim tabi orqali
- * almashtiriladigan eng faol xodimlar diagrammasi — talab: "belgilashlar
- * orqali statistikalarni ko'ra oladigan" zamonaviy ko'rinish.
+ * "Eng faol xodimlar" — Dashboard'da faqat BUGUNGI faollik (talab:
+ * "Kunlik qismi Boshqaruv panelida chiqib tursin"), ism-familiya bilan,
+ * bo'lim bo'yicha tab. Haftalik/oylik va filtrlanadigan to'liq ko'rinish
+ * "Maosh va statistika" sahifasida (EmployeeActivitySection).
  */
 export function EmployeeActivityChart() {
-  const [tab, setTab] = useState<DeptKey>('createdBy')
-  const { orders, loading } = useRecentOrders()
+  const [tab, setTab] = useState<DeptKey>('delivery')
+  const { orders, loading: ordersLoading } = useRecentOrders()
   const employees = useEmployeesMap()
 
-  const rows = useMemo<Row[]>(() => {
-    const list: Order[] = orders ?? []
-    const tally: Record<string, number> = {}
-    for (const o of list) {
-      const id = o[tab]
-      if (!id) continue
-      tally[id] = (tally[id] ?? 0) + 1
-    }
-    return Object.entries(tally)
-      .map(([id, count]) => ({ name: employees[id] ?? "Noma'lum xodim", count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6)
-  }, [orders, tab, employees])
+  const pickupOrderIds = useMemo(() => (orders ?? []).filter((o) => o.serviceType === 'pickup').map((o) => o.id), [orders])
+  const itemsByOrder = useAllOrderItems(pickupOrderIds)
 
-  const chartHeight = Math.max(rows.length * 42, 120)
+  const rows = useMemo(() => {
+    const start = startOfToday()
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000)
+    const activity = computeEmployeeActivity(orders ?? [], itemsByOrder, employees, start, end)
+    return Object.values(activity)
+      .filter((r) => hasActivity(tab, r))
+      .sort((a, b) => primaryMetric(tab, b) - primaryMetric(tab, a))
+      .slice(0, 8)
+  }, [orders, itemsByOrder, employees, tab])
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
       <div className="mb-1 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity size={18} className="text-brand-primary" />
-          <h2 className="font-heading font-bold text-ink">Eng faol xodimlar</h2>
+          <h2 className="font-heading font-bold text-ink">Eng faol xodimlar — bugun</h2>
         </div>
         <div className="flex rounded-xl border border-border bg-bg p-1">
           {TABS.map((t) => (
@@ -77,30 +75,51 @@ export function EmployeeActivityChart() {
           ))}
         </div>
       </div>
-      <p className="mb-4 text-xs text-gray-dark">So'nggi buyurtmalar bo'yicha (real-vaqtli oyna)</p>
+      <p className="mb-4 text-xs text-gray-dark">Bugungi kun bo'yicha, real-vaqtli</p>
 
-      {loading ? (
-        <Spinner className="py-16" />
+      {ordersLoading ? (
+        <Spinner className="py-12" />
       ) : rows.length === 0 ? (
-        <p className="py-10 text-center text-sm text-gray-dark">Ma'lumot yo'q</p>
+        <p className="py-8 text-center text-sm text-gray-dark">Bugun hali faollik yo'q</p>
       ) : (
-        <ResponsiveContainer width="100%" height={chartHeight}>
-          <BarChart data={rows} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }} barCategoryGap="30%">
-            <CartesianGrid horizontal={false} stroke="var(--color-border)" strokeDasharray="3 3" />
-            <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: 'var(--color-gray-dark)', fontSize: 11 }} allowDecimals={false} />
-            <YAxis
-              type="category"
-              dataKey="name"
-              axisLine={false}
-              tickLine={false}
-              width={110}
-              tick={{ fill: 'var(--color-ink)', fontSize: 12, fontWeight: 600 }}
-            />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--color-bg)' }} />
-            <Bar dataKey="count" fill="var(--color-brand-primary)" radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="space-y-2">
+          {rows.map((r) => (
+            <div key={r.employeeId} className="rounded-xl bg-bg p-3.5">
+              <div className="font-bold text-ink">{r.name}</div>
+              {tab === 'delivery' && (
+                <div className="mt-1 space-y-0.5 text-xs text-gray-dark">
+                  <div>
+                    Sexga olib keldi: <span className="font-bold text-ink">{r.pickedUpCount} ta buyurtma</span> ({formatMoney(r.pickedUpTotal)})
+                  </div>
+                  <div>
+                    Yetgazdi: <span className="font-bold text-ink">{r.deliveredCount} ta mahsulot</span> ({formatMoney(r.deliveredTotal)})
+                  </div>
+                </div>
+              )}
+              {tab === 'worker' && (
+                <div className="mt-1 space-y-0.5 text-xs text-gray-dark">
+                  <div>
+                    Yuvgan: <span className="font-bold text-ink">{r.washedCount} ta mahsulot</span>
+                  </div>
+                  <div>
+                    Ishlov bergan (upakovka): <span className="font-bold text-ink">{r.qcCount} ta mahsulot</span>
+                  </div>
+                </div>
+              )}
+              {tab === 'dispatcher' && (
+                <div className="mt-1 text-xs text-gray-dark">
+                  <span className="font-bold text-ink">{r.ordersCreated} ta buyurtma</span> ({formatMoney(r.ordersCreatedTotal)})
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
+
+      <Link to="/payroll" className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold text-brand-primary hover:underline">
+        Haftalik/oylik statistikani ko'rish
+        <ArrowRight size={13} />
+      </Link>
     </section>
   )
 }

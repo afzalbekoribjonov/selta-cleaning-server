@@ -101,6 +101,16 @@ const Map<String, TariffInfo> kTariffConfig = {
 TariffInfo tariffOf(String? tariff) =>
     kTariffConfig[tariff] ?? kTariffConfig['standart']!;
 
+/// "#RRGGBB" ko'rinishidagi satrni Color'ga aylantiradi — admin panelda
+/// dinamik ravishda boshqariladigan ranglar (masalan buyurtma "Manba"si)
+/// uchun. Noto'g'ri qiymatda neytral kulrang qaytadi.
+Color colorFromHex(String hex) {
+  final clean = hex.replaceAll('#', '');
+  final value = int.tryParse(clean, radix: 16);
+  if (value == null || clean.length != 6) return AppColors.grayDark;
+  return Color(0xFF000000 | value);
+}
+
 class AppTheme {
   AppTheme._();
 
