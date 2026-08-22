@@ -107,6 +107,8 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           specializations: data.specializations ?? [],
           canPack: data.canPack ?? false,
           canCreateOrders: data.canCreateOrders ?? false,
+          attendanceEnabled: data.attendanceEnabled ?? false,
+          attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
           terminatedAt: data.terminatedAt?.toDate?.().toISOString() ?? null,
         };

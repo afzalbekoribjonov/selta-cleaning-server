@@ -9,6 +9,7 @@ import { productsRouter } from "./routes/products";
 import { expensesRouter } from "./routes/expenses";
 import { tasksRouter } from "./routes/tasks";
 import { orderSourcesRouter } from "./routes/orderSources";
+import { attendanceRouter } from "./routes/attendance";
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use("/", productsRouter);
 app.use("/", expensesRouter);
 app.use("/", tasksRouter);
 app.use("/", orderSourcesRouter);
+app.use("/", attendanceRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 8080;
 app.listen(port, () => {

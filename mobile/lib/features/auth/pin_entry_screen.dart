@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/employee_repository.dart';
 import '../../core/widgets/selta_loader.dart';
 
 /// Xodim ismini tanlagach ko'rsatiladigan 4 xonali PIN ekrani (talab #2).
@@ -43,10 +47,30 @@ class _PinEntryScreenState extends ConsumerState<PinEntryScreen> {
     setState(() => _pin = _pin.substring(0, _pin.length - 1));
   }
 
+  /// Talab: "Ilovaga kirilgach, GPS ma'lumotlari uchun darhol ruxsat
+  /// so'ralishi kerak (agar yo'q bo'lsa)" — faqat davomat nazoratiga
+  /// kiritilgan xodimlar uchun (boshqalarga keraksiz ruxsat so'ralmaydi).
+  /// Login oqimini ushlab turmasligi uchun navigatsiyadan keyin, fonda
+  /// ishga tushiriladi.
+  Future<void> _requestLocationPermissionIfNeeded() async {
+    try {
+      final employee = await ref.read(currentEmployeeProvider.future);
+      if (employee?['attendanceEnabled'] != true) return;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+    } catch (_) {
+      // Sokin — bu shunchaki qulaylik uchun oldindan so'rash, keyinroq
+      // davomat oynasida ham qayta tekshiriladi.
+    }
+  }
+
   Future<void> _submit() async {
     setState(() => _checking = true);
     try {
       await ref.read(authServiceProvider).loginWithPin(employeeId: widget.employeeId, pin: _pin);
+      unawaited(_requestLocationPermissionIfNeeded());
       if (!mounted) return;
       context.go('/home');
     } catch (e) {

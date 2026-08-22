@@ -126,6 +126,15 @@ service cloud.firestore {
       allow read, write: if false; // faqat createOrder tranzaksiyasi (Admin SDK)
     }
 
+    // Talab: "Davomat nazorati" — xodimning joylashuvi qayd etiladi, shuning
+    // uchun faqat admin ko'ra oladi (xodimlarning o'zi ham emas). Yozish
+    // faqat server orqali (submitAttendanceCheckin — masofa/vaqt oynasi
+    // tekshiruvi bilan).
+    match /attendanceRecords/{recordId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // --- expenses ---------------------------------------------------------
     // Moliyaviy ma'lumot — faqat admin ko'radi va yozadi (xodimlar buni
     // umuman ko'rmaydi). Yozish baribir server orqali, boshqa yozuvlar bilan

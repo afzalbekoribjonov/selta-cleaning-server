@@ -13,6 +13,7 @@ const MonthlyReportPage = lazy(() => import('@/pages/MonthlyReportPage'))
 const ExpensesPage = lazy(() => import('@/pages/ExpensesPage'))
 const ProductsPage = lazy(() => import('@/pages/ProductsPage'))
 const MarketingStatsPage = lazy(() => import('@/pages/MarketingStatsPage'))
+const AttendancePage = lazy(() => import('@/pages/AttendancePage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 
@@ -49,6 +50,7 @@ export default function App() {
                     <Route path="expenses" element={<ExpensesPage />} />
                     <Route path="products" element={<ProductsPage />} />
                     <Route path="marketing" element={<MarketingStatsPage />} />
+                    <Route path="attendance" element={<AttendancePage />} />
                     <Route path="settings" element={<SettingsPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>

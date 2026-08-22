@@ -9,6 +9,7 @@ import {
   Receipt,
   Package,
   Megaphone,
+  CalendarCheck,
   Settings,
   Menu,
   X,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/expenses', label: 'Chiqimlar', icon: Receipt },
   { to: '/products', label: 'Mahsulotlar', icon: Package },
   { to: '/marketing', label: 'Marketing statistikasi', icon: Megaphone },
+  { to: '/attendance', label: 'Davomat nazorati', icon: CalendarCheck },
   { to: '/settings', label: 'Sozlamalar', icon: Settings },
 ]
 
