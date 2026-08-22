@@ -27,15 +27,21 @@ export function StatCard({
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-surface p-5 flex items-center gap-4 shadow-sm">
-      <div className={cn('flex h-11 w-11 items-center justify-center rounded-xl', toneClasses[tone])}>
+    <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', toneClasses[tone])}>
         <Icon size={20} />
       </div>
-      <div>
-        <div className="text-2xl font-heading font-extrabold text-ink leading-tight">
+      {/* `min-w-0` — flex bolasi standart holatda o'z mazmuni kengligidan
+          kichraya olmaydi, shuning uchun uzun matn (masalan "Belgilanmagan")
+          tor mobil grid katakchasida kartani chetga chiqarib yuborardi. */}
+      <div className="min-w-0">
+        <div
+          className="truncate text-2xl font-heading font-extrabold text-ink leading-tight"
+          title={typeof value === 'string' ? value : undefined}
+        >
           {numericValue != null ? <AnimatedNumber value={numericValue} format={format} /> : value}
         </div>
-        <div className="text-sm text-gray-dark">{label}</div>
+        <div className="truncate text-sm text-gray-dark">{label}</div>
       </div>
     </div>
   )

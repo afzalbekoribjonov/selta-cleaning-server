@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { ClipboardList, Clock, TrendingUp, AlertTriangle } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
-import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
+import { StatusBadge, TariffDots } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
-import { isOverdue, type Order } from '@/lib/orders'
+import { useAllOrderItems } from '@/hooks/useAllOrderItems'
+import { type Order } from '@/lib/orders'
+import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
 import { formatDateUz } from '@/lib/date-utils'
 import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
 import { RevenueTrendChart } from '@/components/dashboard/RevenueTrendChart'
@@ -25,23 +27,29 @@ export default function DashboardPage() {
   const { orders, loading } = useRecentOrders()
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
+  // Talab: pickup buyurtmalarda tarif/muddat item-darajasida — "Kechikkan
+  // buyurtmalar" hisoblagichi va jadvaldagi Muddat ustuni to'g'ri
+  // ishlashi uchun itemlarni ham kuzatish kerak.
+  const pickupOrderIds = useMemo(() => (orders ?? []).filter((o) => o.serviceType === 'pickup').map((o) => o.id), [orders])
+  const itemsByOrder = useAllOrderItems(pickupOrderIds)
+
   const stats = useMemo(() => {
     const list = orders ?? []
     const active = list.filter((o) => o.status !== 'done')
     const today = list.filter((o) => isToday(o.createdAt))
     const todayRevenue = today.reduce((sum, o) => sum + (o.totalPrice || 0), 0)
-    const overdue = active.filter(isOverdue)
+    const overdue = active.filter((o) => isOrderOverdue(o, itemsByOrder[o.id] ?? []))
     return { activeCount: active.length, todayCount: today.length, todayRevenue, overdueCount: overdue.length, active }
-  }, [orders])
+  }, [orders, itemsByOrder])
 
   const activeSorted = useMemo(() => {
     return [...stats.active].sort((a, b) => {
-      const aOverdue = isOverdue(a)
-      const bOverdue = isOverdue(b)
+      const aOverdue = isOrderOverdue(a, itemsByOrder[a.id] ?? [])
+      const bOverdue = isOrderOverdue(b, itemsByOrder[b.id] ?? [])
       if (aOverdue !== bOverdue) return aOverdue ? -1 : 1
       return b.createdAt.getTime() - a.createdAt.getTime()
     })
-  }, [stats.active])
+  }, [stats.active, itemsByOrder])
 
   return (
     <div className="space-y-8">
@@ -101,7 +109,9 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {activeSorted.slice(0, 20).map((o) => {
-                  const overdue = isOverdue(o)
+                  const items = itemsByOrder[o.id] ?? []
+                  const overdue = isOrderOverdue(o, items)
+                  const dueDate = effectiveDueDate(o, items)
                   return (
                     <tr key={o.id} onClick={() => setSelectedOrder(o)} className="cursor-pointer border-b border-border last:border-0 hover:bg-bg">
                       <td className="px-5 py-3 font-semibold text-ink">#{o.orderNumber}</td>
@@ -110,10 +120,10 @@ export default function DashboardPage() {
                         <StatusBadge status={o.status} />
                       </td>
                       <td className="px-5 py-3">
-                        <TariffBadge tariff={o.tariff} />
+                        <TariffDots tariffs={distinctTariffs(o, items)} />
                       </td>
                       <td className={`px-5 py-3 font-semibold ${overdue ? 'text-danger' : 'text-ink'}`}>
-                        {o.dueDate ? formatDateUz(o.dueDate) : '—'}
+                        {dueDate ? formatDateUz(dueDate) : '—'}
                         {overdue && ' · kechikmoqda'}
                       </td>
                     </tr>

@@ -25,3 +25,20 @@ export function TariffBadge({ tariff }: { tariff: string | null }) {
     </span>
   )
 }
+
+/**
+ * Buyurtma ro'yxatlarida (ustun torligi tufayli) tarif nomlarini emas,
+ * har bir mavjud tarifning o'z rangidagi bitta yumaloq nuqtasini
+ * ko'rsatadi — talab: "yumaloq shaklda... bitta turishi yetarli".
+ */
+export function TariffDots({ tariffs }: { tariffs: string[] }) {
+  if (tariffs.length === 0) return <span className="text-gray-dark">—</span>
+  return (
+    <div className="flex items-center gap-1">
+      {tariffs.map((t) => {
+        const info = TARIFF_CONFIG[t] ?? TARIFF_CONFIG.standart
+        return <span key={t} title={info.label} className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: info.color }} />
+      })}
+    </div>
+  )
+}

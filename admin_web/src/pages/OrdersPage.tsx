@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Search, AlertTriangle } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
-import { fetchOrdersPage, isOverdue, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
+import { useAllOrderItems } from '@/hooks/useAllOrderItems'
+import { fetchOrdersPage, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
+import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
 import { STATUS_CONFIG } from '@/lib/status-config'
-import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
+import { StatusBadge, TariffDots } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatDateUz } from '@/lib/date-utils'
 import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
@@ -62,6 +64,11 @@ export default function OrdersPage() {
 
   const baseOrders = view === 'active' ? (recentOrders ?? []).filter((o) => o.status !== 'done') : allOrders
 
+  // Talab: pickup buyurtmalarda tarif/muddat item-darajasida — ro'yxatda
+  // to'g'ri ko'rsatish uchun har bir buyurtmaning itemlarini kuzatish kerak.
+  const pickupOrderIds = useMemo(() => baseOrders.filter((o) => o.serviceType === 'pickup').map((o) => o.id), [baseOrders])
+  const itemsByOrder = useAllOrderItems(pickupOrderIds)
+
   const filtered = useMemo(() => {
     let list = baseOrders
     const q = search.trim().toLowerCase()
@@ -80,7 +87,7 @@ export default function OrdersPage() {
         return ym === monthFilter
       })
     }
-    if (overdueOnly) list = list.filter(isOverdue)
+    if (overdueOnly) list = list.filter((o) => isOrderOverdue(o, itemsByOrder[o.id] ?? []))
 
     list = [...list].sort((a, b) => {
       switch (sortBy) {
@@ -95,7 +102,7 @@ export default function OrdersPage() {
       }
     })
     return list
-  }, [baseOrders, search, statusFilter, monthFilter, overdueOnly, sortBy])
+  }, [baseOrders, search, statusFilter, monthFilter, overdueOnly, sortBy, itemsByOrder])
 
   return (
     <div className="space-y-6">
@@ -199,7 +206,9 @@ export default function OrdersPage() {
               </thead>
               <tbody>
                 {filtered.map((o) => {
-                  const overdue = isOverdue(o)
+                  const items = itemsByOrder[o.id] ?? []
+                  const overdue = isOrderOverdue(o, items)
+                  const dueDate = effectiveDueDate(o, items)
                   return (
                     <tr
                       key={o.id}
@@ -213,13 +222,13 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-5 py-3 text-ink">{o.serviceType === 'onsite' ? 'Joyida yuvish' : 'Olib kelish'}</td>
                       <td className="px-5 py-3">
-                        <TariffBadge tariff={o.tariff} />
+                        <TariffDots tariffs={distinctTariffs(o, items)} />
                       </td>
                       <td className="px-5 py-3">
                         <StatusBadge status={o.status} />
                       </td>
                       <td className={`px-5 py-3 font-semibold ${overdue ? 'text-danger' : 'text-ink'}`}>
-                        {o.dueDate ? formatDateUz(o.dueDate) : '—'}
+                        {dueDate ? formatDateUz(dueDate) : '—'}
                         {overdue && ' · kechikmoqda'}
                       </td>
                       <td className="px-5 py-3 text-right font-extrabold text-brand-primary">{formatMoney(o.totalPrice)}</td>

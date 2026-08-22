@@ -225,7 +225,7 @@ export default function EmployeeDetailPage() {
         <StatCard
           icon={Wallet}
           label="Maosh usuli"
-          value={employee.salary?.method ? SALARY_METHODS[employee.salary.method]?.label ?? employee.salary.method : 'Belgilanmagan'}
+          value={employee.salary?.method ? SALARY_METHODS[employee.salary.method]?.label ?? employee.salary.method : "Yo'q"}
           tone="warning"
         />
       </div>

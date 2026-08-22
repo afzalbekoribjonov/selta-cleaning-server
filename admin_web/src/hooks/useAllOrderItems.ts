@@ -5,6 +5,9 @@ import { db } from '@/lib/firebase'
 export interface StatsItem {
   id: string
   price: number
+  status?: string
+  tariff?: string
+  dueDate?: Date
   washedBy?: string
   washedAt?: Date
   qcBy?: string
@@ -17,6 +20,9 @@ function toStatsItem(id: string, d: Record<string, unknown>): StatsItem {
   return {
     id,
     price: (d.price as number) ?? 0,
+    status: d.status as string | undefined,
+    tariff: d.tariff as string | undefined,
+    dueDate: (d.dueDate as Timestamp | undefined)?.toDate(),
     washedBy: d.washedBy as string | undefined,
     washedAt: (d.washedAt as Timestamp | undefined)?.toDate(),
     qcBy: d.qcBy as string | undefined,
