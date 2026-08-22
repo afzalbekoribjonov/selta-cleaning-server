@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { PlusCircle } from 'lucide-react'
-import { apiPost } from '@/lib/api'
+import { apiPost, ApiError } from '@/lib/api'
 import { type Employee } from '@/lib/employees'
 
 /**
@@ -9,17 +10,41 @@ import { type Employee } from '@/lib/employees'
  * buyurtma ochish imkoniyatini berish. Sotuv menejerida bu huquq
  * bo'limining o'zidan kelib chiqadi, shuning uchun ular uchun
  * ko'rsatilmaydi (EmployeeDetailPage shu shartda chaqiradi).
+ *
+ * Tugma bosilganda darrov (optimistik) almashadi — `employee` prop
+ * `['employees']` so'rovi qayta yuklangunga qadar hali eski qiymatni
+ * ko'rsatib turadi, shuning uchun mahalliy holat kerak. Refetch tugagach
+ * (invalidateQueries'ning o'zi shu va'dani beradi) mahalliy holat
+ * tozalanadi — bu orada "eski qiymatga bir lahzaga qaytib, keyin
+ * qaytadan yangilanish" (miltillash) yuz bermasligi uchun tozalash
+ * refetch tugashini kutadi, natijada darrov emas.
  */
 export function OrderPermissionSection({ employee }: { employee: Employee }) {
   const queryClient = useQueryClient()
   const terminated = employee.status !== 'active'
+  const [optimistic, setOptimistic] = useState<boolean | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
     mutationFn: (value: boolean) => apiPost('/adminSetEmployeeOrderPermission', { employeeId: employee.id, canCreateOrders: value }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employees'] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['employees'] })
+      setOptimistic(null)
+    },
+    onError: (err) => {
+      setOptimistic(null)
+      setError(err instanceof ApiError ? err.message : 'Xatolik yuz berdi')
+    },
   })
 
-  const enabled = employee.canCreateOrders
+  const enabled = optimistic ?? employee.canCreateOrders
+
+  function handleToggle() {
+    setError(null)
+    const next = !enabled
+    setOptimistic(next)
+    mutation.mutate(next)
+  }
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
@@ -36,7 +61,7 @@ export function OrderPermissionSection({ employee }: { employee: Employee }) {
         <button
           type="button"
           disabled={terminated || mutation.isPending}
-          onClick={() => mutation.mutate(!employee.canCreateOrders)}
+          onClick={handleToggle}
           className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
             enabled ? 'bg-brand-primary' : 'bg-border'
           }`}
@@ -48,6 +73,7 @@ export function OrderPermissionSection({ employee }: { employee: Employee }) {
           />
         </button>
       </div>
+      {error && <p className="mt-3 text-xs font-semibold text-danger">{error}</p>}
     </section>
   )
 }
