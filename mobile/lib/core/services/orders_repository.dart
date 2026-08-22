@@ -59,6 +59,8 @@ class OrdersRepository {
     List<String>? notedItems,
     num? estimatedPrice,
     String? source,
+    bool? walkIn,
+    String? actorName,
   }) async {
     final result = await _api.post(
       '/createOrder',
@@ -74,6 +76,8 @@ class OrdersRepository {
         if (notedItems != null && notedItems.isNotEmpty) 'notedItems': notedItems,
         if (estimatedPrice != null) 'estimatedPrice': estimatedPrice,
         if (source != null) 'source': source,
+        if (walkIn != null) 'walkIn': walkIn,
+        if (actorName != null) 'actorName': actorName,
       },
     );
     return (orderId: result['orderId'] as String, orderNumber: (result['orderNumber'] as num).toInt());

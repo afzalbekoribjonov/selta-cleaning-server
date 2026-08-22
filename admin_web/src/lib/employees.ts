@@ -9,6 +9,7 @@ export interface Employee {
   salary?: { method: string; params: Record<string, number> }
   specializations: string[]
   canPack: boolean
+  canCreateOrders: boolean
   createdAt: string | null
   terminatedAt: string | null
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Search, AlertTriangle } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
 import { fetchOrdersPage, isOverdue, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
-import { STATUS_CONFIG, TARIFF_CONFIG } from '@/lib/status-config'
+import { STATUS_CONFIG } from '@/lib/status-config'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatDateUz } from '@/lib/date-utils'
@@ -12,11 +12,25 @@ function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
 }
 
+type SortKey = 'latest' | 'earliest' | 'expensive' | 'cheap'
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'latest', label: 'Oxirgilar' },
+  { key: 'earliest', label: 'Boshidagilar' },
+  { key: 'expensive', label: 'Eng qimmat' },
+  { key: 'cheap', label: 'Eng arzon' },
+]
+
+function currentYearMonth(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
 export default function OrdersPage() {
   const [view, setView] = useState<'active' | 'all'>('active')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [tariffFilter, setTariffFilter] = useState('')
+  const [sortBy, setSortBy] = useState<SortKey>('latest')
+  const [monthFilter, setMonthFilter] = useState('')
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
@@ -60,10 +74,28 @@ export default function OrdersPage() {
       )
     }
     if (statusFilter) list = list.filter((o) => o.status === statusFilter)
-    if (tariffFilter) list = list.filter((o) => o.tariff === tariffFilter)
+    if (monthFilter) {
+      list = list.filter((o) => {
+        const ym = `${o.createdAt.getFullYear()}-${String(o.createdAt.getMonth() + 1).padStart(2, '0')}`
+        return ym === monthFilter
+      })
+    }
     if (overdueOnly) list = list.filter(isOverdue)
+
+    list = [...list].sort((a, b) => {
+      switch (sortBy) {
+        case 'earliest':
+          return a.createdAt.getTime() - b.createdAt.getTime()
+        case 'expensive':
+          return b.totalPrice - a.totalPrice
+        case 'cheap':
+          return a.totalPrice - b.totalPrice
+        default:
+          return b.createdAt.getTime() - a.createdAt.getTime()
+      }
+    })
     return list
-  }, [baseOrders, search, statusFilter, tariffFilter, overdueOnly])
+  }, [baseOrders, search, statusFilter, monthFilter, overdueOnly, sortBy])
 
   return (
     <div className="space-y-6">
@@ -113,17 +145,28 @@ export default function OrdersPage() {
           ))}
         </select>
         <select
-          value={tariffFilter}
-          onChange={(e) => setTariffFilter(e.target.value)}
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortKey)}
           className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-primary"
         >
-          <option value="">Barcha tarif</option>
-          {Object.entries(TARIFF_CONFIG).map(([key, t]) => (
-            <option key={key} value={key}>
-              {t.label}
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt.key} value={opt.key}>
+              {opt.label}
             </option>
           ))}
         </select>
+        <input
+          type="month"
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          max={currentYearMonth()}
+          className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-primary"
+        />
+        {monthFilter && (
+          <button onClick={() => setMonthFilter('')} className="text-xs font-bold text-brand-primary hover:underline">
+            Oyni tozalash
+          </button>
+        )}
         <button
           onClick={() => setOverdueOnly((v) => !v)}
           className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${

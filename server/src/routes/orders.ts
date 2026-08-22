@@ -50,12 +50,22 @@ export const ordersRouter = Router();
  */
 ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
   try {
-    const role = req.auth!.role;
-    if (role !== "dispatcher" && role !== "admin") {
-      throw new ApiError(403, "permission-denied", "Faqat sotuv menejeri yangi buyurtma qo'sha oladi");
+    const role = req.auth!.role!;
+    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    // Talab: "Buyurtma yaratish huquqi" — sotuv menejeri/admin'dan
+    // tashqari, admin panelda shu huquq alohida berilgan xodim ham
+    // (masalan mijoz do'konga o'zi kelganda) buyurtma ocha oladi.
+    let canCreate = role === "dispatcher" || role === "admin";
+    if (!canCreate) {
+      const empSnap = await db.collection("employees").doc(employeeId).get();
+      canCreate = empSnap.data()?.canCreateOrders === true;
+    }
+    if (!canCreate) {
+      throw new ApiError(403, "permission-denied", "Yangi buyurtma yaratish huquqingiz yo'q");
     }
 
-    const { customerName, phone, location, serviceType, tariff, gpsCoords, items, notedItems, estimatedPrice, source } = req.body ?? {};
+    const { customerName, phone, location, serviceType, tariff, gpsCoords, items, notedItems, estimatedPrice, source, walkIn, actorName } =
+      req.body ?? {};
     if (!customerName?.trim() || !phone?.trim() || !location?.trim()) {
       throw new ApiError(400, "invalid-argument", "Ism, telefon va mo'ljal majburiy");
     }
@@ -66,6 +76,10 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
     if (isOnsite && !tariff) {
       throw new ApiError(400, "invalid-argument", "Tarif tanlanishi shart");
     }
+    // Talab: "O'zi keldi" — mijoz do'konga o'zi kelganda, dastavchik
+    // bosqichisiz to'g'ridan-to'g'ri "Sexga keldi"ga (ishchilar
+    // navbatiga) tushadi. Faqat "Olib kelish" turida mazmunli.
+    const isWalkIn = isOnsite ? false : walkIn === true;
 
     // Talab: onsite buyurtmada mijoz aytgan mahsulot nomlarini va
     // taxminiy summani ixtiyoriy ravishda yozib qo'yish — jamoa mijoz
@@ -92,9 +106,23 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       computedItems = await computeItems(items as ItemInput[]);
     }
 
+    // Talab: mijoz avval buyurtma bergan bo'lsa, uning GPS manzili
+    // avtomatik yangi buyurtmaga ko'chiriladi (dastavchik qulayligi
+    // uchun) — eng oxirgi GPS'li buyurtma tanlanadi. Faqat teng qiymat
+    // filtri (orderBy'siz) qo'shimcha kompozit indeks talab qilmasligi
+    // uchun; kichik ro'yxat xotirada saralanadi.
+    let resolvedGpsCoords: string | null = typeof gpsCoords === "string" && gpsCoords.trim() ? gpsCoords.trim() : null;
+    if (!resolvedGpsCoords) {
+      const priorSnap = await db.collection("orders").where("phone", "==", phone.trim()).limit(20).get();
+      const withGps = priorSnap.docs
+        .map((d) => d.data())
+        .filter((d) => typeof d.gpsCoords === "string" && d.gpsCoords)
+        .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+      if (withGps.length > 0) resolvedGpsCoords = withGps[0].gpsCoords as string;
+    }
+
     const counterRef = db.collection("counters").doc("orders");
     const orderRef = db.collection("orders").doc();
-    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
 
     const orderNumber = await db.runTransaction(async (tx) => {
       const counterSnap = await tx.get(counterRef);
@@ -110,10 +138,10 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         customerName: customerName.trim(),
         phone: phone.trim(),
         location: location.trim(),
-        gpsCoords: gpsCoords ?? null,
+        gpsCoords: resolvedGpsCoords,
         serviceType,
         tariff: isOnsite ? tariff : null,
-        status: "new",
+        status: isWalkIn ? "brought_in" : "new",
         assignedTeam: [],
         totalArea: 0,
         totalPrice: 0,
@@ -124,13 +152,25 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         notedItems: cleanNotedItems,
         estimatedPrice: cleanEstimatedPrice,
         source: cleanSource,
+        intakeMethod: isWalkIn ? "walk_in" : null,
+        // Talab: "O'zi keldi" buyurtmasi "Sexga olib keldi" statistikasida
+        // ham hisobga olinsin — mijoz o'zi olib kelgani uchun buyurtmani
+        // ochgan xodim xuddi dastavchik kabi "olib keldi" deb belgilanadi.
+        ...(isWalkIn
+          ? {
+              pickedUpBy: employeeId,
+              pickedUpAt: FieldValue.serverTimestamp(),
+              ...(typeof actorName === "string" && actorName.trim() ? { pickedUpByName: actorName.trim() } : {}),
+            }
+          : {}),
       });
 
       tx.set(orderRef.collection("statusHistory").doc(), {
         fromStatus: null,
-        toStatus: "new",
+        toStatus: isWalkIn ? "brought_in" : "new",
         changedBy: employeeId,
         changedAt: FieldValue.serverTimestamp(),
+        note: isWalkIn ? "Mijoz o'zi keldi" : null,
       });
 
       let itemNumber = 1;
@@ -157,9 +197,13 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
     });
 
     if (serviceType === "pickup") {
-      await notifyDepartment("delivery", "Yangi buyurtma", `#${orderNumber} — olib ketish kerak`, {
-        orderId: orderRef.id,
-      });
+      if (isWalkIn) {
+        await notifyDepartment("worker", "Yangi ish", `#${orderNumber} — aniqlashtirish/yuvish kerak`, { orderId: orderRef.id });
+      } else {
+        await notifyDepartment("delivery", "Yangi buyurtma", `#${orderNumber} — olib ketish kerak`, {
+          orderId: orderRef.id,
+        });
+      }
     }
     // Onsite uchun alohida bildirishnoma shart emas — jamoa biriktirish
     // endi to'liq sotuv menejeriga tegishli (talab #5), buyurtmani

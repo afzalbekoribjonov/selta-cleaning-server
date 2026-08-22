@@ -12,7 +12,7 @@ import type { Order } from '@/lib/orders'
 type RangeKey = 'week' | 'month'
 
 const UNKNOWN_KEY = 'unknown'
-const UNKNOWN_LABEL = 'Aniqlanmagan'
+const UNKNOWN_LABEL = 'Boshqa'
 const UNKNOWN_COLOR = '#AAA5AF'
 
 interface Row {

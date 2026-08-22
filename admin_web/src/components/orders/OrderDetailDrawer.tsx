@@ -172,6 +172,9 @@ export function OrderDetailDrawer({
                   {sourceInfo.name}
                 </span>
               )}
+              {order.intakeMethod === 'walk_in' && (
+                <span className="rounded-full bg-brand-accent/20 px-2.5 py-1 text-xs font-bold text-ink">O'zi keldi</span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1">

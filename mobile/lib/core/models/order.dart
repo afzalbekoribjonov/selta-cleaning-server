@@ -44,6 +44,9 @@ class Order {
   // Talab: marketing statistikasi — sotuv menejeri buyurtma yaratishda
   // ixtiyoriy ravishda tanlaydi (masalan 'instagram', 'telegram').
   final String? source;
+  // Talab: "O'zi keldi" — mijoz do'konga o'zi kelganda buyurtma
+  // yaratilgan bo'lsa 'walk_in', aks holda null (odatiy olib kelish).
+  final String? intakeMethod;
 
   const Order({
     required this.id,
@@ -75,6 +78,7 @@ class Order {
     this.notedItems = const [],
     this.estimatedPrice,
     this.source,
+    this.intakeMethod,
   });
 
   factory Order.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -109,6 +113,7 @@ class Order {
       notedItems: (data['notedItems'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       estimatedPrice: data['estimatedPrice'] as num?,
       source: data['source']?.toString(),
+      intakeMethod: data['intakeMethod']?.toString(),
     );
   }
 

@@ -60,6 +60,7 @@ class EmployeeProfileScreen extends ConsumerWidget {
           final phone = employee['phone'] as String? ?? '';
           final specializations = (employee['specializations'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
           final canPack = employee['canPack'] as bool? ?? false;
+          final canCreateOrders = employee['canCreateOrders'] as bool? ?? false;
 
           return ListView(
             padding: EdgeInsets.zero,
@@ -96,7 +97,7 @@ class EmployeeProfileScreen extends ConsumerWidget {
                     const Text('Bu oy statistikasi', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
                     const SizedBox(height: 12),
                     _MonthlyStatsCard(departmentKey: departmentKey),
-                    if (departmentKey == 'delivery') ...[
+                    if (departmentKey == 'delivery' || canCreateOrders) ...[
                       const SizedBox(height: 28),
                       const _DeliveryDailyStatsSection(),
                     ],

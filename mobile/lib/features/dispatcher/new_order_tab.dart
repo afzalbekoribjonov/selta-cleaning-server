@@ -58,7 +58,8 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
   bool _saving = false;
   String? _error;
 
-  bool get _isPickup => _serviceType == 'pickup';
+  bool get _isPickup => _serviceType == 'pickup' || _serviceType == 'walkin';
+  bool get _isWalkIn => _serviceType == 'walkin';
 
   num get _draftTotal => _draftItems.fold<num>(0, (s, d) => s + (d.price ?? 0));
 
@@ -99,16 +100,19 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
           .where((s) => s.isNotEmpty)
           .toList();
       final estimatedPrice = num.tryParse(_estimatedPriceController.text.replaceAll(',', '.'));
+      final actorName = ref.read(currentEmployeeProvider).valueOrNull?['fullName'] as String?;
       final result = await ref.read(ordersRepositoryProvider).createOrder(
             customerName: _nameController.text.trim(),
             phone: '+998$digits',
             location: _locationController.text.trim(),
-            serviceType: _serviceType!,
+            serviceType: _isPickup ? 'pickup' : 'onsite',
             tariff: _isPickup ? null : _onsiteTariff,
             items: _isPickup ? _draftItems : null,
             notedItems: _isPickup ? null : notedItems,
             estimatedPrice: _isPickup ? null : estimatedPrice,
             source: _source,
+            walkIn: _isWalkIn,
+            actorName: actorName,
           );
 
       final commentText = _commentController.text.trim();
@@ -229,7 +233,7 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
                     onTap: () => setState(() => _serviceType = 'onsite'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _ChoiceCard(
                     label: 'Olib kelish',
@@ -238,8 +242,28 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
                     onTap: () => setState(() => _serviceType = 'pickup'),
                   ),
                 ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ChoiceCard(
+                    label: "O'zi keldi",
+                    icon: Icons.storefront_rounded,
+                    selected: _serviceType == 'walkin',
+                    onTap: () => setState(() => _serviceType = 'walkin'),
+                  ),
+                ),
               ],
             ),
+            if (_isWalkIn) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                child: const Text(
+                  "Mijoz do'konga o'zi keldi — buyurtma dastavchiklarga ko'rinmaydi, to'g'ridan to'g'ri ishchilar navbatiga (Kutilmoqda) tushadi.",
+                  style: TextStyle(fontSize: 11.5, color: AppColors.ink, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
             if (_serviceType == 'onsite') ...[
               const SizedBox(height: 20),
               const _Label('Tarif'),

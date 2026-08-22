@@ -53,6 +53,8 @@ export interface Order {
   // Talab: marketing statistikasi — sotuv menejeri buyurtma yaratishda
   // ixtiyoriy ravishda tanlaydi.
   source: string | null
+  // Talab: "O'zi keldi" — mijoz do'konga o'zi kelganda 'walk_in'.
+  intakeMethod: string | null
 }
 
 function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
@@ -88,6 +90,7 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     notedItems: data.notedItems ?? [],
     estimatedPrice: data.estimatedPrice ?? null,
     source: data.source ?? null,
+    intakeMethod: data.intakeMethod ?? null,
   }
 }
 

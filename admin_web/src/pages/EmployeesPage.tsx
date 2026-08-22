@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, X, User, Phone, Wallet, KeyRound, UserX, Pencil, ChevronRight, RotateCcw, Trash2 } from 'lucide-react'
+import { Plus, X, User, Phone, Wallet, KeyRound, UserX, Pencil, ChevronRight, RotateCcw, Trash2, Search } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { SALARY_METHODS } from '@/lib/salary-methods'
 import { type Employee, formatTenure } from '@/lib/employees'
@@ -18,6 +18,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 export default function EmployeesPage() {
   const navigate = useNavigate()
+  const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [salaryTarget, setSalaryTarget] = useState<Employee | null>(null)
@@ -35,12 +36,14 @@ export default function EmployeesPage() {
   const byDepartment = useMemo(() => {
     const groups: Record<string, Employee[]> = {}
     for (const d of departments) groups[d.key] = []
+    const q = search.trim().toLowerCase()
     for (const e of query.data?.employees ?? []) {
+      if (q && !e.fullName.toLowerCase().includes(q) && !e.phone.toLowerCase().includes(q)) continue
       if (!groups[e.department]) groups[e.department] = []
       groups[e.department].push(e)
     }
     return groups
-  }, [query.data, departments])
+  }, [query.data, departments, search])
 
   const total = query.data?.employees.length ?? 0
   const statDepartments = departments.filter((d) => d.includeInStats)
@@ -60,6 +63,18 @@ export default function EmployeesPage() {
           Yangi xodim
         </button>
       </div>
+
+      {query.data && total > 0 && (
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray" size={16} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Ism yoki telefon bo'yicha qidirish"
+            className="w-full rounded-xl border border-border bg-surface py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-primary"
+          />
+        </div>
+      )}
 
       {query.isLoading && <Spinner className="p-8" />}
       {query.isError && (
@@ -91,6 +106,10 @@ export default function EmployeesPage() {
               </div>
             ))}
           </div>
+
+          {search.trim() && departments.every((d) => (byDepartment[d.key]?.length ?? 0) === 0) && (
+            <p className="rounded-2xl border border-border bg-surface p-10 text-center text-sm text-gray-dark">Xodim topilmadi</p>
+          )}
 
           <div className="space-y-8">
             {departments.map((dept) => {

@@ -106,6 +106,7 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           salary: data.salary ?? null,
           specializations: data.specializations ?? [],
           canPack: data.canPack ?? false,
+          canCreateOrders: data.canCreateOrders ?? false,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
           terminatedAt: data.terminatedAt?.toDate?.().toISOString() ?? null,
         };
@@ -269,6 +270,36 @@ employeeAdminRouter.post("/adminSetEmployeeSpecializations", withAuth, requireAd
     }
 
     await employeeRef.update({ specializations, canPack });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * "Buyurtma yaratish huquqi" — talab: sotuv menejeri bo'lmagan xodimga
+ * ham (masalan ishchi yoki dastavchik) mijoz do'konga o'zi kelganda
+ * ("O'zi keldi") buyurtma ochish imkoniyatini berish. Bo'limdan qat'i
+ * nazar istalgan xodimga berilishi mumkin — orders.ts:createOrder shu
+ * bayroqni tekshiradi.
+ */
+employeeAdminRouter.post("/adminSetEmployeeOrderPermission", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, canCreateOrders } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (typeof canCreateOrders !== "boolean") {
+      throw new ApiError(400, "invalid-argument", "canCreateOrders noto'g'ri");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+
+    await employeeRef.update({ canCreateOrders });
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);

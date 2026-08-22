@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/services/employee_repository.dart';
+import 'create_order_screen.dart';
 
 /// 4 ta bo'lim panelining bir xil AppBar'i — bo'lim nomi va xodim ismi
 /// ko'rsatiladi, ism bosilsa profil/sozlamalar sahifasi ochiladi (talab #6:
 /// yuqori o'ngdagi alohida "chiqish" tugmasi olib tashlandi, chiqish endi
-/// shu sahifa ichida, tasdiqlashdan so'ng amalga oshadi).
-class EmployeeAppBar extends StatelessWidget implements PreferredSizeWidget {
+/// shu sahifa ichida, tasdiqlashdan so'ng amalga oshadi). Talab: admin
+/// panelda "Buyurtma yaratish huquqi" berilgan (sotuv menejeri bo'lmagan)
+/// xodimlar uchun o'ng burchakda "+" tugmasi — bosilsa Yangi buyurtma
+/// sahifasi ochiladi ("O'zi keldi" bilan).
+class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final String departmentLabel;
   final String employeeName;
 
@@ -17,8 +23,32 @@ class EmployeeAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final employee = ref.watch(currentEmployeeProvider).valueOrNull;
+    final department = employee?['department'] as String?;
+    final canCreateOrders = employee?['canCreateOrders'] as bool? ?? false;
+    final showCreateOrderButton = canCreateOrders && department != 'dispatcher';
+
     return AppBar(
+      actions: showCreateOrderButton
+          ? [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  onPressed: () => openCreateOrderScreen(context),
+                  tooltip: 'Yangi buyurtma yaratish',
+                  style: IconButton.styleFrom(backgroundColor: AppColors.primary.withValues(alpha: 0.1)),
+                  icon: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: const BoxDecoration(gradient: heroGradient, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                  ),
+                ),
+              ),
+            ]
+          : null,
       title: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => context.push('/profile'),
