@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Wallet, TrendingUp } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
@@ -30,6 +30,14 @@ interface PayrollResult {
 export default function PayrollPage() {
   const [yearMonth, setYearMonth] = useState(currentYearMonth())
   const [results, setResults] = useState<Record<string, PayrollResult> | null>(null)
+
+  // Bir martalik, xavfsiz (idempotent) tuzatish — `doneAt` maydoni
+  // qo'shilishidan oldingi onsite buyurtmalarni to'ldiradi (bug fix:
+  // avval "updatedAt" ishlatilgani uchun keyingi tahrirlar oyni
+  // noto'g'ri "ko'chirib" yuborishi mumkin edi).
+  useEffect(() => {
+    apiPost('/adminBackfillDoneAt', {}).catch(() => {})
+  }, [])
 
   const mutation = useMutation({
     mutationFn: () => apiPost<{ yearMonth: string; results: Record<string, PayrollResult> }>('/computeMonthlyPayroll', { yearMonth }),

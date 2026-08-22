@@ -346,6 +346,14 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
       if (toStatus === "done") {
         attributionUpdate.deliveredBy = employeeId;
         attributionUpdate.deliveredByEmployees = FieldValue.arrayUnion(employeeId);
+        // Maosh hisob-kitobida (payroll.ts) OY ANIQLASH uchun ishlatiladi —
+        // `updatedAt`dan farqli o'laroq bu maydon FAQAT shu yerda, bir marta
+        // yoziladi va boshqa hech qanday amal (masalan keyinroq mijoz
+        // ma'lumotini tahrirlash) uni qayta o'zgartirmaydi. Aks holda
+        // buyurtma tugagandan keyin tahrirlansa, maosh boshqa oyga
+        // "ko'chib ketardi" (qayta hisoblanganda ikki marta yoki
+        // umuman hisobga olinmay qolishi mumkin edi).
+        attributionUpdate.doneAt = FieldValue.serverTimestamp();
         if (typeof collectedAmount === "number" && collectedAmount > 0) {
           attributionUpdate.collectedAmount = collectedAmount;
         }

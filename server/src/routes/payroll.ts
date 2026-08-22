@@ -155,6 +155,35 @@ async function fetchPickupItems(): Promise<PickupItemRow[]> {
 }
 
 /**
+ * Bir martalik, idempotent migratsiya — `doneAt` maydoni qo'shilishidan
+ * OLDIN "done"ga o'tgan onsite buyurtmalarda bu maydon yo'q, shuning
+ * uchun ular endi oylik maosh hisobida umuman ko'rinmay qolardi. Eng
+ * yaqin taxmin sifatida `updatedAt`ni ishlatib to'ldiradi (aniq emas,
+ * lekin butunlay yo'qolib ketishidan yaxshiroq). Faqat `doneAt`i yo'q
+ * yozuvlarga tegadi — allaqachon to'g'ri maydonga ega buyurtmalar
+ * o'zgarmaydi. Admin panel ochilganda chaqiriladi (order-sources
+ * bilan bir xil "ensure" naqshi).
+ */
+payrollRouter.post("/adminBackfillDoneAt", withAuth, requireAdmin, async (_req, res) => {
+  try {
+    const snap = await db.collection("orders").where("serviceType", "==", "onsite").where("status", "==", "done").get();
+    const missing = snap.docs.filter((d) => !d.data().doneAt);
+    if (missing.length > 0) {
+      const batch = db.batch();
+      for (const doc of missing) {
+        const data = doc.data();
+        const fallback = data.updatedAt ?? data.createdAt ?? FieldValue.serverTimestamp();
+        batch.update(doc.ref, { doneAt: fallback });
+      }
+      await batch.commit();
+    }
+    res.json({ ok: true, backfilled: missing.length });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
  * Berilgan oy uchun har bir faol xodimning maoshini o'zining tanlangan
  * usuli bo'yicha hisoblaydi va `employees/{id}/payrollRuns/{yyyy-MM}`ga
  * yozadi (shaffoflik uchun breakdown bilan birga). Admin istalgan vaqt
@@ -173,14 +202,22 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
     // holatiga qarab emas. Aks holda o'tgan oyni qayta hisoblaganda, keyinroq
     // ishdan bo'shatilgan xodim o'sha oyda haqiqatan ishlagan bo'lsa ham
     // ro'yxatdan butunlay tushib qolar edi.
-    const [employeesSnap, updatedSnap, createdSnap, pickupItems] = await Promise.all([
+    //
+    // `doneAt` — onsite "done"ga o'tishning O'ZIGA XOS, o'zgarmas vaqt
+    // belgisi (changeOrderStatus). Ilgari bu yerda `updatedAt` ishlatilgan
+    // edi, lekin u UMUMIY maydon — buyurtma tugagandan keyin (masalan
+    // mijoz telefon raqami updateOrder orqali tuzatilsa) qayta yozilib
+    // ketishi mumkin edi, natijada oy qayta hisoblanganda maosh boshqa
+    // oyga "ko'chib ketishi" (ikki marta yoki umuman hisoblanmasligi)
+    // mumkin edi — bu xato tuzatildi.
+    const [employeesSnap, doneSnap, createdSnap, pickupItems] = await Promise.all([
       db.collection("employees").get(),
-      db.collection("orders").where("updatedAt", ">=", start).where("updatedAt", "<", end).get(),
+      db.collection("orders").where("doneAt", ">=", start).where("doneAt", "<", end).get(),
       db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
       fetchPickupItems(),
     ]);
 
-    const updatedOrders = updatedSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as OrderRow);
+    const doneOrders = doneSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as OrderRow);
     const createdOrders = createdSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as OrderRow);
     const inRange = (date: Date | undefined) => !!date && date >= start && date < end;
 
@@ -231,9 +268,7 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
         case "delivery": {
           // Onsite — order-level (o'zgarmagan); pickup — item-level (har bir
           // mahsulot alohida yetkaziladi, talab #9: qisman yetkazish).
-          const deliveredOnsiteOrders = updatedOrders.filter(
-            (o) => o.serviceType === "onsite" && o.deliveredBy === empId && o.status === "done",
-          );
+          const deliveredOnsiteOrders = doneOrders.filter((o) => o.serviceType === "onsite" && o.deliveredBy === empId);
           const deliveredItems = pickupItems.filter((i) => i.deliveredBy === empId && inRange(i.deliveredAt));
           const orderValue =
             deliveredOnsiteOrders.reduce((s, o) => s + (o.totalPrice || 0), 0) + deliveredItems.reduce((s, i) => s + (i.price || 0), 0);
@@ -266,9 +301,7 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
           break;
         }
         case "furniture_onsite_percent": {
-          const onsiteDone = updatedOrders.filter(
-            (o) => o.serviceType === "onsite" && o.status === "done" && (o.assignedTeam ?? []).includes(empId),
-          );
+          const onsiteDone = doneOrders.filter((o) => o.serviceType === "onsite" && (o.assignedTeam ?? []).includes(empId));
           const revenue = onsiteDone.reduce((s, o) => s + (o.totalPrice || 0), 0);
           const percent = params.percent ?? 0;
           amount = (revenue * percent) / 100;
