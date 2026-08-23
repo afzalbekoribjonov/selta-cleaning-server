@@ -21,6 +21,13 @@
       "runtimeArgs": ["/c", "cd sotuv_web && npm run dev -- --port 5680 --host 127.0.0.1"],
       "port": 5680,
       "url": "http://127.0.0.1:5680"
+    },
+    {
+      "name": "selta_workers_web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd workers_web && npm run dev -- --port 5681 --host 127.0.0.1"],
+      "port": 5681,
+      "url": "http://127.0.0.1:5681"
     }
   ]
 }
