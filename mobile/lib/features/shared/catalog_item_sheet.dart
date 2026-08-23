@@ -93,6 +93,14 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
   final _widthController = TextEditingController();
   final _heightController = TextEditingController();
   final _directAreaController = TextEditingController();
+  // Talab: klaviatura to'satdan yopilib qolmasligi kerak — bu controller
+  // avval har bir build()da QAYTA yaratilar edi (`TextEditingController(
+  // text: ...)` to'g'ridan-to'g'ri widget daraxtida), bu esa TextField'ning
+  // ichki holatini (fokus, klaviatura) har safar +/- tugmasi yoki BOSHQA
+  // maydon o'zgarganda ham yo'qotib qo'yardi. Endi bitta barqaror
+  // controller, qiymati faqat +/- tugmalari bosilganda dasturiy
+  // yangilanadi.
+  late final _qtyController = TextEditingController();
   bool _sqmDirectMode = false;
   num _qty = 1;
   String? _sizeVariant = 'small';
@@ -131,6 +139,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
         }
       }
     }
+    _qtyController.text = _qty.toStringAsFixed(item?.calcType == 'count' ? 0 : 1);
   }
 
   @override
@@ -140,7 +149,13 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
     _widthController.dispose();
     _heightController.dispose();
     _directAreaController.dispose();
+    _qtyController.dispose();
     super.dispose();
+  }
+
+  void _setQty(num value, String calcType) {
+    _qty = value;
+    _qtyController.text = _qty.toStringAsFixed(calcType == 'count' ? 0 : 1);
   }
 
   num get _measuredQty {
@@ -194,6 +209,11 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
 
   Future<void> _save() async {
     final draft = _buildDraft();
+    // Talab: mahsulot qo'shilgach klaviatura ochiq qolib ketmasligi kerak —
+    // varaq yopilishidan oldin fokusni majburan olib tashlaymiz (aks holda
+    // hali fokusda turgan TextField klaviaturani ochiq ushlab qolishi
+    // mumkin edi).
+    FocusScope.of(context).unfocus();
     if (widget.orderId == null) {
       widget.onLocalAdd!(draft);
       if (mounted) Navigator.of(context).pop();
@@ -373,7 +393,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                                     _product = p;
                                     _nameController.text = p.name;
                                     _condition = null;
-                                    _qty = 1;
+                                    _setQty(1, p.calcType);
                                   }),
                                 ),
                             ],
@@ -589,12 +609,12 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
         const SizedBox(height: 8),
         Row(
           children: [
-            _StepButton(icon: Icons.remove_rounded, onTap: () => setState(() => _qty = (_qty - step).clamp(0, 999999))),
+            _StepButton(icon: Icons.remove_rounded, onTap: () => setState(() => _setQty((_qty - step).clamp(0, 999999), calcType))),
             const SizedBox(width: 12),
             SizedBox(
               width: 70,
               child: TextField(
-                controller: TextEditingController(text: _qty.toStringAsFixed(calcType == 'count' ? 0 : 1)),
+                controller: _qtyController,
                 textAlign: TextAlign.center,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: calcType == 'count' ? [FilteringTextInputFormatter.digitsOnly] : [],
@@ -603,7 +623,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
               ),
             ),
             const SizedBox(width: 12),
-            _StepButton(icon: Icons.add_rounded, onTap: () => setState(() => _qty = _qty + step)),
+            _StepButton(icon: Icons.add_rounded, onTap: () => setState(() => _setQty(_qty + step, calcType))),
             const SizedBox(width: 12),
             Text('× ${(tariffPrice.unitPrice ?? 0).toStringAsFixed(0)} so\'m', style: const TextStyle(fontSize: 12, color: AppColors.grayDark)),
           ],

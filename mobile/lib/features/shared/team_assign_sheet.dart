@@ -123,14 +123,28 @@ class _TeamAssignSheetState extends ConsumerState<_TeamAssignSheet> {
                           for (final c in entry.value)
                             CheckboxListTile(
                               value: _selected.contains(c.employee.id),
-                              onChanged: (checked) => setState(() {
-                                if (checked == true) {
-                                  _selected.add(c.employee.id);
-                                } else {
-                                  _selected.remove(c.employee.id);
-                                }
-                              }),
-                              title: Text(c.employee.fullName, style: const TextStyle(fontWeight: FontWeight.w700)),
+                              onChanged: !c.employee.canDoOnsiteWashing
+                                  ? null
+                                  : (checked) => setState(() {
+                                      if (checked == true) {
+                                        _selected.add(c.employee.id);
+                                      } else {
+                                        _selected.remove(c.employee.id);
+                                      }
+                                    }),
+                              title: Text(
+                                c.employee.fullName,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: c.employee.canDoOnsiteWashing ? AppColors.ink : AppColors.danger,
+                                ),
+                              ),
+                              subtitle: c.employee.canDoOnsiteWashing
+                                  ? null
+                                  : const Text(
+                                      'Ruxsat yo\'q',
+                                      style: TextStyle(color: AppColors.danger, fontSize: 11.5, fontWeight: FontWeight.w700),
+                                    ),
                               activeColor: AppColors.primary,
                             ),
                         ],

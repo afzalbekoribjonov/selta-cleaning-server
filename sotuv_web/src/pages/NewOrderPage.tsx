@@ -46,6 +46,7 @@ export default function NewOrderPage() {
   const [onsiteTariff, setOnsiteTariff] = useState('standart')
   const [draftItems, setDraftItems] = useState<CatalogItemDraft[]>([])
   const [itemModalOpen, setItemModalOpen] = useState(false)
+  const [zeroItemsConfirmOpen, setZeroItemsConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -66,14 +67,23 @@ export default function NewOrderPage() {
     setDraftItems([])
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
     setError(null)
     if (!name.trim()) return setError('Ism familiyani kiriting')
     if (phoneDigits(phone).length !== 9) return setError('9 xonali telefon raqam kiriting')
-    if (!location.trim()) return setError("Mo'ljalni kiriting")
+    if (!location.trim()) return setError('Manzilni kiriting')
     if (!serviceType) return setError('Xizmat turini tanlang')
-    if (isPickup && draftItems.length === 0) return setError('Kamida bitta mahsulot qoshing')
+    // Talab: mahsulot qo'shish endi ixtiyoriy — lekin unutmaslik uchun
+    // qattiq bloklash o'rniga eslatma bilan tasdiqlash so'raladi.
+    if (isPickup && draftItems.length === 0) {
+      setZeroItemsConfirmOpen(true)
+      return
+    }
+    void doSubmit()
+  }
 
+  async function doSubmit() {
+    setError(null)
     setSaving(true)
     try {
       const notedList = notedItems
@@ -141,7 +151,7 @@ export default function NewOrderPage() {
                 </div>
               </Field>
             </div>
-            <Field label="Mo'ljal" icon={MapPin}>
+            <Field label="Manzil" icon={MapPin}>
               <textarea
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
@@ -395,6 +405,37 @@ export default function NewOrderPage() {
           onClose={() => setItemModalOpen(false)}
           onLocalAdd={(draft) => setDraftItems((prev) => [...prev, draft])}
         />
+      )}
+
+      {zeroItemsConfirmOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setZeroItemsConfirmOpen(false)}
+        >
+          <div className="w-full max-w-sm rounded-3xl bg-surface p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-heading text-lg font-extrabold text-ink">Mahsulot qo'shilmagan</h2>
+            <p className="mt-2 text-sm text-gray-dark">
+              Siz hali biror mahsulot qo'shmadingiz. Mahsulotsiz davom etasizmi — ular keyinroq qo'shilishi mumkin?
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setZeroItemsConfirmOpen(false)}
+                className="flex-1 rounded-xl border border-border py-2.5 text-sm font-bold text-ink"
+              >
+                Orqaga
+              </button>
+              <button
+                onClick={() => {
+                  setZeroItemsConfirmOpen(false)
+                  void doSubmit()
+                }}
+                className="flex-1 rounded-xl bg-brand-primary py-2.5 text-sm font-bold text-white"
+              >
+                Davom etish
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

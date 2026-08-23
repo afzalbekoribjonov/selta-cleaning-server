@@ -4,6 +4,7 @@ export interface EmployeeSummaryFull {
   id: string
   fullName: string
   departmentLabel?: string
+  canDoOnsiteWashing: boolean
 }
 
 export async function listEmployeesByDepartment(department: string): Promise<EmployeeSummaryFull[]> {

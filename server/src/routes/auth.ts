@@ -57,7 +57,16 @@ authRouter.post("/listEmployeesByDepartment", async (req, res) => {
       .orderBy("fullName")
       .get();
 
-    res.json({ employees: snap.docs.map((doc) => ({ id: doc.id, fullName: doc.data().fullName as string })) });
+    // `canDoOnsiteWashing` — talab: jamoa biriktirishda (assignTeam) qaysi
+    // xodimga ruxsat borligini client ko'rsata olishi uchun (worker/delivery
+    // ro'yxatlarida) — boshqa bo'limlar uchun mazmunsiz, lekin zararsiz.
+    res.json({
+      employees: snap.docs.map((doc) => ({
+        id: doc.id,
+        fullName: doc.data().fullName as string,
+        canDoOnsiteWashing: (doc.data().canDoOnsiteWashing as boolean | undefined) ?? false,
+      })),
+    });
   } catch (err) {
     sendError(res, err);
   }

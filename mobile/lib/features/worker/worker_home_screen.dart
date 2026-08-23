@@ -56,8 +56,35 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
     final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
     final specializations =
         (employeeAsync.value?['specializations'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    // Talab: admin joyida-yuvishga ixtisoslashgan ishchi uchun sexga
+    // keladigan (pickup) buyurtmalar navbatini yashirishi mumkin bo'lishi
+    // kerak — standart holat true (avvalgi xatti-harakat).
+    final canSeeWorkshopQueue = employeeAsync.value?['canSeeWorkshopQueue'] as bool? ?? true;
     final ordersAsync = ref.watch(recentOrdersProvider);
     final stage = _workerStages[_stageIndex];
+
+    if (!canSeeWorkshopQueue) {
+      return Scaffold(
+        appBar: EmployeeAppBar(departmentLabel: 'Ishchi', employeeName: fullName),
+        body: const Column(
+          children: [
+            TeamJobsSection(),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text(
+                    "Sizga joyida yuvish ishi biriktirilganda shu yerda ko'rinadi",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: EmployeeAppBar(departmentLabel: 'Ishchi', employeeName: fullName),

@@ -40,6 +40,8 @@ import { TasksSection } from '@/components/employees/TasksSection'
 import { AdvancesSection } from '@/components/employees/AdvancesSection'
 import { SpecializationsSection } from '@/components/employees/SpecializationsSection'
 import { OrderPermissionSection } from '@/components/employees/OrderPermissionSection'
+import { OnsiteWashingPermissionSection } from '@/components/employees/OnsiteWashingPermissionSection'
+import { WorkshopVisibilitySection } from '@/components/employees/WorkshopVisibilitySection'
 import { DeliverySelfAddedSection } from '@/components/employees/DeliverySelfAddedSection'
 
 function formatMoney(value: number): string {
@@ -265,6 +267,10 @@ export default function EmployeeDetailPage() {
       {employee.department === 'worker' && <SpecializationsSection employee={employee} />}
       {employee.department === 'delivery' && <DeliverySelfAddedSection employeeId={employee.id} />}
       {employee.department !== 'dispatcher' && <OrderPermissionSection employee={employee} />}
+      {(employee.department === 'worker' || employee.department === 'delivery') && (
+        <OnsiteWashingPermissionSection employee={employee} />
+      )}
+      {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm xl:col-span-2">

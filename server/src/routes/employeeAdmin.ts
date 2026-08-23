@@ -107,6 +107,8 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           specializations: data.specializations ?? [],
           canPack: data.canPack ?? false,
           canCreateOrders: data.canCreateOrders ?? false,
+          canDoOnsiteWashing: data.canDoOnsiteWashing ?? false,
+          canSeeWorkshopQueue: data.canSeeWorkshopQueue ?? true,
           attendanceEnabled: data.attendanceEnabled ?? false,
           attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -302,6 +304,70 @@ employeeAdminRouter.post("/adminSetEmployeeOrderPermission", withAuth, requireAd
     }
 
     await employeeRef.update({ canCreateOrders });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * "Joyida yuvish" jamoasiga qo'shilish huquqi — talab: bu endi har qanday
+ * ishchi/dastavchik emas, admin alohida ruxsat bergan xodimlargagina
+ * tegishli bo'lishi kerak. `assignTeam` (orders.ts) shu bayroqni serverda
+ * qayta tekshiradi — client (mobil/sotuv_web) faqat ruxsati yo'qlarni
+ * ko'rinish uchun kulrang/bloklangan qilib ko'rsatadi, haqiqiy cheklov
+ * har doim serverda.
+ */
+employeeAdminRouter.post("/adminSetEmployeeOnsitePermission", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, canDoOnsiteWashing } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (typeof canDoOnsiteWashing !== "boolean") {
+      throw new ApiError(400, "invalid-argument", "canDoOnsiteWashing noto'g'ri");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+
+    await employeeRef.update({ canDoOnsiteWashing });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Ishchi bo'limidagi "sexga keladigan" (pickup) buyurtmalar navbatini
+ * ko'rish/ko'rmaslik — talab: joyida-yuvishga ixtisoslashgan ishchilar
+ * uchun admin bu navbatni yashirishi mumkin bo'lishi kerak. Standart holat
+ * `true` (avvalgi xatti-harakat o'zgarmaydi) — admin faqat kerak bo'lganda
+ * o'chirib qo'yadi.
+ */
+employeeAdminRouter.post("/adminSetEmployeeWorkshopVisibility", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, canSeeWorkshopQueue } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (typeof canSeeWorkshopQueue !== "boolean") {
+      throw new ApiError(400, "invalid-argument", "canSeeWorkshopQueue noto'g'ri");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+    if (snap.data()!.department !== "worker") {
+      throw new ApiError(400, "invalid-argument", "Bu sozlama faqat Ishchi bo'limidagi xodimlar uchun");
+    }
+
+    await employeeRef.update({ canSeeWorkshopQueue });
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);

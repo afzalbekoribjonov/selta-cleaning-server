@@ -28,7 +28,7 @@ class _UzPhoneFormatter extends TextInputFormatter {
 }
 
 /// Sotuv menejerining "Yangi buyurtma" formasi (talab #3): Ism familiya,
-/// telefon (avtomat formatlangan), Mo'ljal, Xizmat turi. Olib kelish
+/// telefon (avtomat formatlangan), Manzil, Xizmat turi. Olib kelish
 /// (pickup) tanlanganda mahsulotlar SHU YERDA — inline, har biri o'z
 /// tarifi bilan — qo'shiladi (running ro'yxat, jami summa, "Yana
 /// qo'shish"). Joyida yuvish (onsite) uchun order-level tarif tanlanadi,
@@ -86,9 +86,23 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
       setState(() => _error = "Xizmat turini tanlang");
       return;
     }
+    // Talab: mahsulot qo'shish endi ixtiyoriy — lekin unutmaslik uchun
+    // qattiq bloklash o'rniga eslatma bilan tasdiqlash so'raladi.
     if (_isPickup && _draftItems.isEmpty) {
-      setState(() => _error = "Kamida bitta mahsulot qo'shing");
-      return;
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Mahsulot qo'shilmagan"),
+          content: const Text(
+            "Siz hali biror mahsulot qo'shmadingiz. Mahsulotsiz davom etasizmi, ular keyinroq qo'shilishi mumkin?",
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Orqaga')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Davom etish')),
+          ],
+        ),
+      );
+      if (proceed != true) return;
     }
 
     setState(() => _saving = true);
@@ -185,11 +199,11 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
               validator: (v) => (v == null || v.replaceAll(RegExp(r'\D'), '').length != 9) ? '9 xonali raqam kiriting' : null,
             ),
             const SizedBox(height: 16),
-            const _Label('Mo\'ljal'),
+            const _Label('Manzil'),
             TextFormField(
               controller: _locationController,
               maxLines: 2,
-              validator: (v) => (v == null || v.trim().isEmpty) ? "Mo'ljal majburiy" : null,
+              validator: (v) => (v == null || v.trim().isEmpty) ? "Manzil majburiy" : null,
             ),
             const SizedBox(height: 20),
             const _Label('Manba (ixtiyoriy)'),

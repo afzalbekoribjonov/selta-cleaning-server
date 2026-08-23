@@ -10,6 +10,8 @@ export interface Employee {
   specializations: string[]
   canPack: boolean
   canCreateOrders: boolean
+  canDoOnsiteWashing: boolean
+  canSeeWorkshopQueue: boolean
   attendanceEnabled: boolean
   attendanceEnabledAt: string | null
   createdAt: string | null

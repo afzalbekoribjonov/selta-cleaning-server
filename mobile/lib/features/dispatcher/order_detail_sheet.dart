@@ -400,7 +400,7 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
               decoration: const InputDecoration(labelText: 'Telefon', prefixText: '+998 '),
             ),
             const SizedBox(height: 12),
-            TextField(controller: _locationController, maxLines: 2, decoration: const InputDecoration(labelText: "Mo'ljal")),
+            TextField(controller: _locationController, maxLines: 2, decoration: const InputDecoration(labelText: "Manzil")),
             if (_isOnsite) ...[
               const SizedBox(height: 14),
               Wrap(

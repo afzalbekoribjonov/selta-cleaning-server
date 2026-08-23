@@ -86,20 +86,30 @@ export function TeamAssignModal({ orderId, onClose }: { orderId: string; onClose
               <div key={label}>
                 <p className="mb-2 text-xs font-extrabold text-brand-primary">{label}</p>
                 <div className="space-y-1.5">
-                  {list.map((c) => (
-                    <label
-                      key={c.employee.id}
-                      className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-bg"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(c.employee.id)}
-                        onChange={() => toggle(c.employee.id)}
-                        className="h-4 w-4 accent-brand-primary"
-                      />
-                      <span className="text-sm font-bold text-ink">{c.employee.fullName}</span>
-                    </label>
-                  ))}
+                  {list.map((c) => {
+                    const permitted = c.employee.canDoOnsiteWashing
+                    return (
+                      <label
+                        key={c.employee.id}
+                        title={permitted ? undefined : 'Ruxsat yo\'q'}
+                        className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 ${
+                          permitted ? 'cursor-pointer hover:bg-bg' : 'cursor-not-allowed'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.has(c.employee.id)}
+                          disabled={!permitted}
+                          onChange={() => toggle(c.employee.id)}
+                          className="h-4 w-4 accent-brand-primary disabled:cursor-not-allowed"
+                        />
+                        <span className={`text-sm font-bold ${permitted ? 'text-ink' : 'text-danger'}`}>
+                          {c.employee.fullName}
+                        </span>
+                        {!permitted && <span className="text-xs font-semibold text-danger">Ruxsat yo'q</span>}
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
             ))}

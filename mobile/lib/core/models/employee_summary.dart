@@ -9,14 +9,24 @@ class EmployeeSummary {
   // aynan qaysi kasbda ekanini ko'rsatish uchun (bo'lim bo'yicha oddiy
   // ro'yxatlarda hammasi bir xil bo'lgani uchun kerak emas).
   final String? departmentLabel;
+  // Talab: "Joyida yuvish" jamoasiga faqat admin ruxsat bergan xodimlar
+  // qo'shilishi mumkin — jamoa biriktirish ro'yxatida shu bayroqqa qarab
+  // ruxsati yo'qlar bloklangan/qizil ko'rsatiladi (team_assign_sheet.dart).
+  final bool canDoOnsiteWashing;
 
-  const EmployeeSummary({required this.id, required this.fullName, this.departmentLabel});
+  const EmployeeSummary({
+    required this.id,
+    required this.fullName,
+    this.departmentLabel,
+    this.canDoOnsiteWashing = false,
+  });
 
   factory EmployeeSummary.fromMap(Map<Object?, Object?> map) {
     return EmployeeSummary(
       id: map['id'] as String,
       fullName: map['fullName'] as String? ?? "Noma'lum",
       departmentLabel: map['departmentLabel'] as String?,
+      canDoOnsiteWashing: map['canDoOnsiteWashing'] as bool? ?? false,
     );
   }
 }

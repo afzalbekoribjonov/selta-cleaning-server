@@ -68,7 +68,7 @@ export function EditOrderModal({ order, onClose }: { order: Order; onClose: () =
             </div>
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-bold text-ink">Mo'ljal</label>
+            <label className="mb-1.5 block text-xs font-bold text-ink">Manzil</label>
             <textarea
               value={location}
               onChange={(e) => setLocation(e.target.value)}

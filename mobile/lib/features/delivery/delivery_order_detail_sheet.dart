@@ -16,6 +16,7 @@ import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_action_row.dart';
 import '../shared/item_detail_row.dart';
+import 'zero_price_attention_sheet.dart';
 
 void openDeliveryOrderDetailSheet(BuildContext context, Order order) {
   showModalBottomSheet(
@@ -87,6 +88,16 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
     String? gpsCoords;
 
     if (widget.order.status == 'new') {
+      // Talab: narxi 0 so'm bo'lib qolgan mahsulot bo'lsa, buyurtma
+      // ishchilar navbatiga o'tmasligi kerak — avval e'tibor oynasi
+      // ko'rsatiladi, tuzatilgach xodim "QABUL QILINDI"ni qayta bosadi.
+      final items = ref.read(_itemsProvider(widget.order.id)).valueOrNull ?? const [];
+      final hasZeroPriced = items.any((i) => i.price <= 0);
+      if (hasZeroPriced) {
+        await openZeroPriceAttentionSheet(context, widget.order);
+        return;
+      }
+
       setState(() {
         _advancing = true;
         _error = null;

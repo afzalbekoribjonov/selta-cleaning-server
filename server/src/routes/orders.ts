@@ -770,6 +770,17 @@ ordersRouter.post("/assignTeam", withAuth, async (req: AuthedRequest, res) => {
       throw new ApiError(400, "invalid-argument", "Kamida bitta xodim tanlang");
     }
 
+    // Talab: "Joyida yuvish" jamoasiga faqat admin alohida ruxsat bergan
+    // xodimlar biriktirilishi mumkin. Client (mobil/sotuv_web) ruxsati
+    // yo'qlarni bloklangan ko'rsatadi, lekin haqiqiy cheklov shu yerda —
+    // client tekshiruvini chetlab o'tib to'g'ridan-to'g'ri so'rov yuborilsa
+    // ham himoyalangan bo'lishi kerak.
+    const employeeSnaps = await Promise.all((employeeIds as string[]).map((id) => db.collection("employees").doc(id).get()));
+    const notPermitted = employeeSnaps.filter((s) => !s.exists || s.data()?.canDoOnsiteWashing !== true);
+    if (notPermitted.length > 0) {
+      throw new ApiError(403, "permission-denied", "Tanlangan xodimlardan ba'zilarida joyida yuvish jamoasiga ruxsat yo'q");
+    }
+
     const orderRef = db.collection("orders").doc(orderId);
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
     let orderNumber = 0;
