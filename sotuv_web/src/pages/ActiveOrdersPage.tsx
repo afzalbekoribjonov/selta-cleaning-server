@@ -1,29 +1,41 @@
 import { useMemo, useState } from 'react'
-import { Search, AlertTriangle } from 'lucide-react'
+import { Search, AlertTriangle, Clock, History, CalendarClock, ArrowUp, ArrowDown } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
-import { isOverdue, type Order } from '@/lib/orders'
-import { TARIFF_CONFIG, TARIFF_ORDER } from '@/lib/status-config'
-import { formatDateUz, formatDateTimeUz } from '@/lib/date-utils'
+import { useAllOrderItems } from '@/hooks/useAllOrderItems'
+import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
+import type { Order } from '@/lib/orders'
+import { formatDateUz } from '@/lib/date-utils'
 import { formatPhoneDisplay } from '@/lib/phone'
-import { StatusBadge, TariffBadge } from '@/components/Badge'
+import { StatusBadge, TariffDots } from '@/components/Badge'
 import { Spinner } from '@/components/Spinner'
 import { OrderDetailDrawer } from '@/components/OrderDetailDrawer'
 
-function tariffWeight(tariff: string | null): number {
-  if (!tariff) return TARIFF_ORDER.length
-  const i = TARIFF_ORDER.indexOf(tariff)
-  return i === -1 ? TARIFF_ORDER.length : i
+type SortKey = 'latest' | 'earliest' | 'deadline' | 'expensive' | 'cheap'
+const SORT_OPTIONS: { key: SortKey; label: string; icon: typeof Clock }[] = [
+  { key: 'latest', label: 'Oxirgilar', icon: Clock },
+  { key: 'earliest', label: 'Birinchilar', icon: History },
+  { key: 'deadline', label: 'Muddat', icon: CalendarClock },
+  { key: 'expensive', label: 'Qimmat', icon: ArrowUp },
+  { key: 'cheap', label: 'Arzon', icon: ArrowDown },
+]
+
+function formatMoney(v: number): string {
+  return `${Math.round(v).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
 }
 
 export default function ActiveOrdersPage() {
   const { orders, loading } = useRecentOrders()
   const [search, setSearch] = useState('')
-  const [tariffFilter, setTariffFilter] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<SortKey>('latest')
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [openOrderId, setOpenOrderId] = useState<string | null>(null)
 
+  const baseOrders = useMemo(() => orders.filter((o) => o.status !== 'done'), [orders])
+  const pickupOrderIds = useMemo(() => baseOrders.filter((o) => o.serviceType === 'pickup').map((o) => o.id), [baseOrders])
+  const itemsByOrder = useAllOrderItems(pickupOrderIds)
+
   const filtered = useMemo(() => {
-    let list = orders.filter((o) => o.status !== 'done')
+    let list = baseOrders
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter(
@@ -33,19 +45,30 @@ export default function ActiveOrdersPage() {
           o.orderNumber.toString().includes(q),
       )
     }
-    if (tariffFilter) list = list.filter((o) => o.tariff === tariffFilter)
-    if (overdueOnly) list = list.filter((o) => isOverdue(o))
+    if (overdueOnly) list = list.filter((o) => isOrderOverdue(o, itemsByOrder[o.id] ?? []))
 
     list = [...list].sort((a, b) => {
-      const ao = isOverdue(a)
-      const bo = isOverdue(b)
-      if (ao !== bo) return ao ? -1 : 1
-      const tw = tariffWeight(a.tariff) - tariffWeight(b.tariff)
-      if (tw !== 0) return tw
-      return b.createdAt.getTime() - a.createdAt.getTime()
+      switch (sortBy) {
+        case 'earliest':
+          return a.createdAt.getTime() - b.createdAt.getTime()
+        case 'expensive':
+          return b.totalPrice - a.totalPrice
+        case 'cheap':
+          return a.totalPrice - b.totalPrice
+        case 'deadline': {
+          const da = effectiveDueDate(a, itemsByOrder[a.id] ?? [])
+          const db = effectiveDueDate(b, itemsByOrder[b.id] ?? [])
+          if (!da && !db) return b.createdAt.getTime() - a.createdAt.getTime()
+          if (!da) return 1
+          if (!db) return -1
+          return da.getTime() - db.getTime()
+        }
+        default:
+          return b.createdAt.getTime() - a.createdAt.getTime()
+      }
     })
     return list
-  }, [orders, search, tariffFilter, overdueOnly])
+  }, [baseOrders, search, overdueOnly, sortBy, itemsByOrder])
 
   return (
     <div className="px-8 py-8">
@@ -65,36 +88,23 @@ export default function ActiveOrdersPage() {
         </div>
       </div>
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        <FilterChip
-          label="Barchasi"
-          active={!tariffFilter && !overdueOnly}
-          onClick={() => {
-            setTariffFilter(null)
-            setOverdueOnly(false)
-          }}
-        />
-        {TARIFF_ORDER.map((t) => (
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {SORT_OPTIONS.map((opt) => (
           <FilterChip
-            key={t}
-            label={TARIFF_CONFIG[t].label}
-            color={TARIFF_CONFIG[t].color}
-            active={tariffFilter === t}
-            onClick={() => {
-              setTariffFilter(tariffFilter === t ? null : t)
-              setOverdueOnly(false)
-            }}
+            key={opt.key}
+            label={opt.label}
+            icon={opt.icon}
+            active={sortBy === opt.key}
+            onClick={() => setSortBy(opt.key)}
           />
         ))}
+        <div className="mx-1 h-5 w-px bg-border" />
         <FilterChip
           label="Kechikkan"
           color="#DC2626"
           icon={AlertTriangle}
           active={overdueOnly}
-          onClick={() => {
-            setOverdueOnly(!overdueOnly)
-            if (!overdueOnly) setTariffFilter(null)
-          }}
+          onClick={() => setOverdueOnly((v) => !v)}
         />
       </div>
 
@@ -116,12 +126,17 @@ export default function ActiveOrdersPage() {
                 <th className="px-5 py-3">Holat</th>
                 <th className="px-5 py-3">Tarif</th>
                 <th className="px-5 py-3">Muddat</th>
-                <th className="px-5 py-3">Yaratildi</th>
+                <th className="px-5 py-3 text-right">Summa</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((order) => (
-                <OrderRow key={order.id} order={order} onClick={() => setOpenOrderId(order.id)} />
+                <OrderRow
+                  key={order.id}
+                  order={order}
+                  items={itemsByOrder[order.id] ?? []}
+                  onClick={() => setOpenOrderId(order.id)}
+                />
               ))}
             </tbody>
           </table>
@@ -133,8 +148,17 @@ export default function ActiveOrdersPage() {
   )
 }
 
-function OrderRow({ order, onClick }: { order: Order; onClick: () => void }) {
-  const overdue = isOverdue(order)
+function OrderRow({
+  order,
+  items,
+  onClick,
+}: {
+  order: Order
+  items: ReturnType<typeof useAllOrderItems>[string]
+  onClick: () => void
+}) {
+  const overdue = isOrderOverdue(order, items ?? [])
+  const dueDate = effectiveDueDate(order, items ?? [])
   return (
     <tr onClick={onClick} className="cursor-pointer border-b border-border last:border-0 hover:bg-bg/60">
       <td className="px-5 py-3.5 font-extrabold text-brand-primary">#{order.orderNumber}</td>
@@ -144,15 +168,20 @@ function OrderRow({ order, onClick }: { order: Order; onClick: () => void }) {
       <td className="px-5 py-3.5">
         <StatusBadge status={order.status} />
       </td>
-      <td className="px-5 py-3.5">{order.tariff && <TariffBadge tariff={order.tariff} />}</td>
       <td className="px-5 py-3.5">
-        {order.dueDate ? (
-          <span className={overdue ? 'font-bold text-danger' : 'text-ink'}>{formatDateUz(order.dueDate)}</span>
+        <TariffDots tariffs={distinctTariffs(order, items ?? [])} />
+      </td>
+      <td className="px-5 py-3.5">
+        {dueDate ? (
+          <span className={overdue ? 'font-bold text-danger' : 'text-ink'}>
+            {formatDateUz(dueDate)}
+            {overdue && ' · kechikmoqda'}
+          </span>
         ) : (
-          '—'
+          <span className="text-gray-dark">—</span>
         )}
       </td>
-      <td className="px-5 py-3.5 text-gray-dark">{formatDateTimeUz(order.createdAt)}</td>
+      <td className="px-5 py-3.5 text-right font-extrabold text-brand-primary">{formatMoney(order.totalPrice)}</td>
     </tr>
   )
 }

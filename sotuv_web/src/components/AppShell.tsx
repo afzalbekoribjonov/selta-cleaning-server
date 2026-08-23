@@ -19,9 +19,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary text-lg font-extrabold text-white">
             S
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-heading text-sm font-extrabold text-ink">Selta Cleaning</p>
-            <p className="text-xs font-semibold text-gray-dark">Sotuv menejeri</p>
+            <p className="truncate text-xs font-bold text-brand-primary">{fullName ?? '...'}</p>
           </div>
         </div>
 
@@ -48,7 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 text-sm font-extrabold text-brand-primary">
               {(fullName ?? '?').charAt(0).toUpperCase()}
             </div>
-            <p className="truncate text-sm font-bold text-ink">{fullName ?? '...'}</p>
+            <p className="truncate text-xs font-bold text-gray-dark">Sotuv menejeri</p>
           </div>
           <button
             onClick={() => logout()}
