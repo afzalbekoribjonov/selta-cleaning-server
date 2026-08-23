@@ -24,7 +24,11 @@ function formatMoney(v: number): string {
 }
 
 const inputClass =
+  'h-11 w-full rounded-xl border border-border bg-bg px-4 text-sm text-ink outline-none transition-colors placeholder:text-gray focus:border-brand-primary focus:bg-surface'
+const textareaClass =
   'w-full rounded-xl border border-border bg-bg px-4 py-3 text-sm text-ink outline-none transition-colors placeholder:text-gray focus:border-brand-primary focus:bg-surface'
+const fieldWrapClass =
+  'flex h-11 items-center rounded-xl border border-border bg-bg pl-4 transition-colors focus-within:border-brand-primary focus-within:bg-surface'
 
 export default function NewOrderPage() {
   const navigate = useNavigate()
@@ -125,14 +129,14 @@ export default function NewOrderPage() {
                 />
               </Field>
               <Field label="Telefon raqam">
-                <div className="flex items-center rounded-xl border border-border bg-bg pl-4 transition-colors focus-within:border-brand-primary focus-within:bg-surface">
-                  <span className="text-sm font-bold text-gray-dark">+998</span>
+                <div className={fieldWrapClass}>
+                  <span className="shrink-0 text-sm font-bold text-gray-dark">+998</span>
                   <input
                     value={phone}
                     onChange={(e) => setPhone(formatUzPhoneInput(e.target.value))}
                     inputMode="numeric"
                     placeholder="90 123 45 67"
-                    className="w-full bg-transparent px-2.5 py-3 text-sm outline-none"
+                    className="h-full w-full bg-transparent px-2.5 text-sm outline-none"
                   />
                 </div>
               </Field>
@@ -143,7 +147,7 @@ export default function NewOrderPage() {
                 onChange={(e) => setLocation(e.target.value)}
                 rows={2}
                 placeholder="Mijoz manzili yoki mo'ljal"
-                className={inputClass}
+                className={textareaClass}
               />
             </Field>
           </Section>
@@ -240,13 +244,13 @@ export default function NewOrderPage() {
                   />
                 </Field>
                 <Field label="Taxminiy umumiy summa (ixtiyoriy)">
-                  <div className="flex items-center rounded-xl border border-border bg-bg pr-4 transition-colors focus-within:border-brand-primary focus-within:bg-surface">
+                  <div className={`${fieldWrapClass} pr-4`}>
                     <input
                       value={estimatedPrice}
                       onChange={(e) => setEstimatedPrice(e.target.value)}
                       inputMode="decimal"
                       placeholder="Masalan: 500000"
-                      className="w-full bg-transparent px-4 py-3 text-sm outline-none"
+                      className="h-full w-full bg-transparent px-4 text-sm outline-none"
                     />
                     <span className="shrink-0 text-xs font-bold text-gray-dark">so'm</span>
                   </div>
@@ -319,7 +323,7 @@ export default function NewOrderPage() {
               onChange={(e) => setComment(e.target.value)}
               rows={2}
               placeholder="Qo'shimcha izoh..."
-              className={inputClass}
+              className={textareaClass}
             />
           </Section>
         </div>

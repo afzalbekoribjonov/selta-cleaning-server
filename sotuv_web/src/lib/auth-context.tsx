@@ -27,11 +27,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false)
         return
       }
-      const c = await getEmployeeClaims(u)
-      setClaims(c)
-      if (c) {
-        const profile = await fetchEmployeeProfile(c.employeeId)
-        setFullName(profile?.fullName ?? null)
+      // Vaqtinchalik tarmoq xatosi (token yangilashda) butun ilovani
+      // "Yuklanmoqda" holatida abadiy ushlab qolmasligi kerak — bir marta
+      // qayta urinib ko'riladi, baribir muvaffaqiyatsiz bo'lsa xodim qayta
+      // PIN kiritishi kerak bo'ladi (loading yopiladi, claims null qoladi).
+      try {
+        const c = await getEmployeeClaims(u)
+        setClaims(c)
+        if (c) {
+          const profile = await fetchEmployeeProfile(c.employeeId)
+          setFullName(profile?.fullName ?? null)
+        }
+      } catch {
+        setClaims(null)
+        setFullName(null)
       }
       setLoading(false)
     })

@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseOptions } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig: FirebaseOptions = {
@@ -14,3 +14,9 @@ const firebaseConfig: FirebaseOptions = {
 export const firebaseApp = initializeApp(firebaseConfig)
 export const auth = getAuth(firebaseApp)
 export const db = getFirestore(firebaseApp)
+
+// Talab: PIN bilan bir marta kirilgach, sessiya doim (brauzer yopilib
+// qayta ochilgandan keyin ham) saqlanib qolishi kerak — indexedDB'ga
+// yozadi, muddati tugamaydi (faqat PIN o'zgartirilsa/xodim
+// o'chirilganda server tokenlarni bekor qiladi).
+void setPersistence(auth, browserLocalPersistence)

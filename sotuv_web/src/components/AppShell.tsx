@@ -13,8 +13,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { fullName, logout } = useAuth()
 
   return (
-    <div className="flex min-h-screen bg-bg">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-surface">
+    <div className="flex h-screen overflow-hidden bg-bg">
+      <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface">
         <div className="flex items-center gap-3 px-6 py-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary text-lg font-extrabold text-white">
             S
@@ -60,7 +60,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="h-full flex-1 overflow-y-auto">{children}</main>
     </div>
   )
 }
