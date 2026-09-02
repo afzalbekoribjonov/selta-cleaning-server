@@ -64,12 +64,6 @@ export default function ActiveOrdersPage() {
   // birlashtirilgan ro'yxat bo'ylab qidiriladi, aks holda faqat faollar.
   const baseOrders = query ? orders : activeOrders
 
-  const pickupOrderIds = useMemo(
-    () => baseOrders.filter((o) => o.serviceType === 'pickup').map((o) => o.id),
-    [baseOrders],
-  )
-  const itemsByOrder = useAllOrderItems(pickupOrderIds)
-
   const searched = useMemo(() => {
     if (!query) return baseOrders
     return baseOrders.filter(
@@ -79,6 +73,15 @@ export default function ActiveOrdersPage() {
         o.orderNumber.toString().includes(query),
     )
   }, [baseOrders, query])
+
+  // Obuna QIDIRUVDAN KEYINGI ro'yxatga bog'lanadi, undan oldingiga emas —
+  // aks holda qidiruv paytida (baza yakunlanganlar bilan kengayganda)
+  // birdan yuzlab keraksiz item obunasi ochilib ketardi.
+  const pickupOrderIds = useMemo(
+    () => searched.filter((o) => o.serviceType === 'pickup').map((o) => o.id),
+    [searched],
+  )
+  const itemsByOrder = useAllOrderItems(pickupOrderIds)
 
   // Filtr tugmalaridagi sonlar joriy qidiruvga mos keladi (filtrning
   // o'zidan oldingi holat), shunda son har doim "bosilsa nechta chiqadi"ni
