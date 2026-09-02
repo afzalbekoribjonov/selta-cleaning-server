@@ -22,8 +22,6 @@ const ACTIVE_ORDER_STATUSES = [
   "ready",
   "team_assigned",
   "in_progress",
-  "pending",
-  "returned",
 ];
 
 /** Hisoblash uchun o'qiladigan buyurtmalar soni chegarasi (himoya klapani). */

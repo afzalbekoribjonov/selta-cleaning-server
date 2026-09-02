@@ -72,8 +72,10 @@ export function isOverdue(order: Order): boolean {
 /**
  * Buyurtmaning YAKUNLANMAGAN (faol) holatlari — `done`dan boshqa hammasi.
  * Item-darajasiga ko'chirilishidan oldingi eski buyurtmalarda order
- * darajasida qolgan holatlar (`washing`, `ready` va h.k.) ham qamrab
- * olinishi uchun ro'yxat ataylab keng.
+ * darajasida qolgan holatlar (`washing`, `ready` va h.k.) ham kiritilgan.
+ * `pending`/`returned` ATAYLAB yo'q — ular faqat ITEM holatlari, hech
+ * qachon buyurtmaning o'zida uchramaydi. Ro'yxat 10 tadan oshmasligi ham
+ * muhim: Firestore'ning eski `in` chegarasi aynan shuncha edi.
  */
 export const ACTIVE_ORDER_STATUSES = [
   'new',
@@ -85,8 +87,6 @@ export const ACTIVE_ORDER_STATUSES = [
   'ready',
   'team_assigned',
   'in_progress',
-  'pending',
-  'returned',
 ]
 
 const ACTIVE_LIMIT = 400

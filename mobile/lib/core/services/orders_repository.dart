@@ -22,8 +22,9 @@ class OrdersRepository {
 
   /// Buyurtmaning YAKUNLANMAGAN (faol) holatlari — `done`dan boshqa
   /// hammasi. Item-darajasiga ko'chirilishidan oldingi eski buyurtmalarda
-  /// order darajasida qolgan holatlar ham qamrab olinishi uchun ro'yxat
-  /// ataylab keng.
+  /// order darajasida qolgan holatlar ham kiritilgan. `pending`/`returned`
+  /// ATAYLAB yo'q — ular faqat ITEM holatlari. Ro'yxat 10 tadan oshmasligi
+  /// ham muhim: Firestore'ning eski `in` chegarasi aynan shuncha edi.
   static const kActiveOrderStatuses = [
     'new',
     'picked_up',
@@ -34,8 +35,6 @@ class OrdersRepository {
     'ready',
     'team_assigned',
     'in_progress',
-    'pending',
-    'returned',
   ];
 
   static const _activeLimit = 400;
