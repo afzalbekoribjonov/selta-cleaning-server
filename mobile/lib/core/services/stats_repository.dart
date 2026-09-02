@@ -57,8 +57,10 @@ class DailyStats {
   final num cashTotal;
   final List<StatEntry> cashEntries;
   final int washingCount;
+  final int washingOrderCount;
   final List<StatEntry> washing;
   final int readyCount;
+  final int readyOrderCount;
   final List<StatEntry> ready;
   final int unmeasuredCount;
   final List<StatEntry> unmeasured;
@@ -75,8 +77,10 @@ class DailyStats {
     required this.cashTotal,
     required this.cashEntries,
     required this.washingCount,
+    required this.washingOrderCount,
     required this.washing,
     required this.readyCount,
+    required this.readyOrderCount,
     required this.ready,
     required this.unmeasuredCount,
     required this.unmeasured,
@@ -119,8 +123,10 @@ class DailyStats {
       cashTotal: (cash['total'] as num?) ?? 0,
       cashEntries: _entries(cash['entries']),
       washingCount: (washing['count'] as num?)?.toInt() ?? 0,
+      washingOrderCount: (washing['orderCount'] as num?)?.toInt() ?? 0,
       washing: _entries(washing['items']),
       readyCount: (ready['count'] as num?)?.toInt() ?? 0,
+      readyOrderCount: (ready['orderCount'] as num?)?.toInt() ?? 0,
       ready: _entries(ready['items']),
       unmeasuredCount: (unmeasured['count'] as num?)?.toInt() ?? 0,
       unmeasured: _entries(unmeasured['orders']),

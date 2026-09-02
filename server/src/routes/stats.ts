@@ -226,8 +226,20 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
       },
       deliveredToday: { count: deliveredOrders.length, orders: deliveredOrders.sort(byNumberDesc) },
       cashToHandOver: { total: cashTotal, entries: cashEntries },
-      washingNow: { count: washingItems.length, items: washingItems },
-      readyToDeliver: { count: readyItems.length, items: readyItems },
+      // `count` — mahsulotlar soni (yuvish/tayyorlik ITEM darajasida
+      // kechadi), `orderCount` — shu mahsulotlar tegishli bo'lgan
+      // buyurtmalar soni. Ikkalasi ham ko'rsatiladi, chunki xodim uchun
+      // "nechta gilam" ham, "nechta buyurtma" ham mazmunli.
+      washingNow: {
+        count: washingItems.length,
+        orderCount: new Set(washingItems.map((i) => i.orderId)).size,
+        items: washingItems,
+      },
+      readyToDeliver: {
+        count: readyItems.length,
+        orderCount: new Set(readyItems.map((i) => i.orderId)).size,
+        items: readyItems,
+      },
       unmeasured: { count: unmeasuredOrders.length, orders: unmeasuredOrders.sort(byNumberDesc) },
     });
   } catch (err) {
