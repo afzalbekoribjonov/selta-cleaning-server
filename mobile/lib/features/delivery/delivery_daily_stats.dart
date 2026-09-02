@@ -36,9 +36,9 @@ class DeliveryDayStats {
 
 /// Berilgan kun uchun shu xodimning o'zi bajargan olib kelish/yetkazish
 /// statistikasi — boshqa dastavchiklarniki emas, faqat shu xodimga
-/// tegishli (talab). `recentOrdersProvider`dagi cheklangan oyna (60 ta
-/// eng yangi buyurtma) ustida hisoblanadi — hech qachon butun jamlanma
-/// yuklanmaydi degan umumiy naqshga mos.
+/// tegishli (talab). `ordersProvider` ustida hisoblanadi — u barcha FAOL
+/// buyurtmalar va qo'shimcha oxirgi 60 ta (yakunlanganlari bilan)
+/// birlashmasi; bugungi yetkazishlar shu oxirgi oynadan olinadi.
 DeliveryDayStats computeDeliveryDayStats(WidgetRef ref, List<Order> allOrders, String employeeId, DateTime day) {
   final pickedUpOrders = <Order>[];
   num pickedUpTotal = 0;

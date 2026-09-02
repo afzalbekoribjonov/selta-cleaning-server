@@ -54,13 +54,26 @@ export function WorkerItemRow({ order, item }: { order: Order; item: OrderItem }
         <div className="mb-2 ml-[52px]">
           {(status === 'pending' || status === 'washing' || status === 'returned') &&
             (hasWashingLavozim ? (
-              <button
-                onClick={() => advance(status === 'washing' ? 'packing' : 'washing')}
-                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink hover:bg-bg"
-              >
-                {status === 'washing' ? <Package size={13} /> : <Droplets size={13} />}
-                {status === 'washing' ? "Upakovkaga o'tkazish" : 'Yuvishni boshlash'}
-              </button>
+              // Talab: narxi 0 bo'lgan mahsulot upakovkaga o'tolmasin.
+              // Server ham buni bloklaydi (changeItemStatus) — bu yerdagisi
+              // xodimga NIMA qilish kerakligini oldindan aytish uchun.
+              status === 'washing' && item.price <= 0 ? (
+                <button
+                  onClick={() => setEditOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-danger bg-danger-bg px-3 py-1.5 text-xs font-extrabold text-danger"
+                >
+                  <Package size={13} />
+                  Narxi 0 — avval o'lchang
+                </button>
+              ) : (
+                <button
+                  onClick={() => advance(status === 'washing' ? 'packing' : 'washing')}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink hover:bg-bg"
+                >
+                  {status === 'washing' ? <Package size={13} /> : <Droplets size={13} />}
+                  {status === 'washing' ? "Upakovkaga o'tkazish" : 'Yuvishni boshlash'}
+                </button>
+              )
             ) : (
               <LavozimHint
                 text={

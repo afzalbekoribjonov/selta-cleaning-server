@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/constants.dart';
 import '../../../core/models/order.dart';
+import '../../../core/models/order_item.dart';
+import '../../../core/services/order_items_provider.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/money_utils.dart';
 
@@ -12,7 +15,7 @@ import '../../../core/utils/money_utils.dart';
 /// har doim ko'rinadi; `emphasizePrice` bilan (masalan Dastavchik "tayyor"
 /// bosqichida — mijozdan pul yig'ish kerak bo'lganda) katta va yorqinroq
 /// ko'rsatiladi.
-class OrderCard extends StatelessWidget {
+class OrderCard extends ConsumerWidget {
   final Order order;
   final VoidCallback onTap;
   final List<Widget>? actions;
@@ -27,12 +30,27 @@ class OrderCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final status = statusOf(order.status);
     // Pickup buyurtmalarda tarif endi item-darajasida — order.tariff faqat
     // onsite uchun mavjud, shuning uchun pill faqat shunda ko'rsatiladi.
     final tariff = order.tariff != null ? tariffOf(order.tariff) : null;
-    final overdue = order.isOverdue;
+
+    // Talab: kartada mahsulotning eng yaqin topshirish sanasi va necha kun
+    // qolgani ko'rinsin. Pickup buyurtmalarda muddat item darajasida
+    // bo'lgani uchun `order.dueDate` null bo'ladi — itemlardan hisoblanadi.
+    // Onsite buyurtmalarda muddat order darajasida, shuning uchun ularda
+    // itemlarga obuna bo'lish shart emas (keraksiz Firestore trafigi).
+    final needsItems = order.serviceType != 'onsite';
+    final items = needsItems
+        ? (ref.watch(orderItemsProvider(order.id)).valueOrNull ?? const <OrderItem>[])
+        : const <OrderItem>[];
+    final dueDate = effectiveDueDate(order, items);
+    final overdue = dueDate != null && !order.isDone && DateTime.now().isAfter(dueDate);
+
+    // Talab: jamoa biriktirilmagan joyida-yuvish buyurtmasi e'tiborni
+    // tortib turishi kerak.
+    final needsTeam = order.serviceType == 'onsite' && order.status == 'new' && order.assignedTeam.isEmpty;
 
     return Material(
       color: AppColors.surface,
@@ -43,7 +61,14 @@ class OrderCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: overdue ? AppColors.danger.withValues(alpha: 0.4) : AppColors.border),
+            border: Border.all(
+              color: needsTeam
+                  ? AppColors.danger
+                  : overdue
+                      ? AppColors.danger.withValues(alpha: 0.4)
+                      : AppColors.border,
+              width: needsTeam ? 1.5 : 1,
+            ),
             boxShadow: [
               BoxShadow(color: AppColors.ink.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
             ],
@@ -107,7 +132,11 @@ class OrderCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        if (order.dueDate != null) ...[
+                        if (needsTeam) ...[
+                          const SizedBox(height: 8),
+                          _TeamAlertBanner(),
+                        ],
+                        if (dueDate != null) ...[
                           const SizedBox(height: 8),
                           Row(
                             children: [
@@ -118,13 +147,35 @@ class OrderCard extends StatelessWidget {
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                overdue
-                                    ? "Muddati o'tgan — ${formatDateUz(order.dueDate!)}"
-                                    : formatDateUz(order.dueDate!),
+                                formatDateUz(dueDate),
                                 style: TextStyle(
                                   color: overdue ? AppColors.danger : AppColors.gray,
                                   fontSize: 12,
                                   fontWeight: overdue ? FontWeight.w800 : FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: overdue
+                                      ? AppColors.danger.withValues(alpha: 0.12)
+                                      : daysUntil(dueDate) <= 1
+                                          ? AppColors.warning.withValues(alpha: 0.15)
+                                          : AppColors.success.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  dueLabelUz(dueDate),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: overdue
+                                        ? AppColors.danger
+                                        : daysUntil(dueDate) <= 1
+                                            ? AppColors.warning
+                                            : AppColors.success,
+                                  ),
                                 ),
                               ),
                             ],
@@ -178,6 +229,56 @@ class OrderCard extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Jamoa biriktirilmagan joyida-yuvish buyurtmasi uchun ogohlantirish —
+/// talab: "qandaydir qizarib danger holatda yonib o'chadigan" bo'lsin.
+/// Nafas olayotgandek silliq o'zgaradi (keskin miltillash emas) — uzoq
+/// tikilib turadigan ro'yxatda charchatmasligi uchun.
+class _TeamAlertBanner extends StatefulWidget {
+  @override
+  State<_TeamAlertBanner> createState() => _TeamAlertBannerState();
+}
+
+class _TeamAlertBannerState extends State<_TeamAlertBanner> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.45, end: 1).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: AppColors.danger.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.groups_rounded, size: 14, color: AppColors.danger),
+            SizedBox(width: 6),
+            Text(
+              'Jamoa biriktirilmagan',
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.danger),
+            ),
+          ],
         ),
       ),
     );

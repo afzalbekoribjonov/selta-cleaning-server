@@ -20,6 +20,46 @@ class OrdersRepository {
 
   OrdersRepository(this._api);
 
+  /// Buyurtmaning YAKUNLANMAGAN (faol) holatlari — `done`dan boshqa
+  /// hammasi. Item-darajasiga ko'chirilishidan oldingi eski buyurtmalarda
+  /// order darajasida qolgan holatlar ham qamrab olinishi uchun ro'yxat
+  /// ataylab keng.
+  static const kActiveOrderStatuses = [
+    'new',
+    'picked_up',
+    'brought_in',
+    'washing',
+    'packing',
+    'qc_review',
+    'ready',
+    'team_assigned',
+    'in_progress',
+    'pending',
+    'returned',
+  ];
+
+  static const _activeLimit = 400;
+
+  /// FAOL buyurtmalar — HOLAT bo'yicha so'raladi, "oxirgi N ta" oynasi
+  /// bilan cheklanmaydi.
+  ///
+  /// Avval barcha ekranlar `watchRecentOrders`dan (oxirgi 60 ta) olib,
+  /// keyin `status != 'done'` bo'yicha filtrlardi — bu jiddiy xato edi:
+  /// yakunlangan buyurtmalar oynani to'ldirgach, eski (lekin hamon FAOL)
+  /// buyurtmalar xodimlarga umuman ko'rinmay qolardi. (status, createdAt)
+  /// composite indeksi firebase/firestore.indexes.json'da mavjud.
+  Stream<List<Order>> watchActiveOrders() {
+    return FirebaseFirestore.instance
+        .collection('orders')
+        .where('status', whereIn: kActiveOrderStatuses)
+        .orderBy('createdAt', descending: true)
+        .limit(_activeLimit)
+        .snapshots()
+        .map((snap) => snap.docs.map(Order.fromFirestore).toList());
+  }
+
+  /// Oxirgi N ta buyurtma — YAKUNLANGANLARI bilan birga (bugungi
+  /// statistika va qidiruvda yetkazilganlarni ham topish uchun).
   Stream<List<Order>> watchRecentOrders() {
     return FirebaseFirestore.instance
         .collection('orders')
@@ -289,9 +329,38 @@ final ordersRepositoryProvider = Provider<OrdersRepository>((ref) => OrdersRepos
 /// keshlab qoladi — keyingi PIN bilan kirishlarda ham xuddi shu xatoni
 /// ko'rsataveradi. Auth holatiga bog'lash oqimni har safar kirish/chiqishda
 /// yangidan yaratadi.
-final recentOrdersProvider = StreamProvider<List<Order>>((ref) {
+final _activeOrdersStreamProvider = StreamProvider<List<Order>>((ref) {
+  ref.watch(authStateProvider);
+  return ref.watch(ordersRepositoryProvider).watchActiveOrders();
+});
+
+final _recentOrdersStreamProvider = StreamProvider<List<Order>>((ref) {
   ref.watch(authStateProvider);
   return ref.watch(ordersRepositoryProvider).watchRecentOrders();
+});
+
+/// Ekranlar ishlatadigan yagona buyurtmalar manbai: FAOL buyurtmalar
+/// (to'liq, holat bo'yicha) + oxirgi 60 ta (yakunlanganlari bilan).
+/// Ikkinchisi qidiruvda yetkazilgan buyurtmalar topilishi va "bugun
+/// yetgazildi" kabi ko'rsatkichlar to'g'ri chiqishi uchun kerak.
+///
+/// Yuklanish/xato holati FAOL oqimdan olinadi — shunda faol ro'yxat
+/// kelishi bilan ekran ko'rsatilaveradi, yakunlanganlar oynasini kutib
+/// turmaydi.
+final ordersProvider = Provider<AsyncValue<List<Order>>>((ref) {
+  final active = ref.watch(_activeOrdersStreamProvider);
+  final recent = ref.watch(_recentOrdersStreamProvider);
+  return active.whenData((activeOrders) {
+    final byId = <String, Order>{};
+    for (final o in activeOrders) {
+      byId[o.id] = o;
+    }
+    for (final o in recent.valueOrNull ?? const <Order>[]) {
+      byId.putIfAbsent(o.id, () => o);
+    }
+    final merged = byId.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return merged;
+  });
 });
 
 final myTeamOrdersProvider = StreamProvider.family<List<Order>, String>((ref, employeeId) {

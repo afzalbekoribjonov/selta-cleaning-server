@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   query,
+  where,
   orderBy,
   limit,
   startAfter,
@@ -115,9 +116,51 @@ export function isOverdue(order: Order): boolean {
 const ACTIVE_WINDOW_SIZE = 150
 
 /**
- * Dashboard va "Faol buyurtmalar" bo'limi uchun — talab #9: hech qachon
- * butun jamlanma yuklanmaydi, cheklangan oynadagi eng yangi buyurtmalarga
- * qarab real-vaqtli yangilanadi (kichik-o'rta biznes hajmi uchun yetarli).
+ * Buyurtmaning YAKUNLANMAGAN (faol) holatlari — `done`dan boshqa hammasi.
+ * Item-darajasiga ko'chirilishidan oldingi eski buyurtmalarda order
+ * darajasida qolgan holatlar (`washing`, `ready` va h.k.) ham qamrab
+ * olinishi uchun ro'yxat ataylab keng.
+ */
+export const ACTIVE_ORDER_STATUSES = [
+  'new',
+  'picked_up',
+  'brought_in',
+  'washing',
+  'packing',
+  'qc_review',
+  'ready',
+  'team_assigned',
+  'in_progress',
+  'pending',
+  'returned',
+]
+
+const ACTIVE_LIMIT = 400
+
+/**
+ * FAOL buyurtmalar — HOLAT bo'yicha so'raladi, "oxirgi N ta" oynasi bilan
+ * cheklanmaydi.
+ *
+ * Avval "Faol" ro'yxat `subscribeRecentOrders`dan (oxirgi 150 ta) olinib,
+ * keyin klientda `status !== 'done'` bo'yicha filtrlanardi — bu jiddiy
+ * xato edi: yakunlangan buyurtmalar oynani to'ldirgach, eski (lekin hamon
+ * FAOL) buyurtmalar ro'yxatdan butunlay yo'qolib qolardi. (status,
+ * createdAt) composite indeksi firestore.indexes.json'da mavjud.
+ */
+export function subscribeActiveOrders(callback: (orders: Order[]) => void): () => void {
+  const q = query(
+    collection(db, 'orders'),
+    where('status', 'in', ACTIVE_ORDER_STATUSES),
+    orderBy('createdAt', 'desc'),
+    limit(ACTIVE_LIMIT),
+  )
+  return onSnapshot(q, (snap) => callback(snap.docs.map(toOrder)))
+}
+
+/**
+ * Dashboard statistikasi uchun — oxirgi N ta buyurtma, YAKUNLANGANLARI
+ * bilan birga ("bugun yetgazildi/olindi" kabi ko'rsatkichlar shundan
+ * hisoblanadi). Faol ro'yxat uchun `subscribeActiveOrders`ni ishlating.
  */
 export function subscribeRecentOrders(callback: (orders: Order[]) => void): () => void {
   const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(ACTIVE_WINDOW_SIZE))

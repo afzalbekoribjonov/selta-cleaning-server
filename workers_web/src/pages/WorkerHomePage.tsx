@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Search, Hourglass, Droplets, Package, Undo2 } from 'lucide-react'
+import { Search, Hourglass, Droplets, Package, Undo2, CalendarClock } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
-import { useAllOrderItems } from '@/hooks/useAllOrderItems'
+import { useAllOrderItems, type StatsItem } from '@/hooks/useAllOrderItems'
 import { useAuth } from '@/lib/auth-context'
 import type { Order } from '@/lib/orders'
 import { formatPhoneDisplay } from '@/lib/phone'
+import { formatDateUz } from '@/lib/date-utils'
+import { effectiveDueDate, isOrderOverdue, daysUntil, dueLabel } from '@/lib/order-tariffs'
 import { TeamJobsBanner } from '@/components/TeamJobsBanner'
 import { OrderDetailDrawer } from '@/components/OrderDetailDrawer'
 import { TeamJobDetailDrawer } from '@/components/TeamJobDetailDrawer'
@@ -100,6 +102,7 @@ export default function WorkerHomePage() {
                     label={stage.label}
                     icon={stage.icon}
                     orders={ordersByStage[stage.key]}
+                    itemsByOrder={itemsByOrder}
                     onOpen={setOpenOrderId}
                   />
                 ))}
@@ -142,11 +145,13 @@ function StageColumn({
   label,
   icon: Icon,
   orders,
+  itemsByOrder,
   onOpen,
 }: {
   label: string
   icon: typeof Hourglass
   orders: Order[]
+  itemsByOrder: Record<string, StatsItem[]>
   onOpen: (id: string) => void
 }) {
   return (
@@ -160,17 +165,45 @@ function StageColumn({
         <p className="py-8 text-center text-xs text-gray-dark">Bu bosqichda buyurtma yo'q</p>
       ) : (
         <div className="space-y-2">
-          {orders.map((order) => (
-            <button
-              key={order.id}
-              onClick={() => onOpen(order.id)}
-              className="w-full rounded-xl border border-border bg-bg p-3 text-left transition-colors hover:border-brand-primary/40"
-            >
-              <p className="truncate text-sm font-extrabold text-brand-primary">#{order.orderNumber}</p>
-              <p className="truncate text-sm font-bold text-ink">{order.customerName || "Noma'lum"}</p>
-              <p className="mt-0.5 truncate text-xs text-gray-dark">{formatPhoneDisplay(order.phone)}</p>
-            </button>
-          ))}
+          {orders.map((order) => {
+            // Talab: kartada eng yaqin topshirish sanasi va necha kun
+            // qolgani ko'rinib tursin. Pickup buyurtmalarda muddat item
+            // darajasida — order.dueDate null bo'ladi.
+            const items = itemsByOrder[order.id] ?? []
+            const due = effectiveDueDate(order, items)
+            const overdue = isOrderOverdue(order, items)
+            const remaining = due ? daysUntil(due) : null
+            return (
+              <button
+                key={order.id}
+                onClick={() => onOpen(order.id)}
+                className="w-full rounded-xl border border-border bg-bg p-3 text-left transition-colors hover:border-brand-primary/40"
+              >
+                <p className="truncate text-sm font-extrabold text-brand-primary">#{order.orderNumber}</p>
+                <p className="truncate text-sm font-bold text-ink">{order.customerName || "Noma'lum"}</p>
+                <p className="mt-0.5 truncate text-xs text-gray-dark">{formatPhoneDisplay(order.phone)}</p>
+                {due && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <CalendarClock size={12} className={overdue ? 'text-danger' : 'text-gray-dark'} />
+                    <span className={`text-[11px] font-semibold ${overdue ? 'text-danger' : 'text-gray-dark'}`}>
+                      {formatDateUz(due)}
+                    </span>
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-extrabold ${
+                        overdue
+                          ? 'bg-danger-bg text-danger'
+                          : remaining !== null && remaining <= 1
+                            ? 'bg-warning-bg text-warning'
+                            : 'bg-success-bg text-success'
+                      }`}
+                    >
+                      {dueLabel(due)}
+                    </span>
+                  </div>
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

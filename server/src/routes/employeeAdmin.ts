@@ -109,6 +109,7 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           canCreateOrders: data.canCreateOrders ?? false,
           canDoOnsiteWashing: data.canDoOnsiteWashing ?? false,
           canSeeWorkshopQueue: data.canSeeWorkshopQueue ?? true,
+          canViewStats: data.canViewStats ?? false,
           attendanceEnabled: data.attendanceEnabled ?? false,
           attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -368,6 +369,36 @@ employeeAdminRouter.post("/adminSetEmployeeWorkshopVisibility", withAuth, requir
     }
 
     await employeeRef.update({ canSeeWorkshopQueue });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * "Kunlik ko'rsatkichlar" (statistika) panelini ko'rish huquqi — talab:
+ * xodimga vakolat berish orqali ilovada bugungi sex/yuvish/yetkazish
+ * ko'rsatkichlarini va yig'ilishi kerak bo'lgan summani ko'ra olsin.
+ * Bo'limdan qat'i nazar istalgan xodimga berilishi mumkin. Standart holat
+ * `false` — hech kim so'ramaguncha bu ma'lumot ko'rinmaydi.
+ */
+employeeAdminRouter.post("/adminSetEmployeeStatsPermission", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, canViewStats } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (typeof canViewStats !== "boolean") {
+      throw new ApiError(400, "invalid-argument", "canViewStats noto'g'ri");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+
+    await employeeRef.update({ canViewStats });
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);

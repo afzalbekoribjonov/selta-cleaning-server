@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Search, AlertTriangle, Clock, History, CalendarClock, ArrowUp, ArrowDown } from 'lucide-react'
+import { Search, Clock, History, CalendarClock, ArrowUp, ArrowDown, Home, Truck, Store, LayoutGrid, Users } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
 import { useAllOrderItems } from '@/hooks/useAllOrderItems'
-import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
+import { distinctTariffs, effectiveDueDate, isOrderOverdue, dueLabel, daysUntil } from '@/lib/order-tariffs'
 import type { Order } from '@/lib/orders'
 import { formatDateUz } from '@/lib/date-utils'
 import { formatPhoneDisplay } from '@/lib/phone'
@@ -19,35 +19,84 @@ const SORT_OPTIONS: { key: SortKey; label: string; icon: typeof Clock }[] = [
   { key: 'cheap', label: 'Arzon', icon: ArrowDown },
 ]
 
+type ServiceFilter = 'all' | 'onsite' | 'pickup' | 'walkin'
+const SERVICE_FILTERS: { key: ServiceFilter; label: string; icon: typeof Home }[] = [
+  { key: 'all', label: 'Barchasi', icon: LayoutGrid },
+  { key: 'onsite', label: 'Joyida yuvish', icon: Home },
+  { key: 'pickup', label: 'Olib kelish', icon: Truck },
+  { key: 'walkin', label: "O'zi keldi", icon: Store },
+]
+
+/** "O'zi keldi" — pickup buyurtma, lekin dastavchiksiz (server: intakeMethod). */
+function matchesService(order: Order, filter: ServiceFilter): boolean {
+  switch (filter) {
+    case 'onsite':
+      return order.serviceType === 'onsite'
+    case 'pickup':
+      return order.serviceType === 'pickup' && order.intakeMethod !== 'walk_in'
+    case 'walkin':
+      return order.intakeMethod === 'walk_in'
+    default:
+      return true
+  }
+}
+
+/** Jamoa biriktirilmagan joyida-yuvish buyurtmasi — e'tibor talab qiladi. */
+function needsTeam(order: Order): boolean {
+  return order.serviceType === 'onsite' && order.status === 'new' && (order.assignedTeam?.length ?? 0) === 0
+}
+
 function formatMoney(v: number): string {
   return `${Math.round(v).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
 }
 
 export default function ActiveOrdersPage() {
-  const { orders, loading } = useRecentOrders()
+  const { orders, activeOrders, loading } = useRecentOrders()
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('latest')
-  const [overdueOnly, setOverdueOnly] = useState(false)
+  const [service, setService] = useState<ServiceFilter>('all')
   const [openOrderId, setOpenOrderId] = useState<string | null>(null)
 
-  const baseOrders = useMemo(() => orders.filter((o) => o.status !== 'done'), [orders])
-  const pickupOrderIds = useMemo(() => baseOrders.filter((o) => o.serviceType === 'pickup').map((o) => o.id), [baseOrders])
+  const query = search.trim().toLowerCase()
+
+  // Talab: "yetgazilgan (yakunlangan) buyurtmalar ham qidiruv orqali
+  // qidirilganda ko'rinsin" — qidiruv paytida yakunlanganlari bilan
+  // birlashtirilgan ro'yxat bo'ylab qidiriladi, aks holda faqat faollar.
+  const baseOrders = query ? orders : activeOrders
+
+  const pickupOrderIds = useMemo(
+    () => baseOrders.filter((o) => o.serviceType === 'pickup').map((o) => o.id),
+    [baseOrders],
+  )
   const itemsByOrder = useAllOrderItems(pickupOrderIds)
 
-  const filtered = useMemo(() => {
-    let list = baseOrders
-    const q = search.trim().toLowerCase()
-    if (q) {
-      list = list.filter(
-        (o) =>
-          o.customerName.toLowerCase().includes(q) ||
-          o.phone.toLowerCase().includes(q) ||
-          o.orderNumber.toString().includes(q),
-      )
-    }
-    if (overdueOnly) list = list.filter((o) => isOrderOverdue(o, itemsByOrder[o.id] ?? []))
+  const searched = useMemo(() => {
+    if (!query) return baseOrders
+    return baseOrders.filter(
+      (o) =>
+        o.customerName.toLowerCase().includes(query) ||
+        o.phone.toLowerCase().includes(query) ||
+        o.orderNumber.toString().includes(query),
+    )
+  }, [baseOrders, query])
 
-    list = [...list].sort((a, b) => {
+  // Filtr tugmalaridagi sonlar joriy qidiruvga mos keladi (filtrning
+  // o'zidan oldingi holat), shunda son har doim "bosilsa nechta chiqadi"ni
+  // ko'rsatadi.
+  const counts = useMemo(() => {
+    const c: Record<ServiceFilter, number> = { all: 0, onsite: 0, pickup: 0, walkin: 0 }
+    for (const o of searched) {
+      c.all += 1
+      if (matchesService(o, 'onsite')) c.onsite += 1
+      else if (matchesService(o, 'walkin')) c.walkin += 1
+      else if (matchesService(o, 'pickup')) c.pickup += 1
+    }
+    return c
+  }, [searched])
+
+  const filtered = useMemo(() => {
+    const list = searched.filter((o) => matchesService(o, service))
+    return [...list].sort((a, b) => {
       switch (sortBy) {
         case 'earliest':
           return a.createdAt.getTime() - b.createdAt.getTime()
@@ -67,17 +116,21 @@ export default function ActiveOrdersPage() {
           return b.createdAt.getTime() - a.createdAt.getTime()
       }
     })
-    return list
-  }, [baseOrders, search, overdueOnly, sortBy, itemsByOrder])
+  }, [searched, service, sortBy, itemsByOrder])
+
+  const unassignedCount = useMemo(() => activeOrders.filter(needsTeam).length, [activeOrders])
 
   return (
     <div className="px-8 py-8">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-6">
         <div>
           <h1 className="font-heading text-2xl font-extrabold text-ink">Faol buyurtmalar</h1>
-          <p className="mt-1 text-sm text-gray-dark">{filtered.length} ta buyurtma</p>
+          <p className="mt-1 text-sm text-gray-dark">
+            {filtered.length} ta buyurtma
+            {query && <span className="ml-1 text-brand-primary">· qidiruvda yakunlanganlar ham bor</span>}
+          </p>
         </div>
-        <div className="relative w-80">
+        <div className="relative w-80 shrink-0">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-dark" />
           <input
             value={search}
@@ -88,24 +141,51 @@ export default function ActiveOrdersPage() {
         </div>
       </div>
 
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        {SORT_OPTIONS.map((opt) => (
-          <FilterChip
-            key={opt.key}
-            label={opt.label}
-            icon={opt.icon}
-            active={sortBy === opt.key}
-            onClick={() => setSortBy(opt.key)}
+      {unassignedCount > 0 && (
+        <button
+          onClick={() => {
+            setService('onsite')
+            setSortBy('latest')
+          }}
+          className="mb-5 flex w-full animate-pulse items-center gap-3 rounded-2xl border-[1.5px] border-danger bg-danger-bg px-4 py-3 text-left"
+        >
+          <Users size={18} className="shrink-0 text-danger" />
+          <span className="text-sm font-extrabold text-danger">
+            {unassignedCount} ta joyida-yuvish buyurtmasiga jamoa biriktirilmagan
+          </span>
+          <span className="ml-auto text-xs font-bold text-danger/80">Ko'rish →</span>
+        </button>
+      )}
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {SERVICE_FILTERS.map((f) => (
+          <ServiceChip
+            key={f.key}
+            label={f.label}
+            icon={f.icon}
+            count={counts[f.key]}
+            active={service === f.key}
+            onClick={() => setService(f.key)}
           />
         ))}
-        <div className="mx-1 h-5 w-px bg-border" />
-        <FilterChip
-          label="Kechikkan"
-          color="#DC2626"
-          icon={AlertTriangle}
-          active={overdueOnly}
-          onClick={() => setOverdueOnly((v) => !v)}
-        />
+      </div>
+
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-xs font-bold text-gray-dark">Saralash:</span>
+        {SORT_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            onClick={() => setSortBy(opt.key)}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+              sortBy === opt.key
+                ? 'bg-brand-primary text-white'
+                : 'border border-border bg-surface text-ink hover:border-brand-primary/40'
+            }`}
+          >
+            <opt.icon size={13} />
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -159,12 +239,28 @@ function OrderRow({
 }) {
   const overdue = isOrderOverdue(order, items ?? [])
   const dueDate = effectiveDueDate(order, items ?? [])
+  const alert = needsTeam(order)
+  const serviceLabel =
+    order.intakeMethod === 'walk_in' ? "O'zi keldi" : order.serviceType === 'onsite' ? 'Joyida' : 'Olib kelish'
+  const remaining = dueDate ? daysUntil(dueDate) : null
+
   return (
-    <tr onClick={onClick} className="cursor-pointer border-b border-border last:border-0 hover:bg-bg/60">
+    <tr
+      onClick={onClick}
+      className={`cursor-pointer border-b border-border last:border-0 hover:bg-bg/60 ${alert ? 'bg-danger-bg/40' : ''}`}
+    >
       <td className="px-5 py-3.5 font-extrabold text-brand-primary">#{order.orderNumber}</td>
-      <td className="px-5 py-3.5 font-bold text-ink">{order.customerName || "Noma'lum"}</td>
+      <td className="px-5 py-3.5">
+        <div className="font-bold text-ink">{order.customerName || "Noma'lum"}</div>
+        {alert && (
+          <div className="mt-0.5 inline-flex animate-pulse items-center gap-1 text-[11px] font-extrabold text-danger">
+            <Users size={11} />
+            Jamoa biriktirilmagan
+          </div>
+        )}
+      </td>
       <td className="px-5 py-3.5 text-ink">{formatPhoneDisplay(order.phone)}</td>
-      <td className="px-5 py-3.5 text-ink">{order.serviceType === 'onsite' ? 'Joyida' : 'Olib kelish'}</td>
+      <td className="px-5 py-3.5 text-ink">{serviceLabel}</td>
       <td className="px-5 py-3.5">
         <StatusBadge status={order.status} />
       </td>
@@ -173,10 +269,16 @@ function OrderRow({
       </td>
       <td className="px-5 py-3.5">
         {dueDate ? (
-          <span className={overdue ? 'font-bold text-danger' : 'text-ink'}>
-            {formatDateUz(dueDate)}
-            {overdue && ' · kechikmoqda'}
-          </span>
+          <div>
+            <div className={overdue ? 'font-bold text-danger' : 'text-ink'}>{formatDateUz(dueDate)}</div>
+            <div
+              className={`text-[11px] font-bold ${
+                overdue ? 'text-danger' : remaining !== null && remaining <= 1 ? 'text-warning' : 'text-gray-dark'
+              }`}
+            >
+              {dueLabel(dueDate)}
+            </div>
+          </div>
         ) : (
           <span className="text-gray-dark">—</span>
         )}
@@ -186,28 +288,37 @@ function OrderRow({
   )
 }
 
-function FilterChip({
+function ServiceChip({
   label,
-  active,
-  color,
   icon: Icon,
+  count,
+  active,
   onClick,
 }: {
   label: string
+  icon: typeof Home
+  count: number
   active: boolean
-  color?: string
-  icon?: typeof AlertTriangle
   onClick: () => void
 }) {
-  const c = color ?? '#5A148C'
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors"
-      style={active ? { background: c, color: 'white' } : { background: 'var(--color-surface)', color: 'var(--color-ink)', border: '1px solid var(--color-border)' }}
+      className={`relative flex items-center gap-2 rounded-xl border-[1.5px] px-4 py-2.5 text-sm font-bold transition-colors ${
+        active
+          ? 'border-brand-primary bg-brand-primary text-white'
+          : 'border-border bg-surface text-ink hover:border-brand-primary/40'
+      }`}
     >
-      {Icon && <Icon size={13} />}
+      <Icon size={15} />
       {label}
+      <span
+        className={`absolute -right-1.5 -top-1.5 min-w-5 rounded-full px-1.5 py-0.5 text-[10px] font-extrabold leading-none ${
+          active ? 'bg-brand-accent text-brand-primary-dark' : 'bg-brand-primary text-white'
+        }`}
+      >
+        {count}
+      </span>
     </button>
   )
 }

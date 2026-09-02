@@ -42,7 +42,15 @@ export function ItemRow({ item, subId, onClick }: { item: OrderItem; subId: stri
           {measurement && <p className="text-xs text-gray-dark">{measurement}</p>}
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-xs font-bold text-gray-dark">{item.price.toFixed(0)} so'm</p>
+          {/* Talab: narxi 0 bo'lgan (o'lchanmagan) mahsulot qizarib tursin —
+              u upakovkaga o'tolmaydi (server: changeItemStatus). */}
+          {item.price <= 0 && !done ? (
+            <span className="inline-block rounded-md border border-danger/40 bg-danger-bg px-1.5 py-0.5 text-[10px] font-extrabold text-danger">
+              0 so'm — o'lchanmagan
+            </span>
+          ) : (
+            <p className="text-xs font-bold text-gray-dark">{item.price.toFixed(0)} so'm</p>
+          )}
           {conditionLabel && (
             <span className="mt-1 inline-block rounded-md bg-warning-bg px-1.5 py-0.5 text-[10px] font-bold text-warning">
               {item.conditionSurchargePercent ? `${conditionLabel} +${item.conditionSurchargePercent.toFixed(0)}%` : conditionLabel}

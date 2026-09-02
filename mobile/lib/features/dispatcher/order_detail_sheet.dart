@@ -40,7 +40,7 @@ class _OrderDetailSheet extends ConsumerWidget {
     // biriktirish" tugmasi hamon ko'rinib) qolar edi. Endi joriy ro'yxatdan
     // jonli holatni kuzatib boramiz — topilmasa (masalan sahifalanган eski
     // buyurtma) boshlang'ich qiymatga qaytadi.
-    final recentOrders = ref.watch(recentOrdersProvider).value;
+    final recentOrders = ref.watch(ordersProvider).value;
     Order? matched;
     if (recentOrders != null) {
       for (final o in recentOrders) {

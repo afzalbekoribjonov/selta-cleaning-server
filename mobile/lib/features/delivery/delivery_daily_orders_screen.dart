@@ -39,7 +39,7 @@ class _DeliveryDailyOrdersScreenState extends ConsumerState<DeliveryDailyOrdersS
   @override
   Widget build(BuildContext context) {
     final claims = ref.watch(employeeClaimsProvider).valueOrNull;
-    final ordersAsync = ref.watch(recentOrdersProvider);
+    final ordersAsync = ref.watch(ordersProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(formatDateUz(widget.day))),

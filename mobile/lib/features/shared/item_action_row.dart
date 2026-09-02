@@ -161,11 +161,23 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
         else ...[
           if ((status == 'pending' || status == 'washing' || status == 'returned') && isWorker) ...[
             if (hasWashingLavozim)
-              _ActionButton(
-                label: status == 'washing' ? "Upakovkaga o'tkazish" : 'Yuvishni boshlash',
-                icon: status == 'washing' ? Icons.inventory_rounded : Icons.local_laundry_service_rounded,
-                onTap: () => _changeStatus(status == 'washing' ? 'packing' : 'washing'),
-              )
+              // Talab: narxi 0 bo'lgan mahsulot upakovkaga o'tolmasin.
+              // Server ham buni bloklaydi (changeItemStatus) — bu yerdagi
+              // tugma xodimga nima qilish kerakligini oldindan aytadi va
+              // to'g'ridan-to'g'ri o'lchash oynasiga olib boradi.
+              if (status == 'washing' && widget.item.price <= 0)
+                _ActionButton(
+                  label: "Narxi 0 — avval o'lchang",
+                  icon: Icons.straighten_rounded,
+                  danger: true,
+                  onTap: widget.onEdit ?? () {},
+                )
+              else
+                _ActionButton(
+                  label: status == 'washing' ? "Upakovkaga o'tkazish" : 'Yuvishni boshlash',
+                  icon: status == 'washing' ? Icons.inventory_rounded : Icons.local_laundry_service_rounded,
+                  onTap: () => _changeStatus(status == 'washing' ? 'packing' : 'washing'),
+                )
             else
               _LavozimHint(
                 text: specializations.isEmpty
@@ -241,7 +253,8 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  const _ActionButton({required this.label, required this.icon, required this.onTap});
+  final bool danger;
+  const _ActionButton({required this.label, required this.icon, required this.onTap, this.danger = false});
 
   @override
   Widget build(BuildContext context) {
@@ -253,6 +266,13 @@ class _ActionButton extends StatelessWidget {
           onPressed: onTap,
           icon: Icon(icon, size: 16),
           label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          style: danger
+              ? OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.danger,
+                  side: const BorderSide(color: AppColors.danger),
+                  backgroundColor: AppColors.danger.withValues(alpha: 0.06),
+                )
+              : null,
         ),
       ),
     );

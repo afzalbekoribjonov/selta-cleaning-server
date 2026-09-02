@@ -110,7 +110,27 @@ class ItemDetailRow extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text("${item.price.toStringAsFixed(0)} so'm", style: const TextStyle(color: AppColors.grayDark, fontSize: 12, fontWeight: FontWeight.w600)),
+                    // Talab: narxi 0 bo'lgan (hali o'lchanmagan) mahsulot
+                    // qizarib, darhol ko'zga tashlanib tursin — u
+                    // upakovkaga o'tolmaydi (server: changeItemStatus).
+                    if (item.price <= 0 && !item.isDone)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(7),
+                          border: Border.all(color: AppColors.danger.withValues(alpha: 0.4)),
+                        ),
+                        child: const Text(
+                          "0 so'm — o'lchanmagan",
+                          style: TextStyle(color: AppColors.danger, fontSize: 11, fontWeight: FontWeight.w900),
+                        ),
+                      )
+                    else
+                      Text(
+                        "${item.price.toStringAsFixed(0)} so'm",
+                        style: const TextStyle(color: AppColors.grayDark, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
                     if (conditionLabel != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 3),

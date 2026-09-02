@@ -60,7 +60,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
     // keladigan (pickup) buyurtmalar navbatini yashirishi mumkin bo'lishi
     // kerak — standart holat true (avvalgi xatti-harakat).
     final canSeeWorkshopQueue = employeeAsync.value?['canSeeWorkshopQueue'] as bool? ?? true;
-    final ordersAsync = ref.watch(recentOrdersProvider);
+    final ordersAsync = ref.watch(ordersProvider);
     final stage = _workerStages[_stageIndex];
 
     if (!canSeeWorkshopQueue) {

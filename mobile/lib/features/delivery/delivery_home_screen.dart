@@ -55,7 +55,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
   Widget build(BuildContext context) {
     final employeeAsync = ref.watch(currentEmployeeProvider);
     final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
-    final ordersAsync = ref.watch(recentOrdersProvider);
+    final ordersAsync = ref.watch(ordersProvider);
     final stage = _stages[_stageIndex].$1;
 
     return Scaffold(

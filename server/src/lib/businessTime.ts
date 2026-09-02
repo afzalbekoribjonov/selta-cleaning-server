@@ -19,6 +19,17 @@ export function businessDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Berilgan payt tegishli bo'lgan biznes-kunning 00:00 boshlanishi, UTC
+ * `Date` sifatida — Firestore `Timestamp` bilan taqqoslash uchun. Serverning
+ * o'z vaqt zonasiga bog'liq emas (Render UTCda ishlaydi, biznes UTC+5da).
+ */
+export function businessDayStartUtc(date: Date): Date {
+  const local = toBusinessLocal(date);
+  const localMidnightMs = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
+  return new Date(localMidnightMs - BUSINESS_UTC_OFFSET_MINUTES * 60_000);
+}
+
 /** Biznes mahalliy kun boshidan (00:00) beri o'tgan daqiqalar soni. */
 export function businessMinutesSinceMidnight(date: Date): number {
   const local = toBusinessLocal(date);

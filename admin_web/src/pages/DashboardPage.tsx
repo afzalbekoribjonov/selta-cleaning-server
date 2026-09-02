@@ -3,7 +3,7 @@ import { ClipboardList, Clock, TrendingUp, AlertTriangle, Truck, PackageCheck } 
 import { StatCard } from '@/components/ui/StatCard'
 import { StatusBadge, TariffDots } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
-import { useRecentOrders } from '@/hooks/useRecentOrders'
+import { useRecentOrders, useActiveOrders } from '@/hooks/useRecentOrders'
 import { useAllOrderItems } from '@/hooks/useAllOrderItems'
 import { type Order } from '@/lib/orders'
 import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
@@ -24,18 +24,29 @@ function isToday(date: Date): boolean {
 }
 
 export default function DashboardPage() {
+  // Ikki manba: `recentOrders` — oxirgi 150 ta (YAKUNLANGANLARI bilan),
+  // bugungi ko'rsatkichlar shundan chiqadi; `activeOrders` — barcha faol
+  // buyurtmalar (holat bo'yicha, to'liq). Avval ikkalasi ham bitta
+  // cheklangan oynadan olinardi, shuning uchun eski faol buyurtmalar
+  // "Faol buyurtmalar" ro'yxatidan tushib qolardi.
   const { orders, loading } = useRecentOrders()
+  const { orders: activeOrders } = useActiveOrders()
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
   // Talab: pickup buyurtmalarda tarif/muddat item-darajasida — "Kechikkan
   // buyurtmalar" hisoblagichi va jadvaldagi Muddat ustuni to'g'ri
   // ishlashi uchun itemlarni ham kuzatish kerak.
-  const pickupOrderIds = useMemo(() => (orders ?? []).filter((o) => o.serviceType === 'pickup').map((o) => o.id), [orders])
+  const pickupOrderIds = useMemo(() => {
+    const byId = new Map<string, Order>()
+    for (const o of activeOrders ?? []) byId.set(o.id, o)
+    for (const o of orders ?? []) byId.set(o.id, o)
+    return [...byId.values()].filter((o) => o.serviceType === 'pickup').map((o) => o.id)
+  }, [orders, activeOrders])
   const itemsByOrder = useAllOrderItems(pickupOrderIds)
 
   const stats = useMemo(() => {
     const list = orders ?? []
-    const active = list.filter((o) => o.status !== 'done')
+    const active = activeOrders ?? []
     const today = list.filter((o) => isToday(o.createdAt))
     const todayRevenue = today.reduce((sum, o) => sum + (o.totalPrice || 0), 0)
     const overdue = active.filter((o) => isOrderOverdue(o, itemsByOrder[o.id] ?? []))
@@ -52,7 +63,7 @@ export default function DashboardPage() {
     }
 
     return { activeCount: active.length, todayCount: today.length, todayRevenue, overdueCount: overdue.length, active, pickedUpToday, deliveredToday }
-  }, [orders, itemsByOrder])
+  }, [orders, activeOrders, itemsByOrder])
 
   const activeSorted = useMemo(() => {
     return [...stats.active].sort((a, b) => {

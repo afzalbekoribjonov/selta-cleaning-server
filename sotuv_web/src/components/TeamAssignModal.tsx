@@ -15,6 +15,9 @@ export function TeamAssignModal({ orderId, onClose }: { orderId: string; onClose
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Vakolati yo'q xodim ustiga bosilganda sababni tushuntiradi (talab) —
+  // shunchaki bloklab qo'yish "nega ishlamayapti?" degan savol tug'diradi.
+  const [deniedName, setDeniedName] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([listEmployeesByDepartment('worker'), listEmployeesByDepartment('delivery')])
@@ -91,9 +94,10 @@ export function TeamAssignModal({ orderId, onClose }: { orderId: string; onClose
                     return (
                       <label
                         key={c.employee.id}
-                        title={permitted ? undefined : 'Ruxsat yo\'q'}
+                        title={permitted ? undefined : "Ruxsat yo'q"}
+                        onClick={permitted ? undefined : () => setDeniedName(c.employee.fullName)}
                         className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 ${
-                          permitted ? 'cursor-pointer hover:bg-bg' : 'cursor-not-allowed'
+                          permitted ? 'cursor-pointer hover:bg-bg' : 'cursor-not-allowed bg-danger-bg/40'
                         }`}
                       >
                         <input
@@ -114,6 +118,12 @@ export function TeamAssignModal({ orderId, onClose }: { orderId: string; onClose
               </div>
             ))}
           </div>
+        )}
+
+        {deniedName && (
+          <p className="mt-3 rounded-xl bg-danger-bg px-3 py-2 text-xs font-bold text-danger">
+            {deniedName} — joyida yuvish vakolati yo'q. Admin panel orqali ruxsat berilishi kerak.
+          </p>
         )}
 
         {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}

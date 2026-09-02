@@ -6,6 +6,7 @@ import '../features/home/employee_home_screen.dart';
 import '../features/profile/employee_profile_screen.dart';
 import '../features/role_select/role_select_screen.dart';
 import '../features/splash/splash_screen.dart';
+import '../features/stats/daily_stats_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -27,5 +28,6 @@ final appRouter = GoRouter(
     ),
     GoRoute(path: '/home', builder: (context, state) => const EmployeeHomeScreen()),
     GoRoute(path: '/profile', builder: (context, state) => const EmployeeProfileScreen()),
+    GoRoute(path: '/stats', builder: (context, state) => const DailyStatsScreen()),
   ],
 );

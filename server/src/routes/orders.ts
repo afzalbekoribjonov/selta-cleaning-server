@@ -493,6 +493,22 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       // shart emas).
       const orderUpdate: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
       if (fromStatus === "washing" && toStatus === "packing") {
+        // Talab: "0 so'm bilan upakovkaga o'tishi mumkin emas". Narxi 0
+        // bo'lgan mahsulot — bu deyarli har doim hali O'LCHANMAGAN mahsulot
+        // (sotuv menejeri buyurtmani mahsulotsiz/narxsiz ochgan, ishchi
+        // sexda o'lchab narxini kiritishi kerak edi). Uni upakovkaga
+        // o'tkazib yuborilsa, buyurtma 0 so'm bilan yakunlanib mijozdan pul
+        // olinmay qoladi va maosh hisob-kitobi ham kam chiqadi — shuning
+        // uchun bu yerda, server tomonda, qat'iy to'siladi (klientdagi
+        // ogohlantirish faqat qulaylik uchun, ishonch manbai emas).
+        const itemPrice = (item.price as number | undefined) ?? 0;
+        if (!(itemPrice > 0)) {
+          throw new ApiError(
+            412,
+            "failed-precondition",
+            "Mahsulot narxi 0 so'm — avval o'lchab, narxini kiriting",
+          );
+        }
         itemUpdate.washedBy = employeeId;
         itemUpdate.washedAt = FieldValue.serverTimestamp();
         orderUpdate.washedByEmployees = FieldValue.arrayUnion(employeeId);

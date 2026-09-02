@@ -121,31 +121,16 @@ class _TeamAssignSheetState extends ConsumerState<_TeamAssignSheet> {
                             ),
                           ),
                           for (final c in entry.value)
-                            CheckboxListTile(
-                              value: _selected.contains(c.employee.id),
-                              onChanged: !c.employee.canDoOnsiteWashing
-                                  ? null
-                                  : (checked) => setState(() {
-                                      if (checked == true) {
-                                        _selected.add(c.employee.id);
-                                      } else {
-                                        _selected.remove(c.employee.id);
-                                      }
-                                    }),
-                              title: Text(
-                                c.employee.fullName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: c.employee.canDoOnsiteWashing ? AppColors.ink : AppColors.danger,
-                                ),
-                              ),
-                              subtitle: c.employee.canDoOnsiteWashing
-                                  ? null
-                                  : const Text(
-                                      'Ruxsat yo\'q',
-                                      style: TextStyle(color: AppColors.danger, fontSize: 11.5, fontWeight: FontWeight.w700),
-                                    ),
-                              activeColor: AppColors.primary,
+                            _CandidateTile(
+                              candidate: c,
+                              selected: _selected.contains(c.employee.id),
+                              onToggle: (checked) => setState(() {
+                                if (checked) {
+                                  _selected.add(c.employee.id);
+                                } else {
+                                  _selected.remove(c.employee.id);
+                                }
+                              }),
                             ),
                         ],
                       ],
@@ -178,6 +163,70 @@ class _TeamAssignSheetState extends ConsumerState<_TeamAssignSheet> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Jamoaga nomzod qatori. Talab: "Joyida yuvish"ga vakolati yo'q xodimlar
+/// ro'yxatda KO'RINADI, lekin ismi qizil, belgilash imkonsiz, va ustiga
+/// bosilganda sabab tushuntiriladi. Haqiqiy cheklov har doim serverda
+/// (orders.ts: assignTeam `canDoOnsiteWashing`ni qayta tekshiradi) — bu
+/// yerdagisi faqat ko'rinish/qulaylik uchun.
+class _CandidateTile extends StatelessWidget {
+  final _TeamCandidate candidate;
+  final bool selected;
+  final void Function(bool checked) onToggle;
+
+  const _CandidateTile({required this.candidate, required this.selected, required this.onToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    final permitted = candidate.employee.canDoOnsiteWashing;
+
+    if (permitted) {
+      return CheckboxListTile(
+        value: selected,
+        onChanged: (checked) => onToggle(checked == true),
+        title: Text(
+          candidate.employee.fullName,
+          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink),
+        ),
+        activeColor: AppColors.primary,
+      );
+    }
+
+    // Bloklangan nomzod: CheckboxListTile o'chirilgan holatda ko'rsatiladi
+    // (AbsorbPointer uning o'z bosishlarini yutadi), tashqi GestureDetector
+    // esa bosishni ushlab, sababni ko'rsatadi.
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.danger,
+              content: Text(
+                "${candidate.employee.fullName} — joyida yuvish vakolati yo'q. Admin panel orqali ruxsat berilishi kerak.",
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          );
+      },
+      child: AbsorbPointer(
+        child: CheckboxListTile(
+          value: false,
+          onChanged: null,
+          title: Text(
+            candidate.employee.fullName,
+            style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.danger),
+          ),
+          subtitle: const Text(
+            "Ruxsat yo'q",
+            style: TextStyle(color: AppColors.danger, fontSize: 11.5, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
     );
   }
 }

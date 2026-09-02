@@ -69,11 +69,58 @@ export function isOverdue(order: Order): boolean {
   return new Date() > order.dueDate
 }
 
-const ACTIVE_WINDOW_SIZE = 150
+/**
+ * Buyurtmaning YAKUNLANMAGAN (faol) holatlari — `done`dan boshqa hammasi.
+ * Item-darajasiga ko'chirilishidan oldingi eski buyurtmalarda order
+ * darajasida qolgan holatlar (`washing`, `ready` va h.k.) ham qamrab
+ * olinishi uchun ro'yxat ataylab keng.
+ */
+export const ACTIVE_ORDER_STATUSES = [
+  'new',
+  'picked_up',
+  'brought_in',
+  'washing',
+  'packing',
+  'qc_review',
+  'ready',
+  'team_assigned',
+  'in_progress',
+  'pending',
+  'returned',
+]
 
-/** "Faol buyurtmalar" ro'yxati — cheklangan oynadagi eng yangi buyurtmalar, real-vaqtli. */
+const ACTIVE_LIMIT = 400
+const RECENT_WINDOW_SIZE = 150
+
+/**
+ * FAOL buyurtmalar — HOLAT bo'yicha so'raladi, "oxirgi N ta" oynasi bilan
+ * cheklanmaydi.
+ *
+ * Avval bu ro'yxat `createdAt` bo'yicha oxirgi 150 tadan olinib, keyin
+ * klientda `status !== 'done'` bo'yicha filtrlanardi — bu jiddiy xato edi:
+ * yakunlangan buyurtmalar oynani to'ldirgach, eski (lekin hamon FAOL)
+ * buyurtmalar ro'yxatdan butunlay yo'qolib qolardi va xodimlar ularni
+ * hech qayerda ko'ra olmasdi. Holat bo'yicha so'rov bu xatoni tubdan
+ * yo'q qiladi. (status, createdAt) composite indeksi
+ * firebase/firestore.indexes.json'da allaqachon mavjud.
+ */
+export function subscribeActiveOrders(callback: (orders: Order[]) => void): () => void {
+  const q = query(
+    collection(db, 'orders'),
+    where('status', 'in', ACTIVE_ORDER_STATUSES),
+    orderBy('createdAt', 'desc'),
+    limit(ACTIVE_LIMIT),
+  )
+  return onSnapshot(q, (snap) => callback(snap.docs.map(toOrder)))
+}
+
+/**
+ * Oxirgi N ta buyurtma — YAKUNLANGANLARI bilan birga. Faol ro'yxatga
+ * qo'shimcha sifatida ishlatiladi, shunda qidiruvda yaqinda yetkazilgan
+ * buyurtmalar ham topiladi va bugungi statistika to'g'ri chiqadi.
+ */
 export function subscribeRecentOrders(callback: (orders: Order[]) => void): () => void {
-  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(ACTIVE_WINDOW_SIZE))
+  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(RECENT_WINDOW_SIZE))
   return onSnapshot(q, (snap) => callback(snap.docs.map(toOrder)))
 }
 

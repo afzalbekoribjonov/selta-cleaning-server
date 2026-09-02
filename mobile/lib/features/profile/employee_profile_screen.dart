@@ -196,7 +196,7 @@ class _MonthlyStatsCard extends ConsumerWidget {
     final resolvedDept = dept;
     final employeeId = claims.employeeId;
 
-    final ordersAsync = ref.watch(recentOrdersProvider);
+    final ordersAsync = ref.watch(ordersProvider);
     return ordersAsync.when(
       loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: SeltaLoader(size: 32))),
       error: (_, __) => const Text("Statistikani yuklab bo'lmadi", style: TextStyle(color: AppColors.grayDark)),
@@ -228,7 +228,7 @@ class _DeliveryDailyStatsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final claims = ref.watch(employeeClaimsProvider).valueOrNull;
-    final ordersAsync = ref.watch(recentOrdersProvider);
+    final ordersAsync = ref.watch(ordersProvider);
 
     if (claims == null) return const SizedBox.shrink();
 

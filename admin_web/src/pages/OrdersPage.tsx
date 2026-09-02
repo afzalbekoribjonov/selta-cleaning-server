@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Search, AlertTriangle } from 'lucide-react'
-import { useRecentOrders } from '@/hooks/useRecentOrders'
+import { useActiveOrders } from '@/hooks/useRecentOrders'
 import { useAllOrderItems } from '@/hooks/useAllOrderItems'
 import { fetchOrdersPage, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
 import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
@@ -36,7 +36,10 @@ export default function OrdersPage() {
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
-  const { orders: recentOrders, loading } = useRecentOrders()
+  // "Faol" ko'rinish holat bo'yicha to'liq so'raladi — avval oxirgi 150 ta
+  // buyurtmadan klientda filtrlanardi, shuning uchun eski faol buyurtmalar
+  // ro'yxatdan tushib qolardi.
+  const { orders: activeOrders, loading } = useActiveOrders()
 
   const [allOrders, setAllOrders] = useState<Order[]>([])
   const [cursor, setCursor] = useState<QueryDocumentSnapshot | null>(null)
@@ -62,7 +65,10 @@ export default function OrdersPage() {
     }
   }
 
-  const baseOrders = view === 'active' ? (recentOrders ?? []).filter((o) => o.status !== 'done') : allOrders
+  const baseOrders = useMemo(
+    () => (view === 'active' ? (activeOrders ?? []) : allOrders),
+    [view, activeOrders, allOrders],
+  )
 
   // Talab: pickup buyurtmalarda tarif/muddat item-darajasida — ro'yxatda
   // to'g'ri ko'rsatish uchun har bir buyurtmaning itemlarini kuzatish kerak.
