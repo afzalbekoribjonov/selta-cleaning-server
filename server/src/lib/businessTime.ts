@@ -36,6 +36,17 @@ export function businessMinutesSinceMidnight(date: Date): number {
   return local.getUTCHours() * 60 + local.getUTCMinutes();
 }
 
+/** Biznes mahalliy vaqtidagi hafta kuni (0=Yakshanba ... 6=Shanba). */
+export function businessWeekday(date: Date): number {
+  return toBusinessLocal(date).getUTCDay();
+}
+
+/** Biznes mahalliy vaqtida "HH:MM" — ko'rsatish uchun. */
+export function formatBusinessHHMM(date: Date): string {
+  const local = toBusinessLocal(date);
+  return `${String(local.getUTCHours()).padStart(2, "0")}:${String(local.getUTCMinutes()).padStart(2, "0")}`;
+}
+
 /** "08:00" -> 480 (daqiqa). Noto'g'ri format bo'lsa null. */
 export function parseHHMM(value: string): number | null {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value);

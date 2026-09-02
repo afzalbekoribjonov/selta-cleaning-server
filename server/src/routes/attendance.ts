@@ -3,9 +3,18 @@ import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { distanceMeters } from "../lib/geo";
-import { businessDateString, businessMinutesSinceMidnight, parseHHMM } from "../lib/businessTime";
+import {
+  businessDateString,
+  businessMinutesSinceMidnight,
+  businessWeekday,
+  formatBusinessHHMM,
+  parseHHMM,
+} from "../lib/businessTime";
 
 export const attendanceRouter = Router();
+
+/** Standart ish kunlari — Dushanbadan Shanbagacha (0=Yakshanba). */
+const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5, 6];
 
 interface AttendanceConfig {
   enabled: boolean;
@@ -13,6 +22,8 @@ interface AttendanceConfig {
   lateToleranceMinutes: number;
   location: { lat: number; lng: number } | null;
   radiusMeters: number;
+  workDays: number[];
+  enabledAt: Date | null;
 }
 
 async function getAttendanceConfig(): Promise<AttendanceConfig> {
@@ -24,69 +35,96 @@ async function getAttendanceConfig(): Promise<AttendanceConfig> {
     lateToleranceMinutes: typeof data.lateToleranceMinutes === "number" ? data.lateToleranceMinutes : 30,
     location: data.location && typeof data.location.lat === "number" && typeof data.location.lng === "number" ? data.location : null,
     radiusMeters: typeof data.radiusMeters === "number" ? data.radiusMeters : 200,
+    workDays: Array.isArray(data.workDays) ? (data.workDays as number[]) : DEFAULT_WORK_DAYS,
+    enabledAt: data.enabledAt?.toDate?.() ?? null,
   };
 }
 
 /**
- * Xodim ilovasi fonga/oldingi holatga qaytganda (yoki ochilganda), agar
- * davomat oynasi ichida bo'lsa, chaqiradi — sokin, hech qanday interfeys
- * ko'rsatmasdan (talab: "hech narsa ko'rsatilmaydi"). Vaqt oynasi va
- * masofa serverning o'zida (mijoz soatiga ishonmasdan) tekshiriladi.
- * Har qanday sabab bilan yozilmasa ham xatolik qaytarilmaydi — mijoz
- * bu chaqiruvni har doim "unut" (fire-and-forget) sifatida yuboradi.
+ * Xodim ilovasi ochilganda/fondan qaytganda chaqiradi — sokin, hech qanday
+ * interfeys ko'rsatmasdan (talab: "hech narsa ko'rsatilmaydi").
+ *
+ * MUHIM (2026-09-03 da tuzatilgan mantiq): belgilash KUN DAVOMIDA istalgan
+ * paytda qabul qilinadi, status esa belgilangan VAQTGA qarab aniqlanadi:
+ *   - `arrivalTime` + `lateToleranceMinutes` = imtiyoz muddati (deadline)
+ *   - deadline'gacha (ERTA kelgan ham) -> "on_time"
+ *   - deadline'dan keyin -> "late"
+ *
+ * Avval tor oyna ([arrivalTime, arrivalTime+tolerance)) ishlatilardi va u
+ * ikkita jiddiy xatoga olib kelardi: (1) ishga ERTA kelgan xodim umuman
+ * yozilmay, "kelmagan" bo'lib qolardi; (2) "on_time" faqat aynan
+ * arrivalTime daqiqasida mumkin edi, ya'ni imtiyoz muddati amalda
+ * ishlamas, deyarli hamma "kechikkan" bo'lib yozilardi.
  */
 attendanceRouter.post("/submitAttendanceCheckin", withAuth, async (req: AuthedRequest, res) => {
   try {
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
-    const { lat, lng } = req.body ?? {};
-    if (typeof lat !== "number" || typeof lng !== "number") {
-      throw new ApiError(400, "invalid-argument", "lat/lng majburiy");
-    }
+    const { lat, lng, issue } = req.body ?? {};
 
     const config = await getAttendanceConfig();
     if (!config.enabled || !config.location) {
-      return res.json({ ok: true, recorded: false });
+      return res.json({ ok: true, recorded: false, reason: "disabled" });
     }
 
     const empSnap = await db.collection("employees").doc(employeeId).get();
     if (!empSnap.exists || empSnap.data()?.attendanceEnabled !== true) {
-      return res.json({ ok: true, recorded: false });
+      return res.json({ ok: true, recorded: false, reason: "not_enrolled" });
     }
 
     const arrivalMinutes = parseHHMM(config.arrivalTime);
     if (arrivalMinutes == null) {
-      return res.json({ ok: true, recorded: false });
+      return res.json({ ok: true, recorded: false, reason: "bad_config" });
     }
 
     const now = new Date();
-    const nowMinutes = businessMinutesSinceMidnight(now);
-    const windowEnd = arrivalMinutes + config.lateToleranceMinutes;
-    if (nowMinutes < arrivalMinutes || nowMinutes >= windowEnd) {
-      return res.json({ ok: true, recorded: false });
+    const dateStr = businessDateString(now);
+    const recordRef = db.collection("attendanceRecords").doc(`${employeeId}_${dateStr}`);
+
+    // Shu kun uchun allaqachon belgilangan bo'lsa — ustidan yozilmaydi
+    // (birinchi tasdiqlangan kelish saqlanib qoladi).
+    const existing = await recordRef.get();
+    if (existing.exists) {
+      return res.json({ ok: true, recorded: false, reason: "already" });
+    }
+
+    // Talab: adminda "kelmagan" bilan "telefonda GPS o'chiq" farqlanishi
+    // kerak. Klient joylashuvni ololmasa shu bayroq bilan xabar beradi —
+    // bu davomat yozuvi EMAS, faqat admin uchun izoh (keyinroq haqiqiy
+    // belgilash kelsa, u baribir yoziladi).
+    if (typeof issue === "string" && issue.length > 0 && issue.length <= 40) {
+      await db
+        .collection("attendanceIssues")
+        .doc(`${employeeId}_${dateStr}`)
+        .set(
+          { employeeId, date: dateStr, issue, reportedAt: FieldValue.serverTimestamp() },
+          { merge: true },
+        );
+      return res.json({ ok: true, recorded: false, reason: "issue_logged" });
+    }
+
+    if (typeof lat !== "number" || typeof lng !== "number") {
+      throw new ApiError(400, "invalid-argument", "lat/lng majburiy");
     }
 
     const distance = distanceMeters(config.location.lat, config.location.lng, lat, lng);
     if (distance > config.radiusMeters) {
-      return res.json({ ok: true, recorded: false });
+      return res.json({ ok: true, recorded: false, reason: "out_of_range" });
     }
 
-    const dateStr = businessDateString(now);
-    const recordRef = db.collection("attendanceRecords").doc(`${employeeId}_${dateStr}`);
+    const nowMinutes = businessMinutesSinceMidnight(now);
+    const deadline = arrivalMinutes + config.lateToleranceMinutes;
+    const status = nowMinutes <= deadline ? "on_time" : "late";
 
-    // Idempotent — shu kun uchun allaqachon yozuv bo'lsa, ustidan yozmaymiz
-    // (xodim oyna ichida ilovani bir necha marta ochsa ham birinchi
-    // muvaffaqiyatli belgi saqlanib qoladi).
-    const existing = await recordRef.get();
-    if (existing.exists) {
-      return res.json({ ok: true, recorded: false });
-    }
-
-    const status = nowMinutes <= arrivalMinutes ? "on_time" : "late";
     await recordRef.set({
       employeeId,
       date: dateStr,
       status,
       checkedInAt: FieldValue.serverTimestamp(),
+      // Ko'rsatish uchun biznes vaqtidagi "HH:MM" — admin brauzeri boshqa
+      // vaqt zonasida bo'lsa ham soat to'g'ri ko'rinishi uchun.
+      checkedInTime: formatBusinessHHMM(now),
+      minutesFromArrival: nowMinutes - arrivalMinutes,
+      isWorkDay: config.workDays.includes(businessWeekday(now)),
       gpsCoords: `${lat},${lng}`,
       distanceMeters: Math.round(distance),
       createdAt: FieldValue.serverTimestamp(),
@@ -100,7 +138,7 @@ attendanceRouter.post("/submitAttendanceCheckin", withAuth, async (req: AuthedRe
 
 attendanceRouter.post("/adminSetAttendanceConfig", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
-    const { enabled, arrivalTime, lateToleranceMinutes, location, radiusMeters } = req.body ?? {};
+    const { enabled, arrivalTime, lateToleranceMinutes, location, radiusMeters, workDays } = req.body ?? {};
     if (typeof enabled !== "boolean") {
       throw new ApiError(400, "invalid-argument", "enabled noto'g'ri");
     }
@@ -116,6 +154,19 @@ attendanceRouter.post("/adminSetAttendanceConfig", withAuth, requireAdmin, async
     if (typeof radiusMeters !== "number" || radiusMeters < 10 || radiusMeters > 5000) {
       throw new ApiError(400, "invalid-argument", "Radius 10-5000 metr oralig'ida bo'lishi kerak");
     }
+    const cleanWorkDays = Array.isArray(workDays)
+      ? [...new Set(workDays.filter((d) => typeof d === "number" && d >= 0 && d <= 6))].sort()
+      : DEFAULT_WORK_DAYS;
+    if (cleanWorkDays.length === 0) {
+      throw new ApiError(400, "invalid-argument", "Kamida bitta ish kuni tanlanishi kerak");
+    }
+
+    // `enabledAt` — davomat nazorati QACHON yoqilgani. Admin paneli undan
+    // oldingi kunlarni "kelmagan" deb belgilamasligi uchun kerak (aks holda
+    // tizim ishlatilmagan kunlar ham qizil bo'lib ko'rinardi). Faqat
+    // o'chiqdan yoqiqqa o'tishda yangilanadi.
+    const prevSnap = await db.collection("settings").doc("attendance").get();
+    const wasEnabled = prevSnap.data()?.enabled === true;
 
     await db.collection("settings").doc("attendance").set(
       {
@@ -124,6 +175,8 @@ attendanceRouter.post("/adminSetAttendanceConfig", withAuth, requireAdmin, async
         lateToleranceMinutes,
         location: { lat: location.lat, lng: location.lng },
         radiusMeters,
+        workDays: cleanWorkDays,
+        ...(enabled && !wasEnabled ? { enabledAt: FieldValue.serverTimestamp() } : {}),
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: req.auth!.uid,
       },

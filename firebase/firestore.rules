@@ -135,6 +135,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Xodim telefonida GPS o'chiq/ruxsat berilmagan bo'lsa qayd etiladi —
+    // admin "kelmagan" bilan "joylashuvni o'qib bo'lmadi"ni ajratishi uchun.
+    // Yozish faqat server orqali (submitAttendanceCheckin).
+    match /attendanceIssues/{issueId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // --- expenses ---------------------------------------------------------
     // Moliyaviy ma'lumot — faqat admin ko'radi va yozadi (xodimlar buni
     // umuman ko'rmaydi). Yozish baribir server orqali, boshqa yozuvlar bilan

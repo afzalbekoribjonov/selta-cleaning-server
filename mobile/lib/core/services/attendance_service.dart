@@ -7,35 +7,20 @@ import 'auth_service.dart' show apiClientProvider, authStateProvider;
 
 /// "Davomat nazorati" sozlamalari — admin panelda belgilanadi, barcha
 /// xodimlar uchun bitta (talab: "Butun kompaniya uchun bitta qoida").
-/// Xodim ilovasi faqat oyna vaqtini bilishi kerak — joylashuv/radius
-/// tekshiruvi to'liq serverda amalga oshadi.
+///
+/// Klient endi VAQTNI O'ZI TEKSHIRMAYDI — faqat nazorat umuman
+/// yoqilgan-yoqilmaganini biladi. Sabab: avval klient qurilmaning
+/// mahalliy soatidan (`DateTime.now().hour`) foydalanib oynani
+/// tekshirardi, server esa qat'iy UTC+5 dan. Telefon vaqt zonasi yoki
+/// soati noto'g'ri bo'lsa, klient serverga umuman murojaat qilmay,
+/// xodim jimgina "kelmagan" bo'lib qolardi. Endi qaror faqat serverda.
 class AttendanceConfig {
   final bool enabled;
-  final String arrivalTime; // "08:00"
-  final int lateToleranceMinutes;
 
-  const AttendanceConfig({required this.enabled, required this.arrivalTime, required this.lateToleranceMinutes});
+  const AttendanceConfig({required this.enabled});
 
   factory AttendanceConfig.fromMap(Map<String, dynamic>? data) {
-    return AttendanceConfig(
-      enabled: data?['enabled'] == true,
-      arrivalTime: data?['arrivalTime']?.toString() ?? '08:00',
-      lateToleranceMinutes: (data?['lateToleranceMinutes'] as num?)?.toInt() ?? 30,
-    );
-  }
-
-  /// Berilgan vaqt davomat oynasi ichidami (ishga kelish vaqtidan
-  /// kechikish chegarasigacha).
-  bool isWithinWindow(DateTime now) {
-    if (!enabled) return false;
-    final parts = arrivalTime.split(':');
-    if (parts.length != 2) return false;
-    final h = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    if (h == null || m == null) return false;
-    final arrivalMinutes = h * 60 + m;
-    final nowMinutes = now.hour * 60 + now.minute;
-    return nowMinutes >= arrivalMinutes && nowMinutes < arrivalMinutes + lateToleranceMinutes;
+    return AttendanceConfig(enabled: data?['enabled'] == true);
   }
 }
 
@@ -55,24 +40,63 @@ class AttendanceService {
   final ApiClient _api;
   AttendanceService(this._api);
 
+  /// Shu kun uchun ish tugagan (belgilangan yoki belgilashning hojati
+  /// yo'q) — keyingi urinishlarda GPS o'qishga umuman kirishmaslik uchun.
+  /// Faqat xotirada: ilova qayta ishga tushsa yana bir marta tekshiradi,
+  /// bu esa zararsiz (server idempotent).
+  String? _settledDate;
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month}-${now.day}';
+  }
+
   Future<void> tryCheckin({required String idToken}) async {
+    final today = _todayKey();
+    if (_settledDate == today) return;
+
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) return;
+      // Joylashuvni o'qib bo'lmasa — adminga sababi bilan xabar beriladi,
+      // shunda u "kelmagan" bilan "GPS o'chiq"ni farqlay oladi.
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        await _reportIssue(idToken, 'location_off');
+        return;
+      }
       var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        await _reportIssue(idToken, 'permission_denied');
+        return;
+      }
 
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 20)),
       );
-      await _api.post(
+      final result = await _api.post(
         '/submitAttendanceCheckin',
         idToken: idToken,
         body: {'lat': position.latitude, 'lng': position.longitude},
       );
+
+      // Belgilandi yoki allaqachon belgilangan / nazorat o'chiq — bugun
+      // qayta urinish shart emas. "out_of_range" bo'lsa esa urinaveramiz:
+      // xodim hali yo'lda bo'lishi mumkin.
+      final recorded = result['recorded'] == true;
+      final reason = result['reason']?.toString();
+      if (recorded || reason == 'already' || reason == 'disabled' || reason == 'not_enrolled') {
+        _settledDate = today;
+      }
     } catch (_) {
       // Sokin — talab: "ilovada davomatga oid hech qanday narsa
       // ko'rsatilmaydi", shuning uchun xatolik ham hech qanday holatda
       // foydalanuvchiga ko'rsatilmaydi.
+    }
+  }
+
+  Future<void> _reportIssue(String idToken, String issue) async {
+    try {
+      await _api.post('/submitAttendanceCheckin', idToken: idToken, body: {'issue': issue});
+    } catch (_) {
+      // Sokin.
     }
   }
 }

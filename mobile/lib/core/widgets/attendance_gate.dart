@@ -49,8 +49,13 @@ class _AttendanceGateState extends ConsumerState<AttendanceGate> with WidgetsBin
       final employee = await ref.read(currentEmployeeProvider.future);
       if (employee?['attendanceEnabled'] != true) return;
 
+      // Vaqt oynasi ATAYLAB bu yerda tekshirilmaydi — u faqat serverda
+      // (biznes vaqti bo'yicha) aniqlanadi. Klient qurilma soatiga
+      // tayanganda, telefon vaqt zonasi noto'g'ri bo'lsa xodim jimgina
+      // "kelmagan" bo'lib qolardi. Servis o'zi kuniga bir marta muvaffaqiyatli
+      // belgilagach to'xtaydi, shuning uchun bu qimmatga tushmaydi.
       final config = await ref.read(attendanceConfigProvider.future);
-      if (!config.isWithinWindow(DateTime.now())) return;
+      if (!config.enabled) return;
 
       final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
       if (idToken == null) return;
