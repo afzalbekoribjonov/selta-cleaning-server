@@ -80,3 +80,10 @@ export function subscribeConditionSurcharges(callback: (s: ConditionSurcharges) 
     callback({ average: data?.average ?? 0, bad: data?.bad ?? 0, veryBad: data?.veryBad ?? 0 })
   })
 }
+
+/** Ishchi mutaxassisligi shu toifalar bo'yicha belgilanadi (admin panel). */
+export const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
+  gilam: 'Gilam',
+  parda: 'Parda',
+  boshqa: 'Boshqa',
+}

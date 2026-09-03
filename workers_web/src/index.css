@@ -48,3 +48,46 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
 }
+
+/*
+ * iPhone / mobil uchun sozlamalar. Bu sayt asosan iOS Safari'da va
+ * "Asosiy ekranga qo'shish" orqali standalone rejimda ishlatiladi.
+ */
+html {
+  /* iOS'da gorizontal siljish va matn kattalashuvini oldini oladi */
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+body {
+  /* Bosilganda ko'k "highlight" chiqmasin — ilova hissi uchun */
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Barmoq bilan ishlash uchun: matn tanlash tasodifan yoqilib ketmasin,
+   lekin haqiqiy matn maydonlarida saqlanadi. */
+button, a, [role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/*
+ * iOS Safari input'ga fokuslanganda shrift 16px dan kichik bo'lsa
+ * sahifani avtomatik kattalashtiradi. Barcha kiritish maydonlari
+ * kamida 16px bo'lishi shart.
+ */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* Xavfsiz zonalar (notch / home indicator) uchun yordamchilar */
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+
+@keyframes selta-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: selta-fade-up 0.22s ease-out both; }

@@ -7,6 +7,7 @@ import { subId } from '@/lib/order-items'
 import { useAuth } from '@/lib/auth-context'
 import { describeApiError } from '@/lib/api'
 import type { Order } from '@/lib/orders'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 
 /**
  * mobile/lib/features/shared/item_action_row.dart bilan bir xil mantiq:
@@ -22,6 +23,10 @@ export function WorkerItemRow({ order, item }: { order: Order; item: OrderItem }
   const [editOpen, setEditOpen] = useState(false)
   const [failOpen, setFailOpen] = useState(false)
   const [passOpen, setPassOpen] = useState(false)
+  // Talab: "ko'p jarayonlarda xuddi ilovadagidek tasdiq oynalari" —
+  // bosqichni oldinga surish qaytarib bo'lmaydigan amal, shuning uchun
+  // tasodifan bosilishidan himoyalanadi.
+  const [advanceOpen, setAdvanceOpen] = useState(false)
 
   const specializations = profile?.specializations ?? []
   const canPack = profile?.canPack ?? false
@@ -67,10 +72,10 @@ export function WorkerItemRow({ order, item }: { order: Order; item: OrderItem }
                 </button>
               ) : (
                 <button
-                  onClick={() => advance(status === 'washing' ? 'packing' : 'washing')}
-                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-ink hover:bg-bg"
+                  onClick={() => setAdvanceOpen(true)}
+                  className="flex h-11 items-center gap-1.5 rounded-xl border border-border px-4 text-xs font-bold text-ink active:scale-95"
                 >
-                  {status === 'washing' ? <Package size={13} /> : <Droplets size={13} />}
+                  {status === 'washing' ? <Package size={14} /> : <Droplets size={14} />}
                   {status === 'washing' ? "Upakovkaga o'tkazish" : 'Yuvishni boshlash'}
                 </button>
               )
@@ -89,16 +94,16 @@ export function WorkerItemRow({ order, item }: { order: Order; item: OrderItem }
               <div className="flex gap-2">
                 <button
                   onClick={() => setFailOpen(true)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-danger px-3 py-1.5 text-xs font-bold text-danger hover:bg-danger-bg"
+                  className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-danger text-xs font-bold text-danger active:scale-95"
                 >
-                  <X size={13} />
+                  <X size={14} />
                   Rad etish
                 </button>
                 <button
                   onClick={() => setPassOpen(true)}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-success px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
+                  className="flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-success text-xs font-bold text-white active:scale-95"
                 >
-                  <Check size={13} />
+                  <Check size={14} />
                   Tasdiqlash
                 </button>
               </div>
@@ -109,6 +114,18 @@ export function WorkerItemRow({ order, item }: { order: Order; item: OrderItem }
           {error && <p className="mt-1 text-xs font-semibold text-danger">{error}</p>}
         </div>
       )}
+
+      <ConfirmDialog
+        open={advanceOpen}
+        title={status === 'washing' ? "Upakovkaga o'tkazish" : 'Yuvishni boshlash'}
+        message={
+          status === 'washing'
+            ? `"${item.name}" yuvib bo'lindi va upakovkaga o'tkaziladi. Tasdiqlaysizmi?`
+            : `"${item.name}" yuvishga olinadi. Tasdiqlaysizmi?`
+        }
+        onConfirm={() => advance(status === 'washing' ? 'packing' : 'washing')}
+        onClose={() => setAdvanceOpen(false)}
+      />
 
       {editOpen && (
         <CatalogItemModal

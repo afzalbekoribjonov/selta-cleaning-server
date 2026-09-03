@@ -5,7 +5,7 @@ import { useOrderItems } from '@/hooks/useOrderItems'
 import { CommentsSection } from '@/components/CommentsSection'
 import { CatalogItemModal } from '@/components/CatalogItemModal'
 import { WorkerItemRow } from '@/components/WorkerItemRow'
-import { Spinner } from '@/components/Spinner'
+import { Spinner } from '@/components/SeltaLoader'
 
 export function OrderDetailDrawer({ orderId, onClose }: { orderId: string; onClose: () => void }) {
   const order = useOrder(orderId)
@@ -13,8 +13,11 @@ export function OrderDetailDrawer({ orderId, onClose }: { orderId: string; onClo
   const [addOpen, setAddOpen] = useState(false)
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose}>
-      <div className="h-full w-full max-w-xl overflow-y-auto bg-bg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-40 flex items-end bg-ink/50 sm:items-center sm:justify-center" onClick={onClose}>
+      <div
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-bg pb-safe shadow-2xl sm:max-w-xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {order === undefined ? (
           <Spinner className="py-20" />
         ) : order === null ? (

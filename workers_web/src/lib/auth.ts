@@ -55,6 +55,12 @@ export interface EmployeeProfile {
   // Standart holat true (admin panelda o'chirilmagunicha) — server ham
   // shu standartni ishlatadi (employeeAdmin.ts:adminListEmployees).
   canSeeWorkshopQueue: boolean
+  /** Kunlik ko'rsatkichlar panelini ko'rish vakolati (admin beradi). */
+  canViewStats: boolean
+  /** Joyida yuvish jamoasiga biriktirilish vakolati. */
+  canDoOnsiteWashing: boolean
+  /** Davomat nazoratiga kiritilganmi — GPS ruxsati shunga qarab so'raladi. */
+  attendanceEnabled: boolean
 }
 
 export async function fetchEmployeeProfile(employeeId: string): Promise<EmployeeProfile | null> {
@@ -67,5 +73,8 @@ export async function fetchEmployeeProfile(employeeId: string): Promise<Employee
     specializations: data.specializations ?? [],
     canPack: data.canPack ?? false,
     canSeeWorkshopQueue: data.canSeeWorkshopQueue ?? true,
+    canViewStats: data.canViewStats === true,
+    canDoOnsiteWashing: data.canDoOnsiteWashing === true,
+    attendanceEnabled: data.attendanceEnabled === true,
   }
 }

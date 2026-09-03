@@ -1,0 +1,24 @@
+{
+  "name": "Selta Cleaning — Ishchi",
+  "short_name": "Selta Ishchi",
+  "description": "Selta Cleaning ishchilar paneli — buyurtmalar, joyida yuvish va kunlik ko'rsatkichlar",
+  "lang": "uz",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#5A148C",
+  "theme_color": "#5A148C",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Ishlar", "url": "/", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Joyida yuvish", "url": "/jamoa", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Profil", "url": "/profil", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

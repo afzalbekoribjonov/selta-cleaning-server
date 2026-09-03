@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Delete, ArrowLeft, Droplets, PackageCheck, MessageSquare, Keyboard } from 'lucide-react'
+import { Delete, ArrowLeft } from 'lucide-react'
 import { listWorkers, loginWithPin, type EmployeeSummary } from '@/lib/auth'
 import { describeApiError } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
+import { SeltaLoader } from '@/components/SeltaLoader'
 
-const FEATURES = [
-  { icon: Droplets, text: "Mahsulot holatini bosqichma-bosqich yangilang" },
-  { icon: PackageCheck, text: "Upakovkada tasdiqlang yoki qayta ishlovga qaytaring" },
-  { icon: MessageSquare, text: 'Buyurtmaga izoh qoldiring' },
-]
-
+/**
+ * Mobil-birinchi kirish ekrani (asosan iPhone Safari uchun). Ilovadagi
+ * PIN oqimi bilan bir xil: ism tanlash -> 4 xonali PIN -> avtomatik
+ * kirish. Sessiya `browserLocalPersistence` bilan saqlanadi, shuning
+ * uchun bu ekran faqat birinchi marta va chiqishdan keyin ko'rinadi.
+ */
 export default function LoginPage() {
   const { user, claims, loading } = useAuth()
   const [employees, setEmployees] = useState<EmployeeSummary[] | null>(null)
@@ -34,65 +35,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface">
-      <div className="relative hidden w-[42%] shrink-0 overflow-hidden bg-gradient-to-br from-brand-primary to-brand-primary-dark lg:flex lg:flex-col lg:justify-between">
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -left-24 -top-24 h-80 w-80 rounded-full bg-white/[0.06]" />
-          <div className="absolute -right-16 top-1/3 h-64 w-64 rounded-full bg-white/[0.05]" />
-          <div className="absolute -bottom-32 left-1/4 h-96 w-96 rounded-full bg-brand-accent/[0.08]" />
-        </div>
+    <div className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-brand-primary to-brand-primary-dark">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-white/[0.06]" />
+        <div className="absolute -right-20 top-1/4 h-56 w-56 rounded-full bg-white/[0.05]" />
+        <div className="absolute -bottom-28 left-1/4 h-80 w-80 rounded-full bg-brand-accent/[0.08]" />
+      </div>
 
-        <div className="relative px-14 pt-14">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-2xl font-extrabold text-white">
-            S
-          </div>
-        </div>
-
-        <div className="relative px-14">
-          <h1 className="font-heading text-[34px] font-extrabold leading-tight text-white">
-            Selta Cleaning
-            <br />
-            Ishchi paneli
-          </h1>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/60">
-            Kompyuterdan qulay tarzda mahsulotlar bosqichini yangilang va ishlaringizni kuzatib boring.
-          </p>
-
-          <div className="mt-9 space-y-4">
-            {FEATURES.map((f) => (
-              <div key={f.text} className="flex items-center gap-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white">
-                  <f.icon size={17} />
-                </div>
-                <span className="text-sm font-medium text-white/80">{f.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="relative px-14 pb-10">
-          <p className="text-xs font-semibold text-white/35">© {new Date().getFullYear()} Selta Cleaning</p>
+      <div className="relative flex flex-col items-center px-6 pb-6 pt-safe">
+        <div className="mt-10 flex flex-col items-center text-center">
+          <img src="/brand/icon_white.png" alt="Selta Cleaning" className="h-16 w-16" />
+          <h1 className="mt-3 font-heading text-xl font-extrabold text-white">Selta Cleaning</h1>
+          <p className="mt-0.5 text-sm text-white/60">Ishchi paneli</p>
         </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center overflow-y-auto px-8 py-12">
-        <div className="w-full max-w-[400px]">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary text-lg font-extrabold text-white">
-              S
-            </div>
-            <div>
-              <p className="font-heading text-sm font-extrabold text-ink">Selta Cleaning</p>
-              <p className="text-xs font-semibold text-gray-dark">Ishchi paneli</p>
-            </div>
-          </div>
-
-          {selected ? (
-            <PinStep employee={selected} onBack={() => setSelected(null)} />
-          ) : (
-            <EmployeeStep employees={employees} error={listError} onRetry={load} onSelect={setSelected} />
-          )}
-        </div>
+      <div className="relative flex-1 rounded-t-[28px] bg-bg px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-6">
+        {selected ? (
+          <PinStep employee={selected} onBack={() => setSelected(null)} />
+        ) : (
+          <EmployeeStep employees={employees} error={listError} onRetry={load} onSelect={setSelected} />
+        )}
       </div>
     </div>
   )
@@ -110,41 +73,39 @@ function EmployeeStep({
   onSelect: (e: EmployeeSummary) => void
 }) {
   return (
-    <div>
-      <h2 className="font-heading text-2xl font-extrabold text-ink">Xush kelibsiz</h2>
-      <p className="mt-1.5 text-sm text-gray-dark">Davom etish uchun ismingizni tanlang</p>
+    <div className="mx-auto w-full max-w-md">
+      <h2 className="font-heading text-lg font-extrabold text-ink">Xush kelibsiz</h2>
+      <p className="mt-0.5 text-sm text-gray-dark">Davom etish uchun ismingizni tanlang</p>
 
-      <div className="mt-8">
+      <div className="mt-5">
         {error ? (
-          <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-bg py-10 text-center">
-            <p className="text-sm font-semibold text-danger">{error}</p>
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-surface py-10 text-center">
+            <p className="px-6 text-sm font-semibold text-danger">{error}</p>
             <button
               onClick={onRetry}
-              className="rounded-xl border border-border bg-surface px-5 py-2 text-sm font-bold text-ink hover:bg-bg"
+              className="h-11 rounded-2xl border border-border px-5 text-sm font-bold text-ink active:scale-95"
             >
               Qayta urinish
             </button>
           </div>
         ) : employees === null ? (
-          <div className="flex justify-center py-14">
-            <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-brand-primary/20 border-t-brand-primary" />
-          </div>
+          <SeltaLoader label="Yuklanmoqda..." className="py-14" />
         ) : employees.length === 0 ? (
-          <p className="rounded-2xl border border-border bg-bg py-10 text-center text-sm text-gray-dark">
-            Hali ishchi bo'limida xodim yo'q — admin panel orqali qo'shiladi
+          <p className="rounded-2xl border border-border bg-surface py-10 text-center text-sm text-gray-dark">
+            Ishchi bo'limida hali xodim yo'q
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2.5">
             {employees.map((emp) => (
               <button
                 key={emp.id}
                 onClick={() => onSelect(emp)}
-                className="flex flex-col items-center gap-2.5 rounded-2xl border border-border bg-surface px-3 py-6 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-primary/40 hover:shadow-md"
+                className="flex w-full items-center gap-3.5 rounded-2xl border border-border bg-surface p-4 text-left active:scale-[0.99]"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary text-base font-extrabold text-white">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary text-base font-extrabold text-white">
                   {emp.fullName.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-sm font-bold leading-tight text-ink">{emp.fullName}</span>
+                <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-ink">{emp.fullName}</span>
               </button>
             ))}
           </div>
@@ -170,6 +131,9 @@ function PinStep({ employee, onBack }: { employee: EmployeeSummary; onBack: () =
         setError(describeApiError(e))
         setChecking(false)
         setPin('')
+        // Xato bo'lganda qisqa tebranish — barmoq bilan ishlashda
+        // ekранga qaramasdan ham sezilishi uchun.
+        navigator.vibrate?.(120)
       }
     },
     [employee.id],
@@ -178,6 +142,7 @@ function PinStep({ employee, onBack }: { employee: EmployeeSummary; onBack: () =
   const press = useCallback(
     (n: number) => {
       if (checking) return
+      navigator.vibrate?.(8)
       setPin((prev) => {
         if (prev.length >= PIN_LENGTH) return prev
         const next = prev + n.toString()
@@ -207,25 +172,22 @@ function PinStep({ employee, onBack }: { employee: EmployeeSummary; onBack: () =
   }, [press, backspace, onBack])
 
   return (
-    <div>
-      <button
-        onClick={onBack}
-        className="mb-6 flex items-center gap-1.5 text-xs font-bold text-gray-dark hover:text-ink"
-      >
-        <ArrowLeft size={14} />
+    <div className="mx-auto w-full max-w-xs">
+      <button onClick={onBack} className="mb-4 flex items-center gap-1.5 text-xs font-bold text-gray-dark active:scale-95">
+        <ArrowLeft size={15} />
         Orqaga
       </button>
 
       <div className="flex flex-col items-center text-center">
-        <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary text-2xl font-extrabold text-white">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary text-2xl font-extrabold text-white">
           {employee.fullName.charAt(0).toUpperCase()}
         </div>
-        <p className="font-heading text-lg font-extrabold text-ink">{employee.fullName}</p>
+        <p className="mt-2.5 font-heading text-base font-extrabold text-ink">{employee.fullName}</p>
         <p className={`mt-1 text-xs font-semibold ${error ? 'text-danger' : 'text-gray-dark'}`}>
           {error ?? `${PIN_LENGTH} xonali PIN kodingizni kiriting`}
         </p>
 
-        <div className="my-7 flex gap-3.5">
+        <div className="my-6 flex gap-3.5">
           {Array.from({ length: PIN_LENGTH }).map((_, i) => (
             <div
               key={i}
@@ -237,29 +199,22 @@ function PinStep({ employee, onBack }: { employee: EmployeeSummary; onBack: () =
         </div>
 
         {checking ? (
-          <div className="py-8">
-            <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-brand-primary/20 border-t-brand-primary" />
-          </div>
+          <SeltaLoader label="Tekshirilmoqda..." className="py-6" />
         ) : (
-          <>
-            <div className="grid grid-cols-3 gap-2.5">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-                <PadButton key={n} label={n.toString()} onClick={() => press(n)} />
-              ))}
-              <div />
-              <PadButton label="0" onClick={() => press(0)} />
-              <button
-                onClick={backspace}
-                className="flex items-center justify-center rounded-2xl bg-bg text-gray-dark transition-colors hover:bg-brand-primary/10 hover:text-brand-primary"
-              >
-                <Delete size={18} />
-              </button>
-            </div>
-            <p className="mt-6 flex items-center gap-1.5 text-[11px] font-semibold text-gray-dark">
-              <Keyboard size={13} />
-              Klaviaturadan raqam kiritishingiz ham mumkin
-            </p>
-          </>
+          <div className="grid w-full grid-cols-3 gap-3">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+              <PadButton key={n} label={n.toString()} onClick={() => press(n)} />
+            ))}
+            <div />
+            <PadButton label="0" onClick={() => press(0)} />
+            <button
+              onClick={backspace}
+              aria-label="O'chirish"
+              className="flex h-16 items-center justify-center rounded-2xl bg-surface text-gray-dark active:scale-95"
+            >
+              <Delete size={20} />
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -270,7 +225,7 @@ function PadButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="h-14 w-14 rounded-2xl bg-bg text-lg font-bold text-ink transition-colors hover:bg-brand-primary/10 hover:text-brand-primary"
+      className="h-16 rounded-2xl bg-surface text-2xl font-bold text-ink shadow-sm active:scale-95 active:bg-brand-primary/10"
     >
       {label}
     </button>
