@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Search, Clock, History, CalendarClock, ArrowUp, ArrowDown, Home, Truck, Store, LayoutGrid, Users } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
-import { useAllOrderItems } from '@/hooks/useAllOrderItems'
 import { distinctTariffs, effectiveDueDate, isOrderOverdue, dueLabel, daysUntil } from '@/lib/order-tariffs'
 import type { Order } from '@/lib/orders'
 import { formatDateUz } from '@/lib/date-utils'
@@ -74,14 +73,6 @@ export default function ActiveOrdersPage() {
     )
   }, [baseOrders, query])
 
-  // Obuna QIDIRUVDAN KEYINGI ro'yxatga bog'lanadi, undan oldingiga emas —
-  // aks holda qidiruv paytida (baza yakunlanganlar bilan kengayganda)
-  // birdan yuzlab keraksiz item obunasi ochilib ketardi.
-  const pickupOrderIds = useMemo(
-    () => searched.filter((o) => o.serviceType === 'pickup').map((o) => o.id),
-    [searched],
-  )
-  const itemsByOrder = useAllOrderItems(pickupOrderIds)
 
   // Filtr tugmalaridagi sonlar joriy qidiruvga mos keladi (filtrning
   // o'zidan oldingi holat), shunda son har doim "bosilsa nechta chiqadi"ni
@@ -108,8 +99,8 @@ export default function ActiveOrdersPage() {
         case 'cheap':
           return a.totalPrice - b.totalPrice
         case 'deadline': {
-          const da = effectiveDueDate(a, itemsByOrder[a.id] ?? [])
-          const db = effectiveDueDate(b, itemsByOrder[b.id] ?? [])
+          const da = effectiveDueDate(a)
+          const db = effectiveDueDate(b)
           if (!da && !db) return b.createdAt.getTime() - a.createdAt.getTime()
           if (!da) return 1
           if (!db) return -1
@@ -119,7 +110,7 @@ export default function ActiveOrdersPage() {
           return b.createdAt.getTime() - a.createdAt.getTime()
       }
     })
-  }, [searched, service, sortBy, itemsByOrder])
+  }, [searched, service, sortBy])
 
   const unassignedCount = useMemo(() => activeOrders.filter(needsTeam).length, [activeOrders])
 
@@ -214,12 +205,7 @@ export default function ActiveOrdersPage() {
             </thead>
             <tbody>
               {filtered.map((order) => (
-                <OrderRow
-                  key={order.id}
-                  order={order}
-                  items={itemsByOrder[order.id] ?? []}
-                  onClick={() => setOpenOrderId(order.id)}
-                />
+                <OrderRow key={order.id} order={order} onClick={() => setOpenOrderId(order.id)} />
               ))}
             </tbody>
           </table>
@@ -231,17 +217,9 @@ export default function ActiveOrdersPage() {
   )
 }
 
-function OrderRow({
-  order,
-  items,
-  onClick,
-}: {
-  order: Order
-  items: ReturnType<typeof useAllOrderItems>[string]
-  onClick: () => void
-}) {
-  const overdue = isOrderOverdue(order, items ?? [])
-  const dueDate = effectiveDueDate(order, items ?? [])
+function OrderRow({ order, onClick }: { order: Order; onClick: () => void }) {
+  const overdue = isOrderOverdue(order)
+  const dueDate = effectiveDueDate(order)
   const alert = needsTeam(order)
   const serviceLabel =
     order.intakeMethod === 'walk_in' ? "O'zi keldi" : order.serviceType === 'onsite' ? 'Joyida' : 'Olib kelish'
@@ -268,7 +246,7 @@ function OrderRow({
         <StatusBadge status={order.status} />
       </td>
       <td className="px-5 py-3.5">
-        <TariffDots tariffs={distinctTariffs(order, items ?? [])} />
+        <TariffDots tariffs={distinctTariffs(order)} />
       </td>
       <td className="px-5 py-3.5">
         {dueDate ? (

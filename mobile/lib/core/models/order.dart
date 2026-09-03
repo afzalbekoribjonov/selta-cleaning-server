@@ -39,6 +39,16 @@ class Order {
   // summani yozib qo'yishi mumkin (majburiy emas). Jamoa mijoz uyida
   // haqiqiy mahsulotlarni aniqlashtirib qo'shguncha shu qaydlar
   // ma'lumot uchun ko'rsatiladi.
+  /// --- Mahsulotlardan HOSILA (server: lib/orderSummary.ts) ---
+  /// Pickup buyurtmalarda tarif/muddat ITEM darajasida. Avval har bir
+  /// karta buni ko'rsatish uchun o'z `items` obunasini ochardi — ro'yxatda
+  /// yuzlab karta bo'lganda bu Firestore kunlik limitini tugatib qo'ydi.
+  /// Endi server bu qiymatlarni mahsulot o'zgarganda buyurtmaga yozadi.
+  final List<String> itemTariffs;
+  final DateTime? earliestPendingDueDate;
+  final int zeroPriceItemCount;
+  final Map<String, int> itemStatusCounts;
+  final Map<String, List<String>> itemStageCategories;
   final List<String> notedItems;
   final num? estimatedPrice;
   // Talab: marketing statistikasi — sotuv menejeri buyurtma yaratishda
@@ -75,6 +85,11 @@ class Order {
     this.dueDate,
     this.qcRating,
     this.qcRatingNote,
+    this.itemTariffs = const [],
+    this.earliestPendingDueDate,
+    this.zeroPriceItemCount = 0,
+    this.itemStatusCounts = const {},
+    this.itemStageCategories = const {},
     this.notedItems = const [],
     this.estimatedPrice,
     this.source,
@@ -110,6 +125,16 @@ class Order {
       dueDate: (data['dueDate'] as Timestamp?)?.toDate(),
       qcRating: (data['qcRating'] as num?)?.toInt(),
       qcRatingNote: data['qcRatingNote']?.toString(),
+      itemTariffs: (data['itemTariffs'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      earliestPendingDueDate: (data['earliestPendingDueDate'] as Timestamp?)?.toDate(),
+      zeroPriceItemCount: (data['zeroPriceItemCount'] as num?)?.toInt() ?? 0,
+      itemStatusCounts: (data['itemStatusCounts'] as Map?)
+              ?.map((k, v) => MapEntry(k.toString(), (v as num).toInt())) ??
+          const {},
+      itemStageCategories: (data['itemStageCategories'] as Map?)?.map(
+            (k, v) => MapEntry(k.toString(), (v as List?)?.map((e) => e.toString()).toList() ?? const <String>[]),
+          ) ??
+          const {},
       notedItems: (data['notedItems'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       estimatedPrice: data['estimatedPrice'] as num?,
       source: data['source']?.toString(),

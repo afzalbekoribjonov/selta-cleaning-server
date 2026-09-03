@@ -1,32 +1,31 @@
 import type { Order } from './orders'
-import type { StatsItem } from '@/hooks/useAllOrderItems'
 
 /**
- * admin_web/src/lib/order-tariffs.ts bilan bir xil — pickup buyurtmalarda
- * tarif/muddat item-darajasiga ko'chirilgan (server: createOrder),
- * order.tariff/order.dueDate faqat onsite uchun mavjud.
+ * Pickup buyurtmalarda tarif/muddat ITEM darajasida (server: createOrder).
+ * Avval bu yordamchilar har bir buyurtmaning `items` pastki jamlanmasini
+ * o'qishni talab qilardi — ro'yxatda yuzlab buyurtma bo'lganda bu minglab
+ * Firestore o'qishiga aylanib, kunlik limitni tugatib qo'ydi.
+ *
+ * Endi server mahsulot o'zgarganda kerakli qiymatlarni buyurtma hujjatiga
+ * yozib qo'yadi (lib/orderSummary.ts), bu yerda esa faqat o'qiladi —
+ * qo'shimcha so'rovsiz.
  */
-export function distinctTariffs(order: Order, items: StatsItem[]): string[] {
+
+/** Buyurtmadagi takrorlanmagan tariflar. */
+export function distinctTariffs(order: Order): string[] {
   if (order.serviceType === 'onsite') return order.tariff ? [order.tariff] : []
-  const set = new Set<string>()
-  for (const item of items) if (item.tariff) set.add(item.tariff)
-  return Array.from(set)
+  return order.itemTariffs
 }
 
-function earliestPendingDueDate(items: StatsItem[]): Date | null {
-  const dates = items.filter((i) => i.status !== 'done' && i.dueDate).map((i) => i.dueDate!)
-  if (dates.length === 0) return null
-  return dates.reduce((a, b) => (a < b ? a : b))
-}
-
-export function effectiveDueDate(order: Order, items: StatsItem[]): Date | null {
+/** Hali yakunlanmagan mahsulotlar orasidagi eng yaqin muddat. */
+export function effectiveDueDate(order: Order): Date | null {
   if (order.serviceType === 'onsite') return order.dueDate
-  return earliestPendingDueDate(items)
+  return order.earliestPendingDueDate
 }
 
-export function isOrderOverdue(order: Order, items: StatsItem[]): boolean {
+export function isOrderOverdue(order: Order): boolean {
   if (order.status === 'done') return false
-  const due = effectiveDueDate(order, items)
+  const due = effectiveDueDate(order)
   if (!due) return false
   return new Date() > due
 }

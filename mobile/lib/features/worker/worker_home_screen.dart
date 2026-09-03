@@ -4,8 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/models/order.dart';
-import '../../core/models/order_item.dart';
-import '../../core/services/auth_service.dart' show authStateProvider;
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/widgets/selta_loader.dart';
@@ -22,12 +20,6 @@ const _stageIcons = {
   'returned': Icons.replay_rounded,
 };
 
-final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
-  ref.watch(authStateProvider);
-  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
-});
-
-typedef _OrderItemPair = ({Order order, OrderItem item});
 
 /// Ishchi paneli — talab #3/#5/#8/#10: har bir mahsulot mustaqil ravishda
 /// pending -> washing -> packing -> ready/returned bosqichlaridan o'tadi.
@@ -113,11 +105,10 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
               error: (err, _) => Center(child: Text('Xatolik: $err')),
               data: (orders) {
                 final activeOrders = orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in').toList();
-                final pairs = _watchAllItems(ref, activeOrders);
                 // Talab: bu bosqichda bitta buyurtma uchun BITTA karta —
                 // item-item emas. Karta bosilganda buyurtma ichidagi
                 // BARCHA mahsulotlar (boshqa bosqichdagilar ham) ko'rinadi.
-                var filtered = _ordersForStage(pairs, stage, specializations);
+                var filtered = _ordersForStage(activeOrders, stage, specializations);
 
                 if (_search.isNotEmpty) {
                   filtered = filtered.where((o) {
@@ -180,7 +171,6 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
         error: (_, __) => null,
         data: (orders) {
           final activeOrders = orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in').toList();
-          final pairs = _watchAllItems(ref, activeOrders);
 
           return NavigationBar(
             selectedIndex: _stageIndex,
@@ -188,7 +178,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
             destinations: [
               for (final s in _workerStages)
                 NavigationDestination(
-                  icon: _BadgedIcon(icon: _stageIcons[s]!, count: _ordersForStage(pairs, s, specializations).length),
+                  icon: _BadgedIcon(icon: _stageIcons[s]!, count: _ordersForStage(activeOrders, s, specializations).length),
                   label: kStatusConfig[s]!.label,
                 ),
             ],
@@ -199,37 +189,32 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
   }
 }
 
-/// Barcha faol buyurtmalarning item'larini birlashtirib (order, item)
-/// juftliklariga aylantiradi — har bir buyurtma o'z items subkolleksiyasi
-/// orqali alohida kuzatiladi (collection-group so'rov emas, qo'shimcha
-/// xavfsizlik qoidasi shart emas).
-List<_OrderItemPair> _watchAllItems(WidgetRef ref, List<Order> orders) {
-  final pairs = <_OrderItemPair>[];
-  for (final order in orders) {
-    final items = ref.watch(_itemsProvider(order.id)).valueOrNull ?? const <OrderItem>[];
-    for (final item in items) {
-      pairs.add((order: order, item: item));
-    }
-  }
-  return pairs;
-}
-
 /// Shu bosqichda kamida bitta mos itemga ega BUYURTMALAR ro'yxati (bir
-/// buyurtma — bir karta, item-item emas). Karta ochilganda esa
+/// buyurtma — bir karta). Karta ochilganda esa
 /// (worker_order_detail_sheet) o'sha buyurtmaning BARCHA itemlari, qaysi
 /// bosqichda bo'lishidan qat'i nazar, ko'rinadi.
-List<Order> _ordersForStage(List<_OrderItemPair> pairs, String stage, List<String> specializations) {
+///
+/// Filtr endi buyurtmadagi HOSILA maydonlardan hisoblanadi
+/// (`itemStatusCounts` / `itemStageCategories`, server:
+/// lib/orderSummary.ts). Avval har bir buyurtmaning mahsulotlariga
+/// alohida obuna ochilardi — ro'yxatda yuzlab buyurtma bo'lganda bu
+/// Firestore kunlik o'qish limitini tugatib qo'ygan asosiy sabablardan
+/// biri edi.
+List<Order> _ordersForStage(List<Order> orders, String stage, List<String> specializations) {
   final restrictBySpecialization = stage == 'pending' || stage == 'washing';
-  final orders = <String, Order>{};
-  for (final p in pairs) {
-    if (p.item.status != stage) continue;
+  final result = <Order>[];
+  for (final order in orders) {
+    if ((order.itemStatusCounts[stage] ?? 0) == 0) continue;
     if (restrictBySpecialization && specializations.isNotEmpty) {
-      final matches = p.item.category == null || specializations.contains(p.item.category);
+      final cats = order.itemStageCategories[stage] ?? const <String>[];
+      // '_none' — toifasi belgilanmagan mahsulot, u hammaga ko'rinadi
+      // (server: assertWorkerLavozim bilan bir xil qoida).
+      final matches = cats.any((c) => c == '_none' || specializations.contains(c));
       if (!matches) continue;
     }
-    orders[p.order.id] = p.order;
+    result.add(order);
   }
-  return orders.values.toList();
+  return result;
 }
 
 class _BadgedIcon extends StatelessWidget {

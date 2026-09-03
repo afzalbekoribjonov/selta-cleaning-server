@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
-import '../../core/models/order_item.dart';
-import '../../core/services/auth_service.dart' show authStateProvider;
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/launch_utils.dart';
@@ -22,19 +20,14 @@ const _stages = [
   ('ready', 'Yetkazishga tayyor', Icons.done_all_rounded),
 ];
 
-final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
-  ref.watch(authStateProvider);
-  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
-});
-
 /// "Yetkazishga tayyor" endi order-level status emas — har bir item
 /// mustaqil ravishda "ready"ga yetadi (talab #9). Shu bosqichdagi
 /// buyurtmalar — "brought_in"da turgan VA kamida bitta "ready" itemga
 /// ega bo'lganlar.
-bool _hasReadyItem(WidgetRef ref, Order order) {
-  final items = ref.watch(_itemsProvider(order.id)).valueOrNull ?? const <OrderItem>[];
-  return items.any((i) => i.status == 'ready');
-}
+/// Buyurtmada yetkazishga tayyor mahsulot bormi — buyurtmadagi HOSILA
+/// maydondan (server: lib/orderSummary.ts). Avval bu har bir buyurtma
+/// uchun alohida `items` obunasini talab qilardi.
+bool _hasReadyItem(Order order) => (order.itemStatusCounts['ready'] ?? 0) > 0;
 
 /// Dastavchik paneli — olib ketish (new -> brought_in, bitta bosqichda,
 /// GPS bilan) jarayonini boshqaradi; yetkazib berish endi ITEM-darajasida (talab
@@ -85,7 +78,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
               error: (err, _) => Center(child: Text('Xatolik: $err')),
               data: (orders) {
                 var filtered = stage == 'ready'
-                    ? orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in' && _hasReadyItem(ref, o)).toList()
+                    ? orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in' && _hasReadyItem(o)).toList()
                     : orders.where((o) => o.serviceType == 'pickup' && o.status == stage).toList();
 
                 if (_search.isNotEmpty) {
@@ -155,7 +148,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
           final pickupOrders = orders.where((o) => o.serviceType == 'pickup').toList();
           final broughtIn = pickupOrders.where((o) => o.status == 'brought_in').toList();
           int countFor(String s) =>
-              s == 'ready' ? broughtIn.where((o) => _hasReadyItem(ref, o)).length : pickupOrders.where((o) => o.status == s).length;
+              s == 'ready' ? broughtIn.where((o) => _hasReadyItem(o)).length : pickupOrders.where((o) => o.status == s).length;
           return NavigationBar(
             selectedIndex: _stageIndex,
             onDestinationSelected: (i) => setState(() => _stageIndex = i),

@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiPost } from '@/lib/api'
 import { ClipboardList, Clock, TrendingUp, AlertTriangle, Truck, PackageCheck } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
 import { StatusBadge, TariffDots } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { useRecentOrders, useActiveOrders } from '@/hooks/useRecentOrders'
-import { useAllOrderItems } from '@/hooks/useAllOrderItems'
 import { type Order } from '@/lib/orders'
 import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
 import { formatDateUz } from '@/lib/date-utils'
@@ -33,46 +34,46 @@ export default function DashboardPage() {
   const { orders: activeOrders } = useActiveOrders()
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
-  // Talab: pickup buyurtmalarda tarif/muddat item-darajasida — "Kechikkan
-  // buyurtmalar" hisoblagichi va jadvaldagi Muddat ustuni to'g'ri
-  // ishlashi uchun itemlarni ham kuzatish kerak.
-  const pickupOrderIds = useMemo(() => {
-    const byId = new Map<string, Order>()
-    for (const o of activeOrders ?? []) byId.set(o.id, o)
-    for (const o of orders ?? []) byId.set(o.id, o)
-    return [...byId.values()].filter((o) => o.serviceType === 'pickup').map((o) => o.id)
-  }, [orders, activeOrders])
-  const itemsByOrder = useAllOrderItems(pickupOrderIds)
+  // Bir martalik, xavfsiz (idempotent) migratsiya — mahsulotlardan hosila
+  // qilingan maydonlar (tarif/muddat/bosqich sonlari) qo'shilishidan
+  // OLDINGI faol buyurtmalarni to'ldiradi. Busiz eski buyurtmalarda
+  // ro'yxatlar tarif/muddatni ko'rsata olmaydi, chunki ular endi
+  // mahsulotlarni o'qimaydi.
+  useEffect(() => {
+    apiPost('/adminBackfillOrderSummary', {}).catch(() => {})
+  }, [])
+
+  // "Bugun olindi/yetgazildi" — serverdan (stats.ts). Avval bu klientda
+  // har bir buyurtmaning mahsulotlarini o'qib hisoblanardi; server buni
+  // ancha arzon qiladi (faqat bugun tegilgan buyurtmalarni ko'radi).
+  const dailyStats = useQuery({
+    queryKey: ['dailyStats'],
+    queryFn: () =>
+      apiPost<{ broughtInToday: { count: number }; deliveredToday: { count: number } }>('/employeeDailyStats'),
+    staleTime: 60_000,
+  })
 
   const stats = useMemo(() => {
     const list = orders ?? []
     const active = activeOrders ?? []
     const today = list.filter((o) => isToday(o.createdAt))
     const todayRevenue = today.reduce((sum, o) => sum + (o.totalPrice || 0), 0)
-    const overdue = active.filter((o) => isOrderOverdue(o, itemsByOrder[o.id] ?? []))
+    const overdue = active.filter((o) => isOrderOverdue(o))
 
-    // Talab: dastavchiklar bugun jami nechta buyurtma olib kelgani va
-    // nechta mahsulot yetkazganini ko'rsatish — barcha dastavchiklar
-    // bo'yicha yig'indi (talab: "Bugun olindi"/"Bugun yetgazildi").
-    const pickedUpToday = list.filter((o) => o.pickedUpAt && isToday(o.pickedUpAt)).length
-    let deliveredToday = 0
-    for (const o of list) {
-      for (const item of itemsByOrder[o.id] ?? []) {
-        if (item.deliveredAt && isToday(item.deliveredAt)) deliveredToday++
-      }
-    }
+    return { activeCount: active.length, todayCount: today.length, todayRevenue, overdueCount: overdue.length, active }
+  }, [orders, activeOrders])
 
-    return { activeCount: active.length, todayCount: today.length, todayRevenue, overdueCount: overdue.length, active, pickedUpToday, deliveredToday }
-  }, [orders, activeOrders, itemsByOrder])
+  const pickedUpToday = dailyStats.data?.broughtInToday.count ?? 0
+  const deliveredToday = dailyStats.data?.deliveredToday.count ?? 0
 
   const activeSorted = useMemo(() => {
     return [...stats.active].sort((a, b) => {
-      const aOverdue = isOrderOverdue(a, itemsByOrder[a.id] ?? [])
-      const bOverdue = isOrderOverdue(b, itemsByOrder[b.id] ?? [])
+      const aOverdue = isOrderOverdue(a)
+      const bOverdue = isOrderOverdue(b)
       if (aOverdue !== bOverdue) return aOverdue ? -1 : 1
       return b.createdAt.getTime() - a.createdAt.getTime()
     })
-  }, [stats.active, itemsByOrder])
+  }, [stats.active])
 
   return (
     <div className="space-y-8">
@@ -97,8 +98,8 @@ export default function DashboardPage() {
             <StatCard icon={Clock} label="Bugungi buyurtmalar" numericValue={stats.todayCount} tone="primary" />
             <StatCard icon={TrendingUp} label="Bugungi tushum" numericValue={stats.todayRevenue} format={formatMoney} tone="success" />
             <StatCard icon={AlertTriangle} label="Kechikkan buyurtmalar" numericValue={stats.overdueCount} tone="danger" />
-            <StatCard icon={Truck} label="Bugun olindi" numericValue={stats.pickedUpToday} tone="primary" />
-            <StatCard icon={PackageCheck} label="Bugun yetgazildi" numericValue={stats.deliveredToday} tone="success" />
+            <StatCard icon={Truck} label="Bugun olindi" numericValue={pickedUpToday} tone="primary" />
+            <StatCard icon={PackageCheck} label="Bugun yetgazildi" numericValue={deliveredToday} tone="success" />
           </>
         )}
       </div>
@@ -136,9 +137,8 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {activeSorted.slice(0, 20).map((o) => {
-                  const items = itemsByOrder[o.id] ?? []
-                  const overdue = isOrderOverdue(o, items)
-                  const dueDate = effectiveDueDate(o, items)
+                  const overdue = isOrderOverdue(o)
+                  const dueDate = effectiveDueDate(o)
                   return (
                     <tr key={o.id} onClick={() => setSelectedOrder(o)} className="cursor-pointer border-b border-border last:border-0 hover:bg-bg">
                       <td className="px-5 py-3 font-semibold text-ink">#{o.orderNumber}</td>
@@ -147,7 +147,7 @@ export default function DashboardPage() {
                         <StatusBadge status={o.status} />
                       </td>
                       <td className="px-5 py-3">
-                        <TariffDots tariffs={distinctTariffs(o, items)} />
+                        <TariffDots tariffs={distinctTariffs(o)} />
                       </td>
                       <td className={`px-5 py-3 font-semibold ${overdue ? 'text-danger' : 'text-ink'}`}>
                         {dueDate ? formatDateUz(dueDate) : '—'}

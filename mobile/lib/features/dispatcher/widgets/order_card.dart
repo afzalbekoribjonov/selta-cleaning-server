@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/constants.dart';
 import '../../../core/models/order.dart';
-import '../../../core/models/order_item.dart';
 import '../../../core/services/order_items_provider.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/money_utils.dart';
@@ -15,7 +13,7 @@ import '../../../core/utils/money_utils.dart';
 /// har doim ko'rinadi; `emphasizePrice` bilan (masalan Dastavchik "tayyor"
 /// bosqichida — mijozdan pul yig'ish kerak bo'lganda) katta va yorqinroq
 /// ko'rsatiladi.
-class OrderCard extends ConsumerWidget {
+class OrderCard extends StatelessWidget {
   final Order order;
   final VoidCallback onTap;
   final List<Widget>? actions;
@@ -30,22 +28,16 @@ class OrderCard extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final status = statusOf(order.status);
     // Pickup buyurtmalarda tarif endi item-darajasida — order.tariff faqat
     // onsite uchun mavjud, shuning uchun pill faqat shunda ko'rsatiladi.
     final tariff = order.tariff != null ? tariffOf(order.tariff) : null;
 
     // Talab: kartada mahsulotning eng yaqin topshirish sanasi va necha kun
-    // qolgani ko'rinsin. Pickup buyurtmalarda muddat item darajasida
-    // bo'lgani uchun `order.dueDate` null bo'ladi — itemlardan hisoblanadi.
-    // Onsite buyurtmalarda muddat order darajasida, shuning uchun ularda
-    // itemlarga obuna bo'lish shart emas (keraksiz Firestore trafigi).
-    final needsItems = order.serviceType != 'onsite';
-    final items = needsItems
-        ? (ref.watch(orderItemsProvider(order.id)).valueOrNull ?? const <OrderItem>[])
-        : const <OrderItem>[];
-    final dueDate = effectiveDueDate(order, items);
+    // qolgani ko'rinsin. Qiymat buyurtmaning o'zidan o'qiladi — karta
+    // endi mahsulotlarga obuna BO'LMAYDI (o'qishlarni tejash uchun).
+    final dueDate = effectiveDueDate(order);
     final overdue = dueDate != null && !order.isDone && DateTime.now().isAfter(dueDate);
 
     // Talab: jamoa biriktirilmagan joyida-yuvish buyurtmasi e'tiborni

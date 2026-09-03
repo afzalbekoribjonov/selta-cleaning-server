@@ -23,17 +23,14 @@ final orderItemsProvider = StreamProvider.autoDispose.family<List<OrderItem>, St
 ///
 /// Olib kelish (pickup) buyurtmalarida tarif/muddat ITEM darajasida
 /// (server: createOrder) — `order.dueDate` faqat joyida yuvish (onsite)
-/// uchun mavjud. Shuning uchun pickup'da hali yakunlanmagan mahsulotlar
-/// orasidan eng YAQIN muddat olinadi (talab: "eng birinchi kuni yaqin
-/// mahsulotni sanasini ko'rsatish").
-DateTime? effectiveDueDate(Order order, List<OrderItem> items) {
+/// uchun mavjud. Pickup'da qiymat endi buyurtmaning O'ZIDAN o'qiladi:
+/// server uni mahsulot o'zgarganda hisoblab yozib qo'yadi
+/// (server/src/lib/orderSummary.ts). Avval bu yerda har bir karta uchun
+/// mahsulotlar ro'yxati o'qilardi — bu Firestore kunlik o'qish limitini
+/// tugatib qo'ygan asosiy sabablardan biri edi.
+DateTime? effectiveDueDate(Order order) {
   if (order.serviceType == 'onsite') return order.dueDate;
-  DateTime? earliest;
-  for (final item in items) {
-    if (item.isDone || item.dueDate == null) continue;
-    if (earliest == null || item.dueDate!.isBefore(earliest)) earliest = item.dueDate;
-  }
-  return earliest;
+  return order.earliestPendingDueDate;
 }
 
 /// Muddatgacha qolgan to'liq kunlar — manfiy bo'lsa kechikkan. Kun

@@ -31,6 +31,18 @@ export interface Order {
   hasFailedItem?: boolean
   createdAt: Date
   dueDate: Date | null
+  // --- Mahsulotlardan HOSILA (server: lib/orderSummary.ts) ---
+  // Pickup buyurtmalarda tarif/muddat/holat item darajasida. Avval
+  // ro'yxatlar buni ko'rsatish uchun HAR BIR buyurtmaning items
+  // pastki jamlanmasiga alohida obuna ochardi — bu Firestore kunlik
+  // o'qish limitini tugatib qo'ydi. Endi server bu qiymatlarni
+  // mahsulot o'zgarganda buyurtma hujjatiga yozib qo'yadi.
+  itemCount: number | null
+  itemTariffs: string[]
+  earliestPendingDueDate: Date | null
+  zeroPriceItemCount: number
+  itemStatusCounts: Record<string, number>
+  itemStageCategories: Record<string, string[]>
   notedItems: string[]
   estimatedPrice: number | null
   source: string | null
@@ -57,6 +69,15 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     hasFailedItem: data.hasFailedItem ?? undefined,
     createdAt: (data.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
     dueDate: (data.dueDate as Timestamp | undefined)?.toDate() ?? null,
+    // Hosila maydonlar — hali to'ldirilmagan (eski) buyurtmalarda
+    // `itemCount` null bo'ladi, shunda UI noto'g'ri "0 ta / muddat yo'q"
+    // ko'rsatish o'rniga "noma'lum" deb muomala qila oladi.
+    itemCount: data.itemStatusCounts === undefined ? null : (data.itemCount ?? 0),
+    itemTariffs: data.itemTariffs ?? [],
+    earliestPendingDueDate: (data.earliestPendingDueDate as Timestamp | undefined)?.toDate() ?? null,
+    zeroPriceItemCount: data.zeroPriceItemCount ?? 0,
+    itemStatusCounts: data.itemStatusCounts ?? {},
+    itemStageCategories: data.itemStageCategories ?? {},
     notedItems: data.notedItems ?? [],
     estimatedPrice: data.estimatedPrice ?? null,
     source: data.source ?? null,

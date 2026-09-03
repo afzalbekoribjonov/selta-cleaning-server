@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Search, AlertTriangle } from 'lucide-react'
 import { useActiveOrders } from '@/hooks/useRecentOrders'
-import { useAllOrderItems } from '@/hooks/useAllOrderItems'
 import { fetchOrdersPage, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
 import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
 import { STATUS_CONFIG } from '@/lib/status-config'
@@ -70,11 +69,6 @@ export default function OrdersPage() {
     [view, activeOrders, allOrders],
   )
 
-  // Talab: pickup buyurtmalarda tarif/muddat item-darajasida — ro'yxatda
-  // to'g'ri ko'rsatish uchun har bir buyurtmaning itemlarini kuzatish kerak.
-  const pickupOrderIds = useMemo(() => baseOrders.filter((o) => o.serviceType === 'pickup').map((o) => o.id), [baseOrders])
-  const itemsByOrder = useAllOrderItems(pickupOrderIds)
-
   const filtered = useMemo(() => {
     let list = baseOrders
     const q = search.trim().toLowerCase()
@@ -93,7 +87,7 @@ export default function OrdersPage() {
         return ym === monthFilter
       })
     }
-    if (overdueOnly) list = list.filter((o) => isOrderOverdue(o, itemsByOrder[o.id] ?? []))
+    if (overdueOnly) list = list.filter((o) => isOrderOverdue(o))
 
     list = [...list].sort((a, b) => {
       switch (sortBy) {
@@ -108,7 +102,7 @@ export default function OrdersPage() {
       }
     })
     return list
-  }, [baseOrders, search, statusFilter, monthFilter, overdueOnly, sortBy, itemsByOrder])
+  }, [baseOrders, search, statusFilter, monthFilter, overdueOnly, sortBy])
 
   return (
     <div className="space-y-6">
@@ -212,9 +206,8 @@ export default function OrdersPage() {
               </thead>
               <tbody>
                 {filtered.map((o) => {
-                  const items = itemsByOrder[o.id] ?? []
-                  const overdue = isOrderOverdue(o, items)
-                  const dueDate = effectiveDueDate(o, items)
+                  const overdue = isOrderOverdue(o)
+                  const dueDate = effectiveDueDate(o)
                   return (
                     <tr
                       key={o.id}
@@ -228,7 +221,7 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-5 py-3 text-ink">{o.serviceType === 'onsite' ? 'Joyida yuvish' : 'Olib kelish'}</td>
                       <td className="px-5 py-3">
-                        <TariffDots tariffs={distinctTariffs(o, items)} />
+                        <TariffDots tariffs={distinctTariffs(o)} />
                       </td>
                       <td className="px-5 py-3">
                         <StatusBadge status={o.status} />

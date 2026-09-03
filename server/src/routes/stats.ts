@@ -97,53 +97,45 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
       orderDocs.set(doc.id, doc.data());
     }
 
-    // Har bir buyurtmaning itemlari alohida so'rov bilan olinadi. Bu N ta
-    // so'rov degani, shuning uchun N qat'iy cheklanadi — normal ish
-    // hajmida (o'nlab faol buyurtma) bu chegaraga hech qachon yetilmaydi,
-    // u faqat kutilmagan holatda serverni himoya qilish uchun.
-    const orderIds = [...orderDocs.keys()].slice(0, MAX_ORDERS_SCANNED);
+    // Itemlar FAQAT bugun o'zgargan buyurtmalar uchun o'qiladi.
+    //
+    // Avval BARCHA faol buyurtmalarning itemlari o'qilardi (N+1) — yuzlab
+    // faol buyurtmada bu bitta chaqiruvda minglab o'qish edi va Firestore
+    // kunlik limitini tugatishga hissa qo'shdi. "Bugun yuvildi/yetkazildi"
+    // uchun faqat bugun tegilgan buyurtmalar kerak (har qanday item
+    // harakati buyurtmaning `updatedAt`ini ham yangilaydi), joriy holat
+    // ko'rsatkichlari esa endi buyurtmadagi hosila maydonlardan olinadi.
+    const touchedIds = touchedSnap.docs.map((d) => d.id).slice(0, MAX_ORDERS_SCANNED);
     const itemsByOrder = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
     await Promise.all(
-      orderIds.map(async (id) => {
+      touchedIds.map(async (id) => {
         const snap = await db.collection("orders").doc(id).collection("items").get();
         itemsByOrder.set(id, snap.docs);
       }),
     );
-    // Itemlari o'qilmagan buyurtmalar hisob-kitobdan chiqariladi (yarim
-    // ma'lumot bilan noto'g'ri son ko'rsatgandan ko'ra, umuman
-    // ko'rsatmagan ma'qul).
-    for (const id of [...orderDocs.keys()]) {
-      if (!itemsByOrder.has(id)) orderDocs.delete(id);
-    }
 
     const broughtInOrders: Record<string, unknown>[] = [];
     const deliveredOrders: Record<string, unknown>[] = [];
     const washedItems: ItemRow[] = [];
-    const washingItems: ItemRow[] = [];
-    const readyItems: ItemRow[] = [];
-    const unmeasuredOrders: Record<string, unknown>[] = [];
     const cashEntries: Record<string, unknown>[] = [];
-
     const washedTotals = new Map<string, number>();
     let cashTotal = 0;
 
+    // --- BUGUNGI harakatlar: faqat bugun tegilgan buyurtmalarning
+    // itemlaridan (aniq vaqt shtampi kerak, hosila maydonda yo'q). ---
     for (const [orderId, order] of orderDocs) {
       const orderNumber = (order.orderNumber as number) ?? 0;
       const customerName = (order.customerName as string) ?? "";
       const phone = (order.phone as string) ?? "";
       const serviceType = (order.serviceType as string) ?? "pickup";
-      const items = itemsByOrder.get(orderId) ?? [];
-
       const base = { orderId, orderNumber, customerName, phone };
 
-      // 1) Bugun sexga keldi — dastavchik olib kelgan (pickup) buyurtmalar.
       const pickedUpAt = toDate(order.pickedUpAt);
       if (pickedUpAt && pickedUpAt >= dayStart.toDate()) {
         broughtInOrders.push({ ...base, at: pickedUpAt.toISOString() });
       }
 
-      // 2) Joyida yuvish buyurtmasi bugun yakunlangan bo'lsa — u ham
-      // "bugun yetgazildi"ga kiradi (item-darajasi onsite'da yo'q).
+      // Joyida yuvish item-darajasiga ega emas — u order darajasida yopiladi.
       const doneAt = toDate(order.doneAt);
       if (serviceType === "onsite" && doneAt && doneAt >= dayStart.toDate()) {
         deliveredOrders.push({ ...base, at: doneAt.toISOString(), serviceType });
@@ -155,14 +147,10 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
       }
 
       let orderDeliveredToday = false;
-      let unmeasuredCount = 0;
-
-      for (const itemDoc of items) {
+      for (const itemDoc of itemsByOrder.get(orderId) ?? []) {
         const item = itemDoc.data();
         const calcType = (item.calcType as string) ?? "fixed";
         const qty = (item.qty as number | undefined) ?? 0;
-        const price = (item.price as number | undefined) ?? 0;
-        const status = (item.status as string | undefined) ?? null;
         const row: ItemRow = {
           orderId,
           orderNumber,
@@ -171,7 +159,7 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
           itemName: (item.name as string) ?? "Mahsulot",
           calcType,
           qty,
-          price,
+          price: (item.price as number | undefined) ?? 0,
           at: null,
         };
 
@@ -180,8 +168,7 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
           washedItems.push({ ...row, at: washedAt.toISOString() });
           // O'lchovli turlar o'z birligida yig'iladi, o'lchovsizlar donada.
           const unit = UNIT_LABELS[calcType] ?? "dona";
-          const amount = calcType === "sqm" || calcType === "meter" || calcType === "kg" ? qty : 1;
-          washedTotals.set(unit, (washedTotals.get(unit) ?? 0) + amount);
+          washedTotals.set(unit, (washedTotals.get(unit) ?? 0) + (calcType === "sqm" || calcType === "meter" || calcType === "kg" ? qty : 1));
         }
 
         const deliveredAt = toDate(item.deliveredAt);
@@ -193,21 +180,41 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
             cashEntries.push({ ...base, amount: collected, at: deliveredAt.toISOString(), itemName: row.itemName });
           }
         }
-
-        if (status === "washing") washingItems.push(row);
-        if (status === "ready") readyItems.push(row);
-
-        // O'lchanmagan — mahsulot mavjud, lekin narxi hali 0 (ishchi sexda
-        // o'lchab kiritishi kerak). Yakunlangan itemlar hisobga olinmaydi.
-        if (price <= 0 && status !== "done") unmeasuredCount += 1;
       }
+      if (orderDeliveredToday) deliveredOrders.push({ ...base, serviceType });
+    }
 
-      if (orderDeliveredToday) {
-        deliveredOrders.push({ ...base, serviceType });
+    // --- JORIY holat: buyurtmadagi hosila maydonlardan (itemlarni
+    // umuman o'qimasdan). Ro'yxatlar mahsulot emas, BUYURTMA darajasida
+    // beriladi — bu ham yetarli darajada foydali, lekin arzon. ---
+    const washingOrders: Record<string, unknown>[] = [];
+    const readyOrders: Record<string, unknown>[] = [];
+    const unmeasuredOrders: Record<string, unknown>[] = [];
+    let washingItemCount = 0;
+    let readyItemCount = 0;
+
+    for (const doc of activeSnap.docs) {
+      const order = doc.data();
+      const counts = (order.itemStatusCounts as Record<string, number> | undefined) ?? {};
+      const base = {
+        orderId: doc.id,
+        orderNumber: (order.orderNumber as number) ?? 0,
+        customerName: (order.customerName as string) ?? "",
+        phone: (order.phone as string) ?? "",
+      };
+
+      const washing = counts.washing ?? 0;
+      if (washing > 0) {
+        washingItemCount += washing;
+        washingOrders.push({ ...base, itemCount: washing });
       }
-      if (unmeasuredCount > 0) {
-        unmeasuredOrders.push({ ...base, unmeasuredCount });
+      const ready = counts.ready ?? 0;
+      if (ready > 0) {
+        readyItemCount += ready;
+        readyOrders.push({ ...base, itemCount: ready });
       }
+      const zeroPrice = (order.zeroPriceItemCount as number | undefined) ?? 0;
+      if (zeroPrice > 0) unmeasuredOrders.push({ ...base, unmeasuredCount: zeroPrice });
     }
 
     const byNumberDesc = (a: Record<string, unknown>, b: Record<string, unknown>) =>
@@ -218,28 +225,16 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
       broughtInToday: { count: broughtInOrders.length, orders: broughtInOrders.sort(byNumberDesc) },
       washedToday: {
         count: washedItems.length,
-        totals: [...washedTotals.entries()].map(([unit, amount]) => ({
-          unit,
-          amount: Math.round(amount * 100) / 100,
-        })),
+        totals: [...washedTotals.entries()].map(([unit, amount]) => ({ unit, amount: Math.round(amount * 100) / 100 })),
         items: washedItems,
       },
       deliveredToday: { count: deliveredOrders.length, orders: deliveredOrders.sort(byNumberDesc) },
       cashToHandOver: { total: cashTotal, entries: cashEntries },
       // `count` — mahsulotlar soni (yuvish/tayyorlik ITEM darajasida
       // kechadi), `orderCount` — shu mahsulotlar tegishli bo'lgan
-      // buyurtmalar soni. Ikkalasi ham ko'rsatiladi, chunki xodim uchun
-      // "nechta gilam" ham, "nechta buyurtma" ham mazmunli.
-      washingNow: {
-        count: washingItems.length,
-        orderCount: new Set(washingItems.map((i) => i.orderId)).size,
-        items: washingItems,
-      },
-      readyToDeliver: {
-        count: readyItems.length,
-        orderCount: new Set(readyItems.map((i) => i.orderId)).size,
-        items: readyItems,
-      },
+      // buyurtmalar soni.
+      washingNow: { count: washingItemCount, orderCount: washingOrders.length, orders: washingOrders.sort(byNumberDesc) },
+      readyToDeliver: { count: readyItemCount, orderCount: readyOrders.length, orders: readyOrders.sort(byNumberDesc) },
       unmeasured: { count: unmeasuredOrders.length, orders: unmeasuredOrders.sort(byNumberDesc) },
     });
   } catch (err) {

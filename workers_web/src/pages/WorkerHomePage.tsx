@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Search, Hourglass, Droplets, Package, Undo2, CalendarClock, ChevronRight, X, Inbox } from 'lucide-react'
 import { useRecentOrders } from '@/hooks/useRecentOrders'
-import { useAllOrderItems, type StatsItem } from '@/hooks/useAllOrderItems'
 import { useAuth } from '@/lib/auth-context'
 import type { Order } from '@/lib/orders'
 import { formatPhoneDisplay } from '@/lib/phone'
@@ -33,9 +32,6 @@ export default function WorkerHomePage() {
     () => orders.filter((o) => o.serviceType === 'pickup' && o.status === 'brought_in'),
     [orders],
   )
-  const activeOrderIds = useMemo(() => activeOrders.map((o) => o.id), [activeOrders])
-  const itemsByOrder = useAllOrderItems(activeOrderIds)
-
   const ordersByStage = useMemo(() => {
     const q = search.trim().toLowerCase()
     const result: Record<string, Order[]> = { pending: [], washing: [], packing: [], returned: [] }
@@ -45,15 +41,18 @@ export default function WorkerHomePage() {
       const restrictBySpecialization = s === 'pending' || s === 'washing'
       const seen = new Map<string, Order>()
       for (const order of activeOrders) {
-        const items = itemsByOrder[order.id] ?? []
-        const hasMatch = items.some((item) => {
-          if (item.status !== s) return false
-          if (restrictBySpecialization && specializations.length > 0) {
-            return item.category == null || specializations.includes(item.category)
-          }
-          return true
-        })
-        if (!hasMatch) continue
+        // Bosqichda mahsulot bormi va u mening mutaxassisligimga
+        // mos keladimi — buyurtmadagi hosila maydonlardan. Avval buning
+        // uchun har bir buyurtmaning mahsulotlari o'qilardi.
+        const inStage = (order.itemStatusCounts[s] ?? 0) > 0
+        if (!inStage) continue
+        if (restrictBySpecialization && specializations.length > 0) {
+          const cats = order.itemStageCategories[s] ?? []
+          // '_none' — toifasi belgilanmagan mahsulot, u hammaga ko'rinadi
+          // (server: assertWorkerLavozim bilan bir xil qoida).
+          const matchesSpec = cats.some((c) => c === '_none' || specializations.includes(c))
+          if (!matchesSpec) continue
+        }
         if (q) {
           const matches =
             order.customerName.toLowerCase().includes(q) ||
@@ -66,7 +65,7 @@ export default function WorkerHomePage() {
       result[s] = Array.from(seen.values()).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
     }
     return result
-  }, [activeOrders, itemsByOrder, specializations, search])
+  }, [activeOrders, specializations, search])
 
   if (!canSeeWorkshopQueue) {
     return (
@@ -146,12 +145,7 @@ export default function WorkerHomePage() {
         ) : (
           <div className="space-y-3">
             {list.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                items={itemsByOrder[order.id] ?? []}
-                onOpen={() => setOpenOrderId(order.id)}
-              />
+              <OrderCard key={order.id} order={order} onOpen={() => setOpenOrderId(order.id)} />
             ))}
           </div>
         )}
@@ -162,11 +156,11 @@ export default function WorkerHomePage() {
   )
 }
 
-function OrderCard({ order, items, onOpen }: { order: Order; items: StatsItem[]; onOpen: () => void }) {
-  const due = effectiveDueDate(order, items)
-  const overdue = isOrderOverdue(order, items)
+function OrderCard({ order, onOpen }: { order: Order; onOpen: () => void }) {
+  const due = effectiveDueDate(order)
+  const overdue = isOrderOverdue(order)
   const remaining = due ? daysUntil(due) : null
-  const zeroPriced = items.filter((i) => i.price <= 0 && i.status !== 'done').length
+  const zeroPriced = order.zeroPriceItemCount
 
   return (
     <button

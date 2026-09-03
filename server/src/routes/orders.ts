@@ -5,6 +5,7 @@ import { computeDueDate, isValidTransition, isValidItemTransition, type ServiceT
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 import { computeItems, type ItemInput } from "../lib/pricing";
+import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -174,23 +175,26 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       });
 
       let itemNumber = 1;
+      const summaryItems: SummaryItemInput[] = [];
       for (const item of computedItems) {
+        const dueDate = item.tariff ? computeDueDate(now, item.tariff) : null;
         tx.set(orderRef.collection("items").doc(), {
           itemNumber: itemNumber++,
           ...item,
           status: "pending",
-          dueDate: item.tariff ? computeDueDate(now, item.tariff) : null,
+          dueDate,
           qcStatus: "pending",
           addedBy: employeeId,
           addedByDepartment: role,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
+        summaryItems.push({ status: "pending", tariff: item.tariff, dueDate, price: item.price, category: item.category });
         totalArea += item.area;
         totalPrice += item.price;
       }
       if (computedItems.length > 0) {
-        tx.update(orderRef, { totalArea, totalPrice });
+        tx.update(orderRef, { totalArea, totalPrice, ...computeOrderItemsSummary(summaryItems) });
       }
 
       return next;
@@ -552,6 +556,14 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
           });
         }
       }
+
+      // Ro'yxatlar uchun hosila ma'lumot — o'zgargan itemning YANGI
+      // holati bilan qayta hisoblanadi.
+      const summaryItems: SummaryItemInput[] = itemsSnap.docs.map((d) =>
+        d.id === itemId ? { ...(d.data() as SummaryItemInput), status: toStatus } : (d.data() as SummaryItemInput),
+      );
+      Object.assign(orderUpdate, computeOrderItemsSummary(summaryItems));
+
       tx.update(orderRef, orderUpdate);
     });
 
@@ -648,18 +660,25 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
       let addedPrice = 0;
       const now = new Date();
 
+      // Mavjud + yangi mahsulotlar — buyurtmadagi hosila ma'lumotni
+      // (tarif/muddat/holat) qayta hisoblash uchun.
+      const summaryItems: SummaryItemInput[] = existingItemsSnap.docs.map((d) => d.data() as SummaryItemInput);
+
       for (const item of computed) {
+        const dueDate = isPickup && item.tariff ? computeDueDate(now, item.tariff) : null;
+        const status = isPickup ? "pending" : null;
         tx.set(itemsRef.doc(), {
           itemNumber: nextNumber,
           ...item,
-          status: isPickup ? "pending" : null,
-          dueDate: isPickup && item.tariff ? computeDueDate(now, item.tariff) : null,
+          status,
+          dueDate,
           qcStatus: "pending",
           addedBy: employeeId,
           addedByDepartment: role,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
+        summaryItems.push({ status, tariff: item.tariff, dueDate, price: item.price, category: item.category });
         addedArea += item.area;
         addedPrice += item.price;
         nextNumber++;
@@ -672,6 +691,7 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
         totalArea: FieldValue.increment(addedArea),
         totalPrice: FieldValue.increment(addedPrice),
         updatedAt: FieldValue.serverTimestamp(),
+        ...computeOrderItemsSummary(summaryItems),
         ...(role === "delivery" ? { deliveryAddedByEmployees: FieldValue.arrayUnion(employeeId) } : {}),
       });
     });
@@ -706,7 +726,15 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
     const [computed] = await computeItems([item as ItemInput], orderDataPre.tariff as string | undefined);
 
     await db.runTransaction(async (tx) => {
-      const [orderSnap, itemSnap] = await Promise.all([tx.get(orderRef), tx.get(itemRef)]);
+      // Barcha mahsulotlar ham o'qiladi — buyurtmadagi hosila ma'lumotni
+      // qayta hisoblash uchun. Bu YOZISH amali (kamdan-kam), shuning uchun
+      // bu yerdagi qo'shimcha o'qish ro'yxatlarda tejaladigan minglab
+      // o'qishga arziydi.
+      const [orderSnap, itemSnap, allItemsSnap] = await Promise.all([
+        tx.get(orderRef),
+        tx.get(itemRef),
+        tx.get(orderRef.collection("items")),
+      ]);
       if (!orderSnap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
       if (!itemSnap.exists) throw new ApiError(404, "not-found", "Mahsulot topilmadi");
       assertItemsEditable(orderSnap.data()!, role, employeeId, itemSnap.data());
@@ -714,16 +742,31 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
       const prevPrice = Number(itemSnap.data()!.price) || 0;
       const prevArea = Number(itemSnap.data()!.area) || 0;
       const now = new Date();
+      const dueDate = isPickup && computed.tariff ? computeDueDate(now, computed.tariff) : null;
 
       tx.update(itemRef, {
         ...computed,
-        dueDate: isPickup && computed.tariff ? computeDueDate(now, computed.tariff) : null,
+        dueDate,
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      const summaryItems: SummaryItemInput[] = allItemsSnap.docs.map((d) =>
+        d.id === itemId
+          ? {
+              status: (d.data().status as string | null) ?? null,
+              tariff: computed.tariff,
+              dueDate,
+              price: computed.price,
+              category: computed.category,
+            }
+          : (d.data() as SummaryItemInput),
+      );
+
       tx.update(orderRef, {
         totalArea: FieldValue.increment(computed.area - prevArea),
         totalPrice: FieldValue.increment(computed.price - prevPrice),
         updatedAt: FieldValue.serverTimestamp(),
+        ...computeOrderItemsSummary(summaryItems),
       });
     });
 
@@ -747,7 +790,11 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
     const itemRef = orderRef.collection("items").doc(itemId);
 
     await db.runTransaction(async (tx) => {
-      const [orderSnap, itemSnap] = await Promise.all([tx.get(orderRef), tx.get(itemRef)]);
+      const [orderSnap, itemSnap, allItemsSnap] = await Promise.all([
+        tx.get(orderRef),
+        tx.get(itemRef),
+        tx.get(orderRef.collection("items")),
+      ]);
       if (!orderSnap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
       if (!itemSnap.exists) throw new ApiError(404, "not-found", "Mahsulot topilmadi");
       assertItemsEditable(orderSnap.data()!, role, employeeId, itemSnap.data());
@@ -756,10 +803,16 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
       const area = Number(itemSnap.data()!.area) || 0;
 
       tx.delete(itemRef);
+
+      const summaryItems: SummaryItemInput[] = allItemsSnap.docs
+        .filter((d) => d.id !== itemId)
+        .map((d) => d.data() as SummaryItemInput);
+
       tx.update(orderRef, {
         totalArea: FieldValue.increment(-area),
         totalPrice: FieldValue.increment(-price),
         updatedAt: FieldValue.serverTimestamp(),
+        ...computeOrderItemsSummary(summaryItems),
       });
     });
 
@@ -855,6 +908,54 @@ ordersRouter.post("/adminDeleteOrder", withAuth, requireAdmin, async (req, res) 
 
     await db.recursiveDelete(orderRef);
     res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Bir martalik, xavfsiz (idempotent) migratsiya — mahsulotlardan hosila
+ * qilingan ma'lumot (`itemTariffs`, `earliestPendingDueDate`,
+ * `itemStatusCounts` va h.k.) buyurtma hujjatiga qo'shilishidan OLDINGI
+ * buyurtmalarni to'ldiradi.
+ *
+ * Busiz eski buyurtmalarda ro'yxatlar tarif/muddatni ko'rsata olmaydi
+ * (chunki endi ular mahsulotlarni o'qimaydi). Faqat FAOL pickup
+ * buyurtmalar to'ldiriladi — yakunlanganlari ro'yxatlarda ko'rsatilmaydi,
+ * ularga bekorga o'qish sarflashning hojati yo'q.
+ *
+ * `force: true` bilan chaqirilsa, allaqachon to'ldirilganlarni ham qayta
+ * hisoblaydi (ma'lumot eskirib qolgan deb gumon qilinsa).
+ */
+ordersRouter.post("/adminBackfillOrderSummary", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const force = req.body?.force === true;
+    const snap = await db
+      .collection("orders")
+      .where("serviceType", "==", "pickup")
+      .where("status", "in", ["new", "picked_up", "brought_in"])
+      .get();
+
+    const targets = force ? snap.docs : snap.docs.filter((d) => d.data().itemStatusCounts === undefined);
+
+    let updated = 0;
+    // Ketma-ket, kichik to'plamlarda — bir vaqtda yuzlab so'rov
+    // yubormaslik uchun.
+    for (let i = 0; i < targets.length; i += 20) {
+      const chunk = targets.slice(i, i + 20);
+      const batch = db.batch();
+      await Promise.all(
+        chunk.map(async (doc) => {
+          const itemsSnap = await doc.ref.collection("items").get();
+          const summary = computeOrderItemsSummary(itemsSnap.docs.map((d) => d.data() as SummaryItemInput));
+          batch.update(doc.ref, { ...summary });
+          updated += 1;
+        }),
+      );
+      await batch.commit();
+    }
+
+    res.json({ ok: true, scanned: snap.size, updated });
   } catch (err) {
     sendError(res, err);
   }

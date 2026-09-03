@@ -114,7 +114,7 @@ class DailyStatsScreen extends ConsumerWidget {
                 subValue: '${stats.washingOrderCount} ta buyurtmada',
                 entries: stats.washing,
                 emptyText: 'Hozir yuvilayotgan mahsulot yo\'q',
-                detailTitle: 'Hozir yuvilayotgan mahsulotlar',
+                detailTitle: 'Hozir yuvilayotgan buyurtmalar',
               ),
               const SizedBox(height: 12),
 
@@ -126,7 +126,7 @@ class DailyStatsScreen extends ConsumerWidget {
                 subValue: '${stats.readyOrderCount} ta buyurtmada',
                 entries: stats.ready,
                 emptyText: 'Yetgazishga tayyor mahsulot yo\'q',
-                detailTitle: 'Yetgazishga tayyor mahsulotlar',
+                detailTitle: 'Yetgazishga tayyor buyurtmalar',
               ),
               const SizedBox(height: 12),
 
@@ -473,6 +473,11 @@ class _EntryTile extends StatelessWidget {
             Text(
               formatMoneyUz(entry.amount!),
               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.success),
+            )
+          else if (entry.itemCount != null && entry.itemCount! > 0)
+            Text(
+              '${entry.itemCount} ta',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: AppColors.grayDark),
             )
           else if (entry.qty != null && entry.qty! > 0)
             Text(

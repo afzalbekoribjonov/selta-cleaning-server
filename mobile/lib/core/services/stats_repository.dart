@@ -14,6 +14,9 @@ class StatEntry {
   final num? amount;
   final num? qty;
   final String? calcType;
+  /// Buyurtma darajasidagi qatorlarda — shu buyurtmadagi tegishli
+  /// mahsulotlar soni (masalan "3 ta yuvilmoqda").
+  final int? itemCount;
 
   const StatEntry({
     required this.orderNumber,
@@ -23,6 +26,7 @@ class StatEntry {
     this.amount,
     this.qty,
     this.calcType,
+    this.itemCount,
   });
 
   factory StatEntry.fromMap(Map<Object?, Object?> map) {
@@ -34,6 +38,7 @@ class StatEntry {
       amount: map['amount'] as num?,
       qty: map['qty'] as num?,
       calcType: map['calcType']?.toString(),
+      itemCount: (map['itemCount'] as num?)?.toInt(),
     );
   }
 }
@@ -124,10 +129,10 @@ class DailyStats {
       cashEntries: _entries(cash['entries']),
       washingCount: (washing['count'] as num?)?.toInt() ?? 0,
       washingOrderCount: (washing['orderCount'] as num?)?.toInt() ?? 0,
-      washing: _entries(washing['items']),
+      washing: _entries(washing['orders']),
       readyCount: (ready['count'] as num?)?.toInt() ?? 0,
       readyOrderCount: (ready['orderCount'] as num?)?.toInt() ?? 0,
-      ready: _entries(ready['items']),
+      ready: _entries(ready['orders']),
       unmeasuredCount: (unmeasured['count'] as num?)?.toInt() ?? 0,
       unmeasured: _entries(unmeasured['orders']),
     );
