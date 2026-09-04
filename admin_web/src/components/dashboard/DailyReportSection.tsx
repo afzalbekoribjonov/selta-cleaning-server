@@ -163,11 +163,11 @@ export function DailyReportSection() {
 
           <DriversCashPanel date={date} report={data} />
 
-          {!data.hasActivityLog && (
+          {!data.hasActivityLog && !data.isToday && (
             <p className="mt-3 flex items-start gap-2 rounded-xl bg-bg px-3 py-2.5 text-xs text-gray-dark">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" />
-              Bu kun uchun bosqich yozuvlari yo'q. Yuvish/upakovka/yetkazish hisobi kunlik jurnal joriy etilgan kundan
-              boshlab yuritiladi — undan oldingi kunlarda faqat "Sexga keldi" ko'rsatkichi to'g'ri bo'ladi.
+              Bu kunda yuvish, upakovka va yetkazish yozuvi yo'q — kun tinch o'tgan yoki kunlik jurnal joriy
+              etilishidan oldingi kun bo'lishi mumkin. "Sexga keldi" ko'rsatkichi har ikkala holatda ham to'g'ri.
             </p>
           )}
         </>

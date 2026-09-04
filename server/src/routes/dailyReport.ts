@@ -60,10 +60,25 @@ function resolveDateKey(raw: unknown): string {
   return dateKey;
 }
 
-/** employeeId -> to'liq ism (hisobot chaqirilganda bir marta o'qiladi). */
+/**
+ * employeeId -> to'liq ism.
+ *
+ * Qisqa muddatli keshda: hisobot paneli har ochilganda butun `employees`
+ * jamlanmasini qayta o'qishning ma'nosi yo'q — ismlar deyarli
+ * o'zgarmaydi. Eng yomon holatda yangi qo'shilgan xodim ismi bir necha
+ * daqiqa "Noma'lum" ko'rinadi, keyin o'z-o'zidan to'g'rilanadi.
+ */
+const EMPLOYEE_NAME_TTL_MS = 5 * 60_000;
+let employeeNameCache: { at: number; names: Map<string, string> } | null = null;
+
 async function loadEmployeeNames(): Promise<Map<string, string>> {
+  if (employeeNameCache && Date.now() - employeeNameCache.at < EMPLOYEE_NAME_TTL_MS) {
+    return employeeNameCache.names;
+  }
   const snap = await db.collection("employees").get();
-  return new Map(snap.docs.map((d) => [d.id, (d.data().fullName as string) ?? "Noma'lum"]));
+  const names = new Map(snap.docs.map((d) => [d.id, (d.data().fullName as string) ?? "Noma'lum"]));
+  employeeNameCache = { at: Date.now(), names };
+  return names;
 }
 
 interface ActivityRow {

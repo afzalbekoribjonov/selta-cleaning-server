@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/config.dart';
 import '../../core/constants.dart';
 
 /// Bo'lim tanlash ekrani — brendlangan gradient bosh qism + ixcham
@@ -104,7 +106,19 @@ class _HeroHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Image.asset('assets/brand/lockup_white.png', height: 30),
+                    // Logotipni BOSIB TURISH admin panelni ochadi — faqat
+                    // ADMIN_PANEL bayrog'i bilan yig'ilgan buildda. Yashirin
+                    // ataylab: bu tugma xodimlarga ko'rinmasligi kerak, oddiy
+                    // buildda esa u umuman mavjud emas (router.dart).
+                    GestureDetector(
+                      onLongPress: kAdminPanelEnabled
+                          ? () {
+                              HapticFeedback.mediumImpact();
+                              context.push('/admin-panel');
+                            }
+                          : null,
+                      child: Image.asset('assets/brand/lockup_white.png', height: 30),
+                    ),
                     const SizedBox(height: 24),
                     const Text(
                       'Xush kelibsiz',

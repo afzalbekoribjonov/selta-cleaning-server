@@ -48,6 +48,9 @@ dependencies:
   url_launcher: ^6.3.1
   geolocator: ^13.0.2
   connectivity_plus: ^6.1.5
+  # Admin panelni (admin.seltacleaning.uz) ilova ichida ochish uchun —
+  # faqat ADMIN_PANEL build bayrog'i yoqilgan buildlarda ishlatiladi.
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:
