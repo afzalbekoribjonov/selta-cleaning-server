@@ -253,7 +253,7 @@ export function OrderDetailDrawer({
             ) : items.length === 0 ? (
               <p className="text-sm text-gray-dark">Hali mahsulot belgilanmagan</p>
             ) : (
-              <div className="space-y-2">
+              <ul className="divide-y divide-border">
                 {items.map((item) => {
                   const done = item.status === 'done'
                   const showColorDot = !!item.status && !done && !!item.tariff && !!item.createdAt
@@ -264,8 +264,10 @@ export function OrderDetailDrawer({
                     // Avval hammasi BITTA gorizontal qatorda edi va telefonda
                     // (drawer eni ~340px) nom bilan nishonlar bir-birini
                     // siqib, qator chetga chiqib ketardi. Endi nom+narx
-                    // yuqorida, nishonlar pastda o'raladi.
-                    <div key={item.id} className="rounded-xl border border-border bg-bg/40 p-2.5">
+                    // yuqorida, nishonlar pastda o'raladi — va har biri
+                    // alohida ramkali karta emas, ajratgich chiziqli
+                    // ro'yxat qatori (uzun ro'yxat shunda tinchroq).
+                    <li key={item.id} className="py-2.5 first:pt-0 last:pb-0">
                       <div className="flex items-start gap-2">
                         {colorStage && (
                           <span
@@ -312,10 +314,10 @@ export function OrderDetailDrawer({
                       {done && item.deliveredByName && (
                         <p className="mt-1 text-xs font-semibold text-gray-dark">Yetkazdi: {item.deliveredByName}</p>
                       )}
-                    </div>
+                    </li>
                   )
                 })}
-              </div>
+              </ul>
             )}
           </section>
 
