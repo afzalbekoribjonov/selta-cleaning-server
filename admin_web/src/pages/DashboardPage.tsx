@@ -35,13 +35,20 @@ export default function DashboardPage() {
   const { orders: activeOrders } = useActiveOrders()
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
-  // Bir martalik, xavfsiz (idempotent) migratsiya — mahsulotlardan hosila
-  // qilingan maydonlar (tarif/muddat/bosqich sonlari) qo'shilishidan
-  // OLDINGI faol buyurtmalarni to'ldiradi. Busiz eski buyurtmalarda
-  // ro'yxatlar tarif/muddatni ko'rsata olmaydi, chunki ular endi
-  // mahsulotlarni o'qimaydi.
+  // Bir martalik, xavfsiz (idempotent) migratsiyalar.
+  //
+  //  1. Mahsulotlardan hosila qilingan maydonlar (tarif/muddat/bosqich
+  //     sonlari/hajm) qo'shilishidan OLDINGI buyurtmalarni to'ldiradi —
+  //     busiz eski buyurtmalarda ro'yxatlar tarif/muddatni ko'rsata
+  //     olmaydi, chunki ular endi mahsulotlarni o'qimaydi.
+  //  2. Kunlik jurnalni mahsulotlardagi mavjud vaqt shtamplaridan
+  //     (washedAt/qcAt/deliveredAt) qayta quradi — busiz jurnal joriy
+  //     etilishidan oldingi kunlar uchun "yuvildi/upakovka/yetkazildi"
+  //     bo'sh ko'rinardi. Server tugallanganini belgilab qo'yadi va
+  //     keyingi ochilishlarda og'ir skanni takrorlamaydi.
   useEffect(() => {
     apiPost('/adminBackfillOrderSummary', {}).catch(() => {})
+    apiPost('/adminBackfillDailyActivity', {}).catch(() => {})
   }, [])
 
   const stats = useMemo(() => {

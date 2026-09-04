@@ -120,44 +120,38 @@ export function DailyReportSection() {
               icon={Factory}
               tone="primary"
               label="Sexga keldi"
-              primary={formatUnitTotals(data.intake.totals)}
-              lines={[
-                `${data.intake.orderCount} ta buyurtma · ${data.intake.itemCount} ta mahsulot`,
-                data.intake.unmeasuredCount > 0 ? `${data.intake.unmeasuredCount} ta hali o'lchanmagan` : null,
-              ]}
-              warn={data.intake.unmeasuredCount > 0}
+              count={data.intake.orderCount}
+              countLabel="buyurtma"
+              detail={`${data.intake.itemCount} ta mahsulot · ${formatUnitTotals(data.intake.totals)}`}
+              warning={data.intake.unmeasuredCount > 0 ? `${data.intake.unmeasuredCount} ta hali o'lchanmagan` : null}
               onView={() => setDrawer('intake')}
-              disabled={data.intake.orderCount === 0}
             />
             <MetricCard
               icon={Droplets}
               tone="info"
               label="Yuvildi"
-              primary={formatUnitTotals(data.washed.totals)}
-              lines={[`${data.washed.count} ta mahsulot · ${data.washed.orderCount} ta buyurtma`]}
+              count={data.washed.count}
+              countLabel="mahsulot"
+              detail={`${data.washed.orderCount} ta buyurtma · ${formatUnitTotals(data.washed.totals)}`}
               onView={() => setDrawer('washed')}
-              disabled={data.washed.count === 0}
             />
             <MetricCard
               icon={PackageCheck}
               tone="warning"
               label="Upakovka qilindi"
-              primary={formatUnitTotals(data.packed.totals)}
-              lines={[`${data.packed.count} ta mahsulot · ${data.packed.orderCount} ta buyurtma`]}
+              count={data.packed.count}
+              countLabel="mahsulot"
+              detail={`${data.packed.orderCount} ta buyurtma · ${formatUnitTotals(data.packed.totals)}`}
               onView={() => setDrawer('packed')}
-              disabled={data.packed.count === 0}
             />
             <MetricCard
               icon={Truck}
               tone="success"
               label="Yetkazildi"
-              primary={`${data.delivered.orderCount} ta buyurtma`}
-              lines={[
-                `${data.delivered.count} ta mahsulot · ${formatUnitTotals(data.delivered.totals)}`,
-                formatMoney(data.delivered.deliveredAmount),
-              ]}
+              count={data.delivered.orderCount}
+              countLabel="buyurtma"
+              detail={`${data.delivered.count} ta mahsulot · ${formatMoney(data.delivered.deliveredAmount)}`}
               onView={() => setDrawer('delivered')}
-              disabled={data.delivered.count === 0}
             />
           </div>
 
@@ -194,27 +188,34 @@ const TONES: Record<string, { icon: string; ring: string }> = {
   success: { icon: 'bg-success-bg text-success', ring: 'hover:border-success/40' },
 }
 
+/**
+ * Bitta ko'rsatkich. Barcha kartalarda ierarxiya bir xil: katta son —
+ * nechta, ostida hajm/summa tafsiloti. Avval kartaning eng katta matni
+ * ba'zisida hajm, ba'zisida buyurtma soni edi va kartalarni bir-biriga
+ * taqqoslab bo'lmasdi.
+ */
 function MetricCard({
   icon: Icon,
   tone,
   label,
-  primary,
-  lines,
-  warn,
+  count,
+  countLabel,
+  detail,
+  warning,
   onView,
-  disabled,
 }: {
   icon: LucideIcon
   tone: keyof typeof TONES
   label: string
-  primary: string
-  lines: (string | null)[]
-  warn?: boolean
+  count: number
+  countLabel: string
+  detail: string
+  warning?: string | null
   onView: () => void
-  disabled?: boolean
 }) {
+  const empty = count === 0
   return (
-    <div className={`flex flex-col rounded-2xl border border-border bg-bg/40 p-4 transition-colors ${TONES[tone].ring}`}>
+    <div className={`flex flex-col rounded-2xl border border-border bg-surface p-4 shadow-sm transition-colors ${TONES[tone].ring}`}>
       <div className="flex items-center gap-2.5">
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${TONES[tone].icon}`}>
           <Icon size={17} />
@@ -223,20 +224,22 @@ function MetricCard({
       </div>
 
       <div className="mt-3 min-w-0 flex-1">
-        <div className="truncate font-heading text-xl font-extrabold leading-tight text-ink" title={primary}>
-          {primary}
+        <div className="flex items-baseline gap-1.5">
+          <span className={`font-heading text-3xl font-extrabold leading-none ${empty ? 'text-gray' : 'text-ink'}`}>
+            {count}
+          </span>
+          <span className="text-xs font-semibold text-gray-dark">ta {countLabel}</span>
         </div>
-        {lines.filter(Boolean).map((line, i) => (
-          <div key={i} className={`mt-0.5 truncate text-xs ${warn && i > 0 ? 'font-bold text-danger' : 'text-gray-dark'}`}>
-            {line}
-          </div>
-        ))}
+        <div className="mt-1.5 truncate text-xs text-gray-dark" title={detail}>
+          {empty ? "Bu kunda yozuv yo'q" : detail}
+        </div>
+        {warning && <div className="mt-1 truncate text-xs font-bold text-danger">{warning}</div>}
       </div>
 
       <button
         onClick={onView}
-        disabled={disabled}
-        className="mt-3 flex items-center justify-center gap-1.5 rounded-xl border border-border bg-surface py-2 text-xs font-bold text-ink transition-colors hover:border-brand-primary hover:text-brand-primary disabled:opacity-40 disabled:hover:border-border disabled:hover:text-ink"
+        disabled={empty}
+        className="mt-3.5 flex items-center justify-center gap-1.5 rounded-xl border border-border bg-bg py-2 text-xs font-bold text-ink transition-colors hover:border-brand-primary hover:bg-brand-primary/5 hover:text-brand-primary disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-bg disabled:hover:text-ink"
       >
         <Eye size={14} />
         Ko'rish

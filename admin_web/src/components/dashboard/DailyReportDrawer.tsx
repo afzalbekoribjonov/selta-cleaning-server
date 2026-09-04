@@ -10,28 +10,42 @@ import {
   formatTime,
   formatUnitTotals,
   type ActivityRow,
+  type IntakeItemRow,
   type IntakeOrderRow,
   type UnitTotal,
 } from '@/lib/daily-report'
 import { TARIFF_CONFIG, STATUS_CONFIG } from '@/lib/status-config'
+import { ReportTable, type ReportColumn } from './ReportTable'
 
 export type DrawerKind = 'intake' | 'washed' | 'packed' | 'delivered'
 
 const KIND_TITLES: Record<DrawerKind, { title: string; subtitle: string }> = {
   intake: { title: 'Sexga kelgan buyurtmalar', subtitle: 'Shu kuni sexga qabul qilingan buyurtmalar va ularning mahsulotlari' },
-  washed: { title: 'Yuvilgan mahsulotlar', subtitle: 'Shu kuni "Yuvilmoqda" bosqichidan upakovkaga o\'tgan mahsulotlar' },
-  packed: { title: 'Upakovka qilingan mahsulotlar', subtitle: 'Shu kuni upakovka qilinib, yetkazishga tayyor bo\'lgan mahsulotlar' },
+  washed: { title: 'Yuvilgan mahsulotlar', subtitle: "Shu kuni yuvib bo'linib, upakovkaga o'tgan mahsulotlar" },
+  packed: { title: 'Upakovka qilingan mahsulotlar', subtitle: "Shu kuni upakovka qilinib, yetkazishga tayyor bo'lgan mahsulotlar" },
   delivered: { title: 'Yetkazilgan mahsulotlar', subtitle: 'Shu kuni mijozga topshirilgan mahsulotlar va olingan summa' },
 }
 
+const ACTOR_LABEL: Record<DrawerKind, string> = {
+  intake: 'Olib keldi',
+  washed: 'Yuvdi',
+  packed: 'Upakovka qildi',
+  delivered: 'Yetkazdi',
+}
+
+/** Buyurtma raqami — hamma joyda bir xil ko'rinishda. */
+function OrderNo({ value }: { value: number }) {
+  return <span className="font-heading font-extrabold text-ink">#{value}</span>
+}
+
 /**
- * "Ko'rish" tugmasi ochadigan to'liq ro'yxat — qidiruv va xodim/birlik
- * filtri bilan. Katta ekranda o'ng tomondan chiqadigan panel, telefonda
- * butun ekranni egallaydi (talab: mobil ko'rinish ham sifatli bo'lsin).
+ * "Ko'rish" tugmasi ochadigan to'liq ro'yxat — qidiruv va xodim filtri
+ * bilan. Katta ekranda o'ng tomondan chiqadigan panel, telefonda butun
+ * ekranni egallaydi.
  *
- * Ma'lumot allaqachon kunlik hisobot bilan birga kelgan — bu yerda
- * qo'shimcha so'rov faqat "Sexga keldi" bo'limining mahsulot ko'rinishi
- * uchun (u ataylab dangasa yuklanadi).
+ * Ma'lumot allaqachon kunlik hisobot bilan birga kelgan — qo'shimcha
+ * so'rov faqat "Sexga keldi" bo'limining mahsulot ko'rinishi uchun (u
+ * ataylab dangasa yuklanadi).
  */
 export function DailyReportDrawer({
   kind,
@@ -75,33 +89,32 @@ export function DailyReportDrawer({
       rows.filter(
         (r) =>
           (!employeeFilter || r.employeeId === employeeFilter) &&
-          matches(r.orderNumber, r.customerName, r.phone, r.itemName, r.itemId, r.orderId, r.employeeName),
+          matches(r.orderNumber, r.customerName, r.phone, r.itemName, r.employeeName),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, employeeFilter, needle],
   )
 
   const filteredIntakeOrders = useMemo(
-    () => intakeOrders.filter((o) => matches(o.orderNumber, o.customerName, o.phone, o.orderId, o.location)),
+    () => intakeOrders.filter((o) => matches(o.orderNumber, o.customerName, o.phone, o.location)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [intakeOrders, needle],
   )
 
   const filteredIntakeItems = useMemo(
-    () =>
-      (intakeItems.data?.rows ?? []).filter((r) =>
-        matches(r.orderNumber, r.customerName, r.phone, r.itemName, r.itemId, r.orderId),
-      ),
+    () => (intakeItems.data?.rows ?? []).filter((r) => matches(r.orderNumber, r.customerName, r.phone, r.itemName)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [intakeItems.data, needle],
   )
 
   const { title, subtitle } = KIND_TITLES[kind]
+  const shownCount =
+    kind === 'intake' ? (intakeView === 'orders' ? filteredIntakeOrders.length : filteredIntakeItems.length) : filteredRows.length
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
-      <div className="relative flex h-full w-full flex-col bg-surface shadow-2xl sm:max-w-4xl">
+      <div className="relative flex h-full w-full flex-col bg-surface shadow-2xl sm:max-w-5xl">
         <header className="flex items-start gap-3 border-b border-border px-4 py-4 sm:px-6">
           <div className="min-w-0 flex-1">
             <h2 className="font-heading text-lg font-extrabold text-ink">{title}</h2>
@@ -111,6 +124,7 @@ export function DailyReportDrawer({
               <span className="rounded-lg bg-brand-primary/10 px-2.5 py-1 text-xs font-bold text-brand-primary">
                 {formatUnitTotals(totals)}
               </span>
+              <span className="text-xs font-semibold text-gray-dark">{shownCount} ta yozuv</span>
             </div>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-gray-dark hover:bg-bg" aria-label="Yopish">
@@ -124,7 +138,7 @@ export function DailyReportDrawer({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buyurtma №, mijoz, telefon, mahsulot yoki ID"
+              placeholder="Buyurtma №, mijoz, telefon yoki mahsulot nomi"
               className="h-10 w-full rounded-xl border border-border bg-bg pl-9 pr-3 text-sm outline-none focus:border-brand-primary"
             />
           </div>
@@ -165,19 +179,34 @@ export function DailyReportDrawer({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+        <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6">
           {kind === 'intake' ? (
             intakeView === 'orders' ? (
-              <IntakeOrdersList orders={filteredIntakeOrders} />
+              <ReportTable
+                columns={intakeOrderColumns}
+                rows={filteredIntakeOrders}
+                rowKey={(o) => o.orderId}
+                empty="Bu kunda sexga buyurtma kelmagan"
+              />
             ) : intakeItems.isLoading ? (
               <Spinner className="py-10" />
             ) : intakeItems.isError ? (
-              <EmptyState text="Mahsulotlarni yuklab bo'lmadi" />
+              <p className="py-12 text-center text-sm text-gray-dark">Mahsulotlarni yuklab bo'lmadi</p>
             ) : (
-              <IntakeItemsList rows={filteredIntakeItems} />
+              <ReportTable
+                columns={intakeItemColumns}
+                rows={filteredIntakeItems}
+                rowKey={(r) => r.itemId}
+                empty="Bu kunda mahsulot topilmadi"
+              />
             )
           ) : (
-            <ActivityList rows={filteredRows} kind={kind} />
+            <ReportTable
+              columns={activityColumns(kind)}
+              rows={filteredRows}
+              rowKey={(r) => r.id}
+              empty="Bu kunda yozuv yo'q"
+            />
           )}
         </div>
       </div>
@@ -198,178 +227,168 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
   )
 }
 
-function EmptyState({ text }: { text: string }) {
-  return <p className="py-12 text-center text-sm text-gray-dark">{text}</p>
+/** Yuvildi / Upakovka / Yetkazildi — bosqich ro'yxati. */
+function activityColumns(kind: DrawerKind): ReportColumn<ActivityRow>[] {
+  return [
+    { key: 'at', label: 'Vaqt', mobile: 'meta', render: (r) => formatTime(r.at) },
+    { key: 'order', label: 'Buyurtma', mobile: 'title', render: (r) => <OrderNo value={r.orderNumber} /> },
+    {
+      key: 'item',
+      label: 'Mahsulot',
+      mobile: 'title',
+      render: (r) => (
+        <span className="text-ink">
+          {r.itemNumber != null && <span className="mr-1.5 text-gray-dark">{r.itemNumber}.</span>}
+          {r.itemName}
+        </span>
+      ),
+    },
+    {
+      key: 'customer',
+      label: 'Mijoz',
+      mobile: 'sub',
+      render: (r) => (
+        <span className="text-gray-dark">
+          {r.customerName || "Noma'lum"} · {r.phone}
+        </span>
+      ),
+    },
+    {
+      key: 'volume',
+      label: 'Hajmi',
+      align: 'right',
+      mobile: 'value',
+      render: (r) => (
+        <span className="font-bold text-ink">
+          {formatAmount(r.unitAmount)} {r.unitLabel}
+        </span>
+      ),
+    },
+    {
+      key: 'price',
+      label: 'Summa',
+      align: 'right',
+      mobile: 'value',
+      render: (r) => <span className="text-gray-dark">{formatMoney(r.collectedAmount ?? r.price)}</span>,
+    },
+    { key: 'actor', label: ACTOR_LABEL[kind], mobile: 'meta', render: (r) => r.employeeName },
+  ]
 }
 
-/** Buyurtma/mahsulot ID — nusxa olish uchun to'liq, lekin ko'zni charchatmaydigan. */
-function IdChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span
-      title={value}
-      className="inline-flex max-w-full items-center gap-1 rounded-md bg-bg px-1.5 py-0.5 font-mono text-[10px] text-gray-dark"
-    >
-      <span className="font-sans font-bold">{label}</span>
-      <span className="truncate">{value}</span>
-    </span>
-  )
-}
+const intakeOrderColumns: ReportColumn<IntakeOrderRow>[] = [
+  { key: 'at', label: 'Vaqt', mobile: 'meta', render: (o) => formatTime(o.at) },
+  {
+    key: 'order',
+    label: 'Buyurtma',
+    mobile: 'title',
+    render: (o) => (
+      <span className="flex items-center gap-1.5">
+        <OrderNo value={o.orderNumber} />
+        {o.intakeMethod === 'walk_in' && (
+          <span className="rounded bg-info-bg px-1.5 py-0.5 text-[10px] font-bold text-info">O'zi keldi</span>
+        )}
+      </span>
+    ),
+  },
+  { key: 'customer', label: 'Mijoz', mobile: 'title', render: (o) => o.customerName || "Noma'lum" },
+  { key: 'phone', label: 'Telefon', mobile: 'sub', render: (o) => <span className="text-gray-dark">{o.phone}</span> },
+  {
+    key: 'items',
+    label: 'Mahsulot',
+    align: 'right',
+    mobile: 'meta',
+    render: (o) => (
+      <span>
+        {o.itemCount} ta
+        {o.unmeasuredCount > 0 && <span className="ml-1 font-bold text-danger">({o.unmeasuredCount} o'lchanmagan)</span>}
+      </span>
+    ),
+  },
+  {
+    key: 'volume',
+    label: 'Hajmi',
+    align: 'right',
+    mobile: 'value',
+    render: (o) => <span className="font-bold text-ink">{formatUnitTotals(o.totals)}</span>,
+  },
+  {
+    key: 'price',
+    label: 'Summa',
+    align: 'right',
+    mobile: 'value',
+    render: (o) => <span className="text-gray-dark">{formatMoney(o.totalPrice)}</span>,
+  },
+  { key: 'actor', label: 'Olib keldi', mobile: 'meta', render: (o) => o.broughtInByName || '—' },
+]
 
-function ActivityList({ rows, kind }: { rows: ActivityRow[]; kind: DrawerKind }) {
-  if (rows.length === 0) return <EmptyState text="Bu kunda yozuv yo'q" />
-
-  return (
-    <ul className="space-y-2.5">
-      {rows.map((r) => (
-        <li key={r.id} className="rounded-2xl border border-border bg-bg/40 p-3.5">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-heading text-sm font-extrabold text-ink">#{r.orderNumber}</span>
-                {r.itemNumber != null && (
-                  <span className="rounded-md bg-brand-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-brand-primary">
-                    {r.itemNumber}-mahsulot
-                  </span>
-                )}
-                <span className="truncate text-sm font-semibold text-ink">{r.itemName}</span>
-              </div>
-              <p className="mt-0.5 truncate text-xs text-gray-dark">
-                {r.customerName || "Noma'lum"} · {r.phone}
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="font-heading text-sm font-extrabold text-ink">
-                {formatAmount(r.unitAmount)} {r.unitLabel}
-              </div>
-              <div className="text-xs font-semibold text-gray-dark">{formatMoney(r.collectedAmount ?? r.price)}</div>
-            </div>
-          </div>
-
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border pt-2.5 text-[11px] text-gray-dark">
-            <span className="font-bold text-ink">{formatTime(r.at)}</span>
-            <span>
-              {kind === 'delivered' ? 'Yetkazdi' : kind === 'packed' ? 'Upakovka qildi' : 'Yuvdi'}:{' '}
-              <strong className="text-ink">{r.employeeName}</strong>
-            </span>
-            {kind === 'delivered' && r.collectedAmount != null && r.collectedAmount !== r.price && (
-              <span className="rounded-md bg-warning-bg px-1.5 py-0.5 font-bold text-warning">
-                Narxi {formatMoney(r.price)}
-              </span>
-            )}
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            <IdChip label="Buyurtma" value={r.orderId} />
-            {r.itemId && <IdChip label="Mahsulot" value={r.itemId} />}
-          </div>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function IntakeOrdersList({ orders }: { orders: IntakeOrderRow[] }) {
-  if (orders.length === 0) return <EmptyState text="Bu kunda sexga buyurtma kelmagan" />
-
-  return (
-    <ul className="space-y-2.5">
-      {orders.map((o) => (
-        <li key={o.orderId} className="rounded-2xl border border-border bg-bg/40 p-3.5">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-heading text-sm font-extrabold text-ink">#{o.orderNumber}</span>
-                {o.intakeMethod === 'walk_in' && (
-                  <span className="rounded-md bg-info-bg px-1.5 py-0.5 text-[11px] font-bold text-info">O'zi keldi</span>
-                )}
-                {o.unmeasuredCount > 0 && (
-                  <span className="rounded-md bg-danger-bg px-1.5 py-0.5 text-[11px] font-bold text-danger">
-                    {o.unmeasuredCount} ta o'lchanmagan
-                  </span>
-                )}
-              </div>
-              <p className="mt-0.5 truncate text-sm font-semibold text-ink">{o.customerName || "Noma'lum"}</p>
-              <p className="truncate text-xs text-gray-dark">
-                {o.phone}
-                {o.location ? ` · ${o.location}` : ''}
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="font-heading text-sm font-extrabold text-ink">{formatUnitTotals(o.totals)}</div>
-              <div className="text-xs font-semibold text-gray-dark">{formatMoney(o.totalPrice)}</div>
-            </div>
-          </div>
-
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border pt-2.5 text-[11px] text-gray-dark">
-            <span className="font-bold text-ink">{formatTime(o.at)}</span>
-            <span>
-              {o.itemCount} ta mahsulot
-            </span>
-            {o.broughtInByName && (
-              <span>
-                Olib keldi: <strong className="text-ink">{o.broughtInByName}</strong>
-              </span>
-            )}
-          </div>
-          <div className="mt-1.5">
-            <IdChip label="Buyurtma" value={o.orderId} />
-          </div>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function IntakeItemsList({ rows }: { rows: Awaited<ReturnType<typeof fetchDailyIntakeItems>>['rows'] }) {
-  if (rows.length === 0) return <EmptyState text="Bu kunda mahsulot topilmadi" />
-
-  return (
-    <ul className="space-y-2.5">
-      {rows.map((r) => {
-        const tariff = r.tariff ? TARIFF_CONFIG[r.tariff as keyof typeof TARIFF_CONFIG] : null
-        const status = r.status ? STATUS_CONFIG[r.status] : null
-        return (
-          <li key={r.itemId} className="rounded-2xl border border-border bg-bg/40 p-3.5">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-heading text-sm font-extrabold text-ink">#{r.orderNumber}</span>
-                  {r.itemNumber != null && (
-                    <span className="rounded-md bg-brand-primary/10 px-1.5 py-0.5 text-[11px] font-bold text-brand-primary">
-                      {r.itemNumber}-mahsulot
-                    </span>
-                  )}
-                  <span className="truncate text-sm font-semibold text-ink">{r.itemName}</span>
-                </div>
-                <p className="mt-0.5 truncate text-xs text-gray-dark">
-                  {r.customerName || "Noma'lum"} · {r.phone}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="font-heading text-sm font-extrabold text-ink">
-                  {r.unitAmount > 0 ? `${formatAmount(r.unitAmount)} ${r.unitLabel}` : "O'lchanmagan"}
-                </div>
-                <div className={`text-xs font-semibold ${r.price > 0 ? 'text-gray-dark' : 'text-danger'}`}>
-                  {formatMoney(r.price)}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border pt-2.5 text-[11px] text-gray-dark">
-              {r.width && r.height && (
-                <span>
-                  {r.width} × {r.height} m
-                </span>
-              )}
-              {tariff && <span className="font-bold text-ink">{tariff.label}</span>}
-              {status && <span>{status.label}</span>}
-            </div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              <IdChip label="Buyurtma" value={r.orderId} />
-              <IdChip label="Mahsulot" value={r.itemId} />
-            </div>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
+const intakeItemColumns: ReportColumn<IntakeItemRow>[] = [
+  {
+    key: 'order',
+    label: 'Buyurtma',
+    mobile: 'title',
+    render: (r) => <OrderNo value={r.orderNumber} />,
+  },
+  {
+    key: 'item',
+    label: 'Mahsulot',
+    mobile: 'title',
+    render: (r) => (
+      <span className="text-ink">
+        {r.itemNumber != null && <span className="mr-1.5 text-gray-dark">{r.itemNumber}.</span>}
+        {r.itemName}
+      </span>
+    ),
+  },
+  {
+    key: 'customer',
+    label: 'Mijoz',
+    mobile: 'sub',
+    render: (r) => (
+      <span className="text-gray-dark">
+        {r.customerName || "Noma'lum"} · {r.phone}
+      </span>
+    ),
+  },
+  {
+    key: 'size',
+    label: "O'lchami",
+    mobile: 'meta',
+    render: (r) => (r.width && r.height ? `${r.width} × ${r.height} m` : '—'),
+  },
+  {
+    key: 'tariff',
+    label: 'Tarif',
+    mobile: 'meta',
+    render: (r) => {
+      const t = r.tariff ? TARIFF_CONFIG[r.tariff] : null
+      return t ? <span style={{ color: t.color }}>{t.label}</span> : '—'
+    },
+  },
+  {
+    key: 'status',
+    label: 'Holati',
+    mobile: 'meta',
+    render: (r) => (r.status ? (STATUS_CONFIG[r.status]?.label ?? r.status) : '—'),
+  },
+  {
+    key: 'volume',
+    label: 'Hajmi',
+    align: 'right',
+    mobile: 'value',
+    render: (r) =>
+      r.unitAmount > 0 ? (
+        <span className="font-bold text-ink">
+          {formatAmount(r.unitAmount)} {r.unitLabel}
+        </span>
+      ) : (
+        <span className="font-bold text-danger">O'lchanmagan</span>
+      ),
+  },
+  {
+    key: 'price',
+    label: 'Narxi',
+    align: 'right',
+    mobile: 'value',
+    render: (r) => <span className={r.price > 0 ? 'text-gray-dark' : 'font-bold text-danger'}>{formatMoney(r.price)}</span>,
+  },
+]

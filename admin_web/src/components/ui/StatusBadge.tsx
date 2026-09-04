@@ -33,12 +33,14 @@ export function TariffBadge({ tariff }: { tariff: string | null }) {
  */
 export function TariffDots({ tariffs }: { tariffs: string[] }) {
   if (tariffs.length === 0) return <span className="text-gray-dark">—</span>
+  // `span`, `div` emas: bu komponent tugma/matn ichida ham ishlatiladi,
+  // u yerda blok element yaroqsiz HTML beradi.
   return (
-    <div className="flex items-center gap-1">
+    <span className="inline-flex items-center gap-1">
       {tariffs.map((t) => {
         const info = TARIFF_CONFIG[t] ?? TARIFF_CONFIG.standart
         return <span key={t} title={info.label} className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: info.color }} />
       })}
-    </div>
+    </span>
   )
 }
