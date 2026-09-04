@@ -69,7 +69,7 @@ export default function ExpensesPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 [&>*]:min-w-0">
-        <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm xl:col-span-2">
+        <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:col-span-2">
           <div className="mb-1 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <TrendingDown size={18} className="text-danger" />
@@ -116,7 +116,7 @@ export default function ExpensesPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
           <div className="mb-1 flex items-center gap-2">
             <PieChart size={18} className="text-danger" />
             <h2 className="font-heading font-bold text-ink">Shu oy — turlari bo'yicha</h2>

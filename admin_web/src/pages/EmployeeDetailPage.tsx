@@ -237,7 +237,7 @@ export default function EmployeeDetailPage() {
         />
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <div className="mb-1 flex items-center gap-2">
           <ReceiptText size={18} className="text-brand-primary" />
           <h2 className="font-heading font-bold text-ink">So'nggi buyurtma</h2>
@@ -281,7 +281,7 @@ export default function EmployeeDetailPage() {
       {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 [&>*]:min-w-0">
-        <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm xl:col-span-2">
+        <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:col-span-2">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <TrendingUp size={18} className="shrink-0 text-brand-primary" />
@@ -330,7 +330,7 @@ export default function EmployeeDetailPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
           <div className="mb-1 flex items-center gap-2">
             <CalendarCheck size={18} className="text-brand-primary" />
             <h2 className="font-heading font-bold text-ink">Shu oy faolligi</h2>
@@ -367,7 +367,7 @@ export default function EmployeeDetailPage() {
         </section>
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <div className="mb-1 flex items-center gap-2">
           <History size={18} className="text-brand-primary" />
           <h2 className="font-heading font-bold text-ink">Maosh tarixi</h2>
@@ -404,7 +404,7 @@ export default function EmployeeDetailPage() {
 
       <AdvancesSection employee={employee} />
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <div className="mb-1 flex items-center gap-2">
           <Briefcase size={18} className="text-brand-primary" />
           <h2 className="font-heading font-bold text-ink">Kasb tarixi</h2>

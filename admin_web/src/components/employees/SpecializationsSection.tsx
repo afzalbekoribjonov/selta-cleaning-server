@@ -18,7 +18,7 @@ export function SpecializationsSection({ employee }: { employee: Employee }) {
   const terminated = employee.status !== 'active'
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Layers size={18} className="text-brand-primary" />

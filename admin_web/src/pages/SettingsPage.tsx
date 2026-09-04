@@ -22,7 +22,7 @@ export default function SettingsPage() {
         <p className="mt-1 text-sm text-gray-dark">Hisob ma'lumotlari va tizim konfiguratsiyasi</p>
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <h2 className="mb-4 flex items-center gap-2 font-heading font-bold text-ink">
           <ShieldCheck size={18} className="text-brand-primary" />
           Admin hisobi
@@ -31,8 +31,8 @@ export default function SettingsPage() {
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 text-brand-primary">
             <Mail size={18} />
           </div>
-          <div>
-            <div className="text-sm font-semibold text-ink">{user?.email ?? '—'}</div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-ink">{user?.email ?? '—'}</div>
             <div className="text-xs text-gray-dark">Administrator</div>
           </div>
         </div>
@@ -40,7 +40,7 @@ export default function SettingsPage() {
 
       <ChangePasswordCard />
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
           <Clock3 size={18} className="text-brand-primary" />
           Tariflar
@@ -66,7 +66,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
           <Info size={18} className="text-brand-primary" />
           Maosh hisoblash usullari
@@ -159,7 +159,7 @@ function ChangePasswordCard() {
   }
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
         <KeyRound size={18} className="text-brand-primary" />
         Parolni o'zgartirish

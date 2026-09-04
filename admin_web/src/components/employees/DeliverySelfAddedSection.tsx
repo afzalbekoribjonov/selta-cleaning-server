@@ -21,7 +21,7 @@ export function DeliverySelfAddedSection({ employeeId }: { employeeId: string })
   const { stats, loading } = useDeliverySelfAddedItems(employeeId)
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
       <div className="mb-1 flex items-center gap-2">
         <PackagePlus size={18} className="text-brand-primary" />
         <h2 className="font-heading font-bold text-ink">O'zi qo'shgan mahsulotlar</h2>

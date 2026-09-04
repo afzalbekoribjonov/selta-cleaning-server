@@ -218,7 +218,7 @@ function ConditionSurchargesCard() {
   })
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
       <div className="mb-1 flex items-center gap-2">
         <Percent size={18} className="text-brand-primary" />
         <h2 className="font-heading font-bold text-ink">Mahsulot holati — narx ustamasi</h2>

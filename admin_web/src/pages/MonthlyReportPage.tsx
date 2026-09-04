@@ -123,7 +123,7 @@ function MonthCard({ report, delay, isCurrent, isFuture }: { report: MonthReport
 
   return (
     <div
-      className={`month-card-anim rounded-2xl border bg-surface p-5 shadow-sm transition-shadow hover:shadow-md ${
+      className={`month-card-anim rounded-2xl border bg-surface p-4 shadow-sm sm:p-5 transition-shadow hover:shadow-md ${
         isCurrent ? 'border-brand-primary ring-2 ring-brand-primary/20' : 'border-border'
       } ${isFuture ? 'opacity-50' : ''}`}
       style={{ animationDelay: `${delay}s` }}
