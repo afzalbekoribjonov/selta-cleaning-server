@@ -375,19 +375,22 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
         }
       }
 
-      // Joyida yuvish buyurtmasi item-darajasiga ega emas — u shu yerda,
-      // butunligicha yakunlanadi, shuning uchun kunlik jurnalga ham shu
-      // yerdan tushadi (pickup buyurtmalar changeItemStatus'da).
-      if (serviceType === "onsite" && toStatus === "done") {
+      // Kunlik jurnal. Joyida yuvish item-darajasiga ega emas — u shu
+      // yerda, butunligicha yakunlanadi. Pickup buyurtmalar odatda
+      // changeItemStatus orqali (oxirgi mahsulot yetkazilganda) yopiladi
+      // va u yerda har bir mahsulot uchun alohida yozib boriladi;
+      // shuning uchun bu yerga faqat admin butun buyurtmani qo'lda
+      // yopgan holat tushadi — u ham hisobdan tushib qolmasligi kerak.
+      if (toStatus === "done") {
         logDailyActivity(tx, now, {
-          type: "onsite_done",
+          type: serviceType === "onsite" ? "onsite_done" : "delivered",
           orderId,
           orderNumber,
           customerName: (order.customerName as string) ?? "",
           phone: (order.phone as string) ?? "",
           serviceType,
           employeeId,
-          itemName: "Joyida yuvish",
+          itemName: serviceType === "onsite" ? "Joyida yuvish" : "Butun buyurtma",
           price: (order.totalPrice as number | undefined) ?? 0,
           collectedAmount: typeof collectedAmount === "number" && collectedAmount > 0 ? collectedAmount : null,
         });
