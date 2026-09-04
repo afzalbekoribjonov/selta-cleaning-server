@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
@@ -391,155 +391,176 @@ dailyReportRouter.post("/adminSetCashHandover", withAuth, requireAdmin, async (r
  * (`washedAt`, `qcAt`, `deliveredAt`) va buyurtmada (`doneAt`) allaqachon
  * bor edi. Bu migratsiya o'sha vaqt shtamplaridan jurnalni to'ldiradi.
  *
- * Upakovka uchun `packedAt` eski mahsulotlarda yo'q — uning o'rniga
- * `qcAt` ishlatiladi: u aynan "upakovka -> tayyor" o'tishida yozilgan,
- * ya'ni bir xil paytni bildiradi.
+ * BO'LAKMA-BO'LAK ishlaydi: har chaqiruvda cheklangan sondagi buyurtma
+ * qayta ishlanadi va `cursor` qaytariladi; klient `done: true` kelguncha
+ * takrorlaydi. Butun jamlanmani bitta so'rovda o'qish ma'lumot o'sgani
+ * sari HTTP so'rovi vaqti tugashiga olib kelardi va migratsiya hech
+ * qachon yakunlanmasdi.
  *
- * XAVFSIZ QAYTA ISHGA TUSHIRILADI: avval barcha kunlarning hodisalari
- * o'chiriladi, keyin manbadan to'liq qayta yoziladi. Manba — mahsulot
- * maydonlari, shuning uchun natija har doim bir xil. Bir marta
- * bajarilgach `settings/dailyActivityBackfill` belgisi qo'yiladi va
- * keyingi chaqiruvlar `force` bo'lmasa hech narsa qilmaydi.
+ * XAVFSIZ QAYTA ISHGA TUSHIRILADI: hodisa ID'lari aniqlangan
+ * (`tur__manba__kun`), shuning uchun qayta yozish nusxa yaratmaydi —
+ * ustiga yozadi. Yarim yo'lda uzilgan migratsiyani qaytadan boshlash
+ * kifoya.
  */
+const BACKFILL_ORDERS_PER_CALL = 150;
+
 dailyReportRouter.post("/adminBackfillDailyActivity", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
     const force = req.body?.force === true;
+    const cursor = typeof req.body?.cursor === "string" && req.body.cursor ? req.body.cursor : null;
     const markerRef = db.collection("settings").doc("dailyActivityBackfill");
-    const marker = await markerRef.get();
-    if (!force && marker.data()?.completedAt) {
-      res.json({ ok: true, skipped: true, completedAt: toIso(marker.data()?.completedAt) });
-      return;
-    }
 
-    // --- 1. Mavjud hodisalarni tozalash ---
-    // Aniqlangan ID'lar tufayli ustiga yozish ham yetarli bo'lardi, lekin
-    // jurnal joriy etilgan kuni tasodifiy ID bilan yozilgan hodisalar
-    // bor — ular tozalanmasa ikki marta sanalardi.
-    const dayRefs = await db.collection("dailyActivity").listDocuments();
-    let deleted = 0;
-    for (const dayRef of dayRefs) {
-      const snap = await dayRef.collection("events").get();
-      for (let i = 0; i < snap.docs.length; i += 400) {
-        const batch = db.batch();
-        for (const doc of snap.docs.slice(i, i + 400)) batch.delete(doc.ref);
-        await batch.commit();
-        deleted += Math.min(400, snap.docs.length - i);
+    if (!cursor) {
+      const marker = await markerRef.get();
+      if (!force && marker.data()?.completedAt) {
+        res.json({ ok: true, done: true, skipped: true, completedAt: toIso(marker.data()?.completedAt) });
+        return;
       }
+      await removeLegacyRandomIdEvents();
     }
 
-    // --- 2. Buyurtmalardan qayta qurish ---
-    const ordersSnap = await db.collection("orders").get();
+    let query = db.collection("orders").orderBy(FieldPath.documentId()).limit(BACKFILL_ORDERS_PER_CALL);
+    if (cursor) query = query.startAfter(cursor);
+    const ordersSnap = await query.get();
+
     const pending: { id: string; dateKey: string; doc: Record<string, unknown> }[] = [];
 
     /** Vaqt shtampi bor bo'lsa navbatga qo'yadi. */
-    function queue(at: Timestamp | undefined, event: DailyActivityInput) {
+    const queue = (at: Timestamp | undefined, event: DailyActivityInput) => {
       if (!(at instanceof Timestamp)) return;
       const date = at.toDate();
       const dateKey = businessDateString(date);
       pending.push({ id: dailyActivityDocId(event, dateKey), dateKey, doc: buildDailyActivityDoc(date, event) });
-    }
+    };
 
-    for (let i = 0; i < ordersSnap.docs.length; i += 20) {
-      const chunk = ordersSnap.docs.slice(i, i + 20);
-      await Promise.all(
-        chunk.map(async (orderDoc) => {
-          const o = orderDoc.data();
-          const base = {
-            orderId: orderDoc.id,
-            orderNumber: (o.orderNumber as number) ?? 0,
-            customerName: (o.customerName as string) ?? "",
-            phone: (o.phone as string) ?? "",
-            serviceType: (o.serviceType as string) ?? "pickup",
-          };
-
-          if (base.serviceType === "onsite") {
-            // Joyida yuvish item-darajasiga ega emas — buyurtma butunligicha yopiladi.
-            queue(o.doneAt as Timestamp | undefined, {
-              ...base,
-              type: "onsite_done",
-              employeeId: (o.deliveredBy as string) ?? "",
-              itemName: "Joyida yuvish",
-              price: (o.totalPrice as number | undefined) ?? 0,
-              collectedAmount: (o.collectedAmount as number | undefined) ?? null,
-            });
-            return;
-          }
-
-          const itemsSnap = await orderDoc.ref.collection("items").get();
-          let anyDelivered = false;
-          for (const itemDoc of itemsSnap.docs) {
-            const item = itemDoc.data();
-            const itemBase = {
-              ...base,
-              itemId: itemDoc.id,
-              itemNumber: (item.itemNumber as number | undefined) ?? null,
-              itemName: (item.name as string) ?? "Mahsulot",
-              calcType: (item.calcType as string | undefined) ?? null,
-              qty: (item.qty as number | undefined) ?? null,
-              price: (item.price as number | undefined) ?? null,
-            };
-
-            queue(item.washedAt as Timestamp | undefined, {
-              ...itemBase,
-              type: "washed",
-              employeeId: (item.washedBy as string) ?? "",
-            });
-
-            // Eski mahsulotlarda `packedAt` yo'q — `qcAt` aynan shu
-            // o'tishda ("upakovka -> tayyor") yozilgan.
-            const packedAt = (item.packedAt as Timestamp | undefined) ?? (item.qcAt as Timestamp | undefined);
-            if (item.qcStatus === "passed" || item.packedAt) {
-              queue(packedAt, {
-                ...itemBase,
-                type: "packed",
-                employeeId: ((item.packedBy ?? item.qcBy) as string) ?? "",
-              });
-            }
-
-            if (item.deliveredAt instanceof Timestamp) anyDelivered = true;
-            queue(item.deliveredAt as Timestamp | undefined, {
-              ...itemBase,
-              type: "delivered",
-              employeeId: (item.deliveredBy as string) ?? "",
-              collectedAmount: (item.collectedAmount as number | undefined) ?? null,
-            });
-          }
-
-          // Buyurtma yakunlangan, lekin birorta mahsulotda yetkazish
-          // vaqti yo'q — demak u mahsulot-darajasidagi oqim joriy
-          // etilishidan oldin yoki admin tomonidan butunligicha
-          // yopilgan. Shunda "Yetkazildi" hisobida buyurtma
-          // darajasidagi bitta yozuv beriladi, aks holda yakunlangan
-          // buyurtma statistikada umuman ko'rinmay qolardi.
-          if (!anyDelivered) {
-            queue(o.doneAt as Timestamp | undefined, {
-              ...base,
-              type: "delivered",
-              employeeId: (o.deliveredBy as string) ?? "",
-              itemName: `${itemsSnap.size} ta mahsulot`,
-              price: (o.totalPrice as number | undefined) ?? 0,
-              collectedAmount: (o.collectedAmount as number | undefined) ?? null,
-            });
-          }
-        }),
-      );
+    for (let i = 0; i < ordersSnap.docs.length; i += 25) {
+      await Promise.all(ordersSnap.docs.slice(i, i + 25).map((orderDoc) => collectOrderEvents(orderDoc, queue)));
     }
 
     for (let i = 0; i < pending.length; i += 400) {
       const batch = db.batch();
-      for (const e of pending.slice(i, i + 400)) {
-        batch.set(dailyActivityEvents(e.dateKey).doc(e.id), e.doc);
-      }
+      for (const e of pending.slice(i, i + 400)) batch.set(dailyActivityEvents(e.dateKey).doc(e.id), e.doc);
       await batch.commit();
     }
 
-    await markerRef.set(
-      { completedAt: Timestamp.fromDate(new Date()), orders: ordersSnap.size, events: pending.length },
-      { merge: true },
-    );
+    const done = ordersSnap.size < BACKFILL_ORDERS_PER_CALL;
+    if (done) await markerRef.set({ completedAt: Timestamp.fromDate(new Date()) }, { merge: true });
 
-    res.json({ ok: true, orders: ordersSnap.size, events: pending.length, deleted });
+    res.json({
+      ok: true,
+      done,
+      cursor: done ? null : ordersSnap.docs[ordersSnap.docs.length - 1].id,
+      orders: ordersSnap.size,
+      events: pending.length,
+    });
   } catch (err) {
     sendError(res, err);
   }
 });
+
+/**
+ * Jurnal joriy etilgan kuni tasodifiy ID bilan yozilgan hodisalarni
+ * o'chiradi. Aniqlangan ID'lar `__` ajratgichini o'z ichiga oladi,
+ * Firestore avtomatik bergan ID'larda esa u hech qachon uchramaydi —
+ * shu farq bo'yicha ajratiladi. Ular qoldirilsa, qayta qurishdan keyin
+ * bir xil hodisa ikki marta sanalardi.
+ */
+async function removeLegacyRandomIdEvents(): Promise<number> {
+  const dayRefs = await db.collection("dailyActivity").listDocuments();
+  let removed = 0;
+  for (const dayRef of dayRefs) {
+    const snap = await dayRef.collection("events").get();
+    const legacy = snap.docs.filter((d) => !d.id.includes("__"));
+    for (let i = 0; i < legacy.length; i += 400) {
+      const batch = db.batch();
+      for (const doc of legacy.slice(i, i + 400)) batch.delete(doc.ref);
+      await batch.commit();
+    }
+    removed += legacy.length;
+  }
+  return removed;
+}
+
+/** Bitta buyurtmaning barcha tugallangan bosqichlarini navbatga qo'yadi. */
+async function collectOrderEvents(
+  orderDoc: FirebaseFirestore.QueryDocumentSnapshot,
+  queue: (at: Timestamp | undefined, event: DailyActivityInput) => void,
+): Promise<void> {
+  const o = orderDoc.data();
+  const base = {
+    orderId: orderDoc.id,
+    orderNumber: (o.orderNumber as number) ?? 0,
+    customerName: (o.customerName as string) ?? "",
+    phone: (o.phone as string) ?? "",
+    serviceType: (o.serviceType as string) ?? "pickup",
+  };
+
+  if (base.serviceType === "onsite") {
+    // Joyida yuvish item-darajasiga ega emas — buyurtma butunligicha yopiladi.
+    queue(o.doneAt as Timestamp | undefined, {
+      ...base,
+      type: "onsite_done",
+      employeeId: (o.deliveredBy as string) ?? "",
+      itemName: "Joyida yuvish",
+      price: (o.totalPrice as number | undefined) ?? 0,
+      collectedAmount: (o.collectedAmount as number | undefined) ?? null,
+    });
+    return;
+  }
+
+  const itemsSnap = await orderDoc.ref.collection("items").get();
+  let anyDelivered = false;
+
+  for (const itemDoc of itemsSnap.docs) {
+    const item = itemDoc.data();
+    const itemBase = {
+      ...base,
+      itemId: itemDoc.id,
+      itemNumber: (item.itemNumber as number | undefined) ?? null,
+      itemName: (item.name as string) ?? "Mahsulot",
+      calcType: (item.calcType as string | undefined) ?? null,
+      qty: (item.qty as number | undefined) ?? null,
+      price: (item.price as number | undefined) ?? null,
+    };
+
+    queue(item.washedAt as Timestamp | undefined, {
+      ...itemBase,
+      type: "washed",
+      employeeId: (item.washedBy as string) ?? "",
+    });
+
+    // Eski mahsulotlarda `packedAt` yo'q — `qcAt` aynan shu o'tishda
+    // ("upakovka -> tayyor") yozilgan, ya'ni bir xil paytni bildiradi.
+    if (item.packedAt || item.qcStatus === "passed") {
+      queue((item.packedAt as Timestamp | undefined) ?? (item.qcAt as Timestamp | undefined), {
+        ...itemBase,
+        type: "packed",
+        employeeId: ((item.packedBy ?? item.qcBy) as string) ?? "",
+      });
+    }
+
+    if (item.deliveredAt instanceof Timestamp) anyDelivered = true;
+    queue(item.deliveredAt as Timestamp | undefined, {
+      ...itemBase,
+      type: "delivered",
+      employeeId: (item.deliveredBy as string) ?? "",
+      collectedAmount: (item.collectedAmount as number | undefined) ?? null,
+    });
+  }
+
+  // Buyurtma yakunlangan, lekin birorta mahsulotda yetkazish vaqti yo'q
+  // — demak u mahsulot-darajasidagi oqim joriy etilishidan oldin yoki
+  // admin tomonidan butunligicha yopilgan. Shunda "Yetkazildi" hisobida
+  // buyurtma darajasidagi bitta yozuv beriladi, aks holda yakunlangan
+  // buyurtma statistikada umuman ko'rinmay qolardi.
+  if (!anyDelivered) {
+    queue(o.doneAt as Timestamp | undefined, {
+      ...base,
+      type: "delivered",
+      employeeId: (o.deliveredBy as string) ?? "",
+      itemName: `${itemsSnap.size} ta mahsulot`,
+      price: (o.totalPrice as number | undefined) ?? 0,
+      collectedAmount: (o.collectedAmount as number | undefined) ?? null,
+    });
+  }
+}

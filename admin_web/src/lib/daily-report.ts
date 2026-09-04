@@ -121,6 +121,30 @@ export function fetchDailyIntakeItems(date: string): Promise<{
   return apiPost('/adminDailyIntakeItems', { date })
 }
 
+/**
+ * Kunlik jurnal migratsiyasini `done` kelguncha bo'lakma-bo'lak
+ * chaqiradi (server har chaqiruvda cheklangan sondagi buyurtmani qayta
+ * ishlaydi). Ish bajarilgan bo'lsa `true` qaytaradi — chaqiruvchi shunda
+ * hisobotni qayta so'rashi kerak.
+ */
+export async function runDailyActivityBackfill(): Promise<boolean> {
+  let cursor: string | null = null
+  let didWork = false
+  // Yuqori chegara: 200 * 150 = 30 000 buyurtma. Cheksiz siklga
+  // tushmaslik uchun — server kutilmaganda doim `done: false` qaytarsa.
+  for (let i = 0; i < 200; i++) {
+    const res: { done: boolean; cursor: string | null; skipped?: boolean; events?: number } = await apiPost(
+      '/adminBackfillDailyActivity',
+      cursor ? { cursor } : {},
+    )
+    if (res.skipped) return false
+    if ((res.events ?? 0) > 0) didWork = true
+    if (res.done || !res.cursor) return didWork
+    cursor = res.cursor
+  }
+  return didWork
+}
+
 export function setCashHandover(date: string, employeeId: string, handedOver: boolean, amount?: number) {
   return apiPost('/adminSetCashHandover', { date, employeeId, handedOver, amount })
 }

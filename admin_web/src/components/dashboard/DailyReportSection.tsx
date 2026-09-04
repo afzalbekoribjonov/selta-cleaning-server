@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft,
@@ -20,6 +20,7 @@ import { businessDateKey } from '@/lib/attendance'
 import { UZ_MONTHS_FULL } from '@/lib/date-utils'
 import {
   fetchDailyReport,
+  runDailyActivityBackfill,
   setCashHandover,
   formatMoney,
   formatUnitTotals,
@@ -50,8 +51,26 @@ function shiftDateKey(dateKey: string, days: number): string {
  */
 export function DailyReportSection() {
   const todayKey = businessDateKey(new Date())
+  const queryClient = useQueryClient()
   const [date, setDate] = useState(todayKey)
   const [drawer, setDrawer] = useState<DrawerKind | null>(null)
+
+  // Kunlik jurnal 2026-09-05 da joriy etilgan — undan oldingi kunlar
+  // uchun u bo'sh. Bu migratsiya mahsulotlardagi mavjud vaqt
+  // shtamplaridan (washedAt/qcAt/deliveredAt) jurnalni to'ldiradi.
+  // Server bir marta bajarilganini belgilab qo'yadi, keyingi
+  // ochilishlarda darhol "skipped" qaytaradi.
+  useEffect(() => {
+    let cancelled = false
+    runDailyActivityBackfill()
+      .then((didWork) => {
+        if (didWork && !cancelled) queryClient.invalidateQueries({ queryKey: ['dailyReport'] })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [queryClient])
 
   const report = useQuery({
     queryKey: ['dailyReport', date],
