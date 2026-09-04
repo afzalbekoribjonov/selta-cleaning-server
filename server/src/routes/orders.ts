@@ -6,6 +6,7 @@ import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from 
 import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 import { computeItems, type ItemInput } from "../lib/pricing";
 import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
+import { logDailyActivity } from "../lib/dailyActivity";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -189,7 +190,15 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
-        summaryItems.push({ status: "pending", tariff: item.tariff, dueDate, price: item.price, category: item.category });
+        summaryItems.push({
+          status: "pending",
+          tariff: item.tariff,
+          dueDate,
+          price: item.price,
+          category: item.category,
+          calcType: item.calcType,
+          qty: item.qty,
+        });
         totalArea += item.area;
         totalPrice += item.price;
       }
@@ -305,6 +314,9 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
 
     const orderRef = db.collection("orders").doc(orderId);
     let orderNumber = 0;
+    // Kunlik jurnal uchun bitta payt — tranzaksiya qayta urinsa ham
+    // hodisa kuni siljib ketmasligi uchun shu yerda ushlab turiladi.
+    const now = new Date();
 
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(orderRef);
@@ -361,6 +373,24 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
         if (typeof collectedAmount === "number" && collectedAmount > 0) {
           attributionUpdate.collectedAmount = collectedAmount;
         }
+      }
+
+      // Joyida yuvish buyurtmasi item-darajasiga ega emas — u shu yerda,
+      // butunligicha yakunlanadi, shuning uchun kunlik jurnalga ham shu
+      // yerdan tushadi (pickup buyurtmalar changeItemStatus'da).
+      if (serviceType === "onsite" && toStatus === "done") {
+        logDailyActivity(tx, now, {
+          type: "onsite_done",
+          orderId,
+          orderNumber,
+          customerName: (order.customerName as string) ?? "",
+          phone: (order.phone as string) ?? "",
+          serviceType,
+          employeeId,
+          itemName: "Joyida yuvish",
+          price: (order.totalPrice as number | undefined) ?? 0,
+          collectedAmount: typeof collectedAmount === "number" && collectedAmount > 0 ? collectedAmount : null,
+        });
       }
 
       tx.update(orderRef, { status: toStatus, updatedAt: FieldValue.serverTimestamp(), ...attributionUpdate });
@@ -456,6 +486,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
 
     let orderNumber = 0;
     let itemName = "";
+    const now = new Date();
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, itemSnap, itemsSnap] = await Promise.all([
@@ -487,6 +518,22 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         assertWorkerLavozim(workerLavozim, transitionKey, (item.category as string | undefined) ?? null);
       }
 
+      /** Kunlik jurnal hodisasining o'zgarmas qismi — uch bosqichda bir xil. */
+      const activityBase = () => ({
+        orderId,
+        orderNumber,
+        customerName: (order.customerName as string) ?? "",
+        phone: (order.phone as string) ?? "",
+        serviceType: (order.serviceType as string) ?? "pickup",
+        employeeId,
+        itemId,
+        itemNumber: (item.itemNumber as number | undefined) ?? null,
+        itemName,
+        calcType: (item.calcType as string | undefined) ?? null,
+        qty: (item.qty as number | undefined) ?? null,
+        price: (item.price as number | undefined) ?? null,
+      });
+
       const itemUpdate: Record<string, unknown> = { status: toStatus, updatedAt: FieldValue.serverTimestamp() };
       // `washedByEmployees`/`deliveredByEmployees` — order-level denormalizatsiya
       // (arrayUnion) faqat maosh/faollik statistikasi UCHUN, xodim
@@ -516,12 +563,20 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         itemUpdate.washedBy = employeeId;
         itemUpdate.washedAt = FieldValue.serverTimestamp();
         orderUpdate.washedByEmployees = FieldValue.arrayUnion(employeeId);
+        logDailyActivity(tx, now, { ...activityBase(), type: "washed" });
       }
       if (toStatus === "ready") {
         itemUpdate.qcStatus = "passed";
         itemUpdate.qcBy = employeeId;
         itemUpdate.qcAt = FieldValue.serverTimestamp();
         itemUpdate.qcNote = null;
+        // Upakovka aynan shu o'tishda tugaydi ("packing" -> "ready").
+        // Avval bu payt uchun alohida vaqt shtampi yo'q edi, shuning
+        // uchun "bugun nechta mahsulot upakovka qilindi" ko'rsatkichini
+        // hisoblab bo'lmasdi.
+        itemUpdate.packedBy = employeeId;
+        itemUpdate.packedAt = FieldValue.serverTimestamp();
+        logDailyActivity(tx, now, { ...activityBase(), type: "packed" });
       }
       if (toStatus === "returned") {
         itemUpdate.qcStatus = "failed";
@@ -539,6 +594,11 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         if (typeof collectedAmount === "number" && collectedAmount > 0) {
           itemUpdate.collectedAmount = collectedAmount;
         }
+        logDailyActivity(tx, now, {
+          ...activityBase(),
+          type: "delivered",
+          collectedAmount: typeof collectedAmount === "number" && collectedAmount > 0 ? collectedAmount : null,
+        });
       }
 
       tx.update(itemRef, itemUpdate);
@@ -678,7 +738,15 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
-        summaryItems.push({ status, tariff: item.tariff, dueDate, price: item.price, category: item.category });
+        summaryItems.push({
+          status,
+          tariff: item.tariff,
+          dueDate,
+          price: item.price,
+          category: item.category,
+          calcType: item.calcType,
+          qty: item.qty,
+        });
         addedArea += item.area;
         addedPrice += item.price;
         nextNumber++;
@@ -758,6 +826,8 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
               dueDate,
               price: computed.price,
               category: computed.category,
+              calcType: computed.calcType,
+              qty: computed.qty,
             }
           : (d.data() as SummaryItemInput),
       );
@@ -936,7 +1006,12 @@ ordersRouter.post("/adminBackfillOrderSummary", withAuth, requireAdmin, async (r
       .where("status", "in", ["new", "picked_up", "brought_in"])
       .get();
 
-    const targets = force ? snap.docs : snap.docs.filter((d) => d.data().itemStatusCounts === undefined);
+    // Hosila maydonlarning BIRORTASI yetishmasa ham qayta hisoblanadi —
+    // shu tufayli keyinchalik qo'shilgan maydon (masalan `itemUnitTotals`)
+    // ham o'z-o'zidan to'ldiriladi, alohida migratsiya yozmasdan.
+    const targets = force
+      ? snap.docs
+      : snap.docs.filter((d) => d.data().itemStatusCounts === undefined || d.data().itemUnitTotals === undefined);
 
     let updated = 0;
     // Ketma-ket, kichik to'plamlarda — bir vaqtda yuzlab so'rov

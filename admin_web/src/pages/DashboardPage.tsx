@@ -10,10 +10,12 @@ import { type Order } from '@/lib/orders'
 import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
 import { formatDateUz } from '@/lib/date-utils'
 import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
+import { OrderSummaryCard } from '@/components/orders/OrderSummaryCard'
 import { RevenueTrendChart } from '@/components/dashboard/RevenueTrendChart'
 import { ProfitLossCard } from '@/components/dashboard/ProfitLossCard'
 import { EmployeeActivityChart } from '@/components/dashboard/EmployeeActivityChart'
 import { MonthlyExpensesCard } from '@/components/dashboard/MonthlyExpensesCard'
+import { DailyReportSection } from '@/components/dashboard/DailyReportSection'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -82,6 +84,8 @@ export default function DashboardPage() {
         <p className="text-sm text-gray-dark mt-1">Bugungi holat va faol buyurtmalar</p>
       </div>
 
+      <DailyReportSection />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {loading ? (
           <>
@@ -124,7 +128,15 @@ export default function DashboardPage() {
         ) : activeSorted.length === 0 ? (
           <p className="p-10 text-center text-sm text-gray-dark">Hozircha faol buyurtma yo'q</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Telefon: kartalar; lg dan boshlab jadval (OrdersPage bilan bir xil naqsh). */}
+            <div className="space-y-2 p-3 lg:hidden">
+              {activeSorted.slice(0, 20).map((o) => (
+                <OrderSummaryCard key={o.id} order={o} onClick={() => setSelectedOrder(o)} />
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-dark border-b border-border">
@@ -158,7 +170,8 @@ export default function DashboardPage() {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </section>
 

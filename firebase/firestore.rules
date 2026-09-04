@@ -171,5 +171,20 @@ service cloud.firestore {
       allow read: if isAdmin() || (isSignedIn() && employeeId() == resource.data.employeeId);
       allow write: if false;
     }
+
+    // --- dailyActivity / cashHandovers ---------------------------------
+    // Kunlik hisobot manbalari (server/src/lib/dailyActivity.ts va
+    // routes/dailyReport.ts). FAQAT server (Admin SDK) yozadi va o'qiydi
+    // — admin panel ham ularni to'g'ridan-to'g'ri emas, /adminDailyReport
+    // orqali oladi. Qoidalar sukut bo'yicha rad etadi, lekin bu yerda
+    // ataylab ochiq yozilgan: keyinchalik kimdir "nega o'qiy olmayapman"
+    // deb izlanmasligi uchun.
+    match /dailyActivity/{dateKey}/events/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /cashHandovers/{dateKey} {
+      allow read, write: if false;
+    }
   }
 }

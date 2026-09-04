@@ -56,3 +56,17 @@ export function parseHHMM(value: string): number | null {
   if (h < 0 || h > 23 || m < 0 || m > 59) return null;
   return h * 60 + m;
 }
+
+/**
+ * "2026-09-05" kun kaliti uchun [boshi, oxiri) UTC oralig'i — Firestore
+ * vaqt shtampi bo'yicha filtrlash uchun. Noto'g'ri format bo'lsa null.
+ */
+export function businessDayRangeUtc(dateKey: string): { start: Date; end: Date } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const localMidnightMs = Date.UTC(Number(y), Number(m) - 1, Number(d));
+  const start = new Date(localMidnightMs - BUSINESS_UTC_OFFSET_MINUTES * 60_000);
+  if (Number.isNaN(start.getTime())) return null;
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60_000) };
+}

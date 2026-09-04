@@ -161,9 +161,9 @@ export function OrderDetailDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-ink/40" onClick={onClose}>
       <div className="h-full w-full max-w-lg overflow-y-auto bg-bg shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-6 py-4">
-          <div>
-            <h2 className="text-lg font-heading font-extrabold text-ink">Buyurtma #{order.orderNumber}</h2>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-border bg-surface px-4 py-4 sm:px-6">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-heading font-extrabold text-ink">Buyurtma #{order.orderNumber}</h2>
             <div className="mt-1 flex flex-wrap gap-2">
               <StatusBadge status={order.status} />
               <TariffBadge tariff={order.tariff} />
@@ -177,7 +177,7 @@ export function OrderDetailDrawer({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               onClick={() => setDeleteOpen(true)}
               className="rounded-lg p-2 text-gray-dark hover:bg-danger-bg hover:text-danger"
@@ -192,12 +192,12 @@ export function OrderDetailDrawer({
           </div>
         </div>
 
-        <div className="border-b border-border bg-brand-primary/5 px-6 py-4">
+        <div className="border-b border-border bg-brand-primary/5 px-4 py-4 sm:px-6">
           <div className="text-xs font-semibold text-gray-dark">Umumiy summa</div>
           <div className="font-heading text-3xl font-extrabold text-brand-primary">{formatMoney(order.totalPrice)}</div>
         </div>
 
-        <div className="space-y-5 p-6">
+        <div className="space-y-5 p-4 sm:p-6">
           <section className="rounded-2xl border border-border bg-surface p-4">
             <InfoRow icon={User} text={order.customerName || "Noma'lum mijoz"} />
             <InfoRow icon={Phone} text={order.phone} />
@@ -261,33 +261,56 @@ export function OrderDetailDrawer({
                   const statusInfo = item.status ? STATUS_CONFIG[item.status] : null
                   const tariffInfo = item.tariff ? TARIFF_CONFIG[item.tariff] : null
                   return (
-                    <div key={item.id}>
-                      <div className="flex items-center gap-2 text-sm">
-                        {colorStage && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: COLOR_STAGE_HEX[colorStage] }} />}
-                        <span className="shrink-0 rounded-md bg-brand-primary/10 px-2 py-0.5 text-xs font-bold text-brand-primary">
+                    // Avval hammasi BITTA gorizontal qatorda edi va telefonda
+                    // (drawer eni ~340px) nom bilan nishonlar bir-birini
+                    // siqib, qator chetga chiqib ketardi. Endi nom+narx
+                    // yuqorida, nishonlar pastda o'raladi.
+                    <div key={item.id} className="rounded-xl border border-border bg-bg/40 p-2.5">
+                      <div className="flex items-start gap-2">
+                        {colorStage && (
+                          <span
+                            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: COLOR_STAGE_HEX[colorStage] }}
+                          />
+                        )}
+                        <span className="mt-px shrink-0 rounded-md bg-brand-primary/10 px-2 py-0.5 text-xs font-bold text-brand-primary">
                           {order.orderNumber}/{item.itemNumber}
                         </span>
-                        <span className={`flex-1 font-medium ${done ? 'text-success line-through' : 'text-ink'}`}>{item.name}</span>
+                        <span
+                          className={`min-w-0 flex-1 text-sm font-medium ${done ? 'text-success line-through' : 'text-ink'}`}
+                        >
+                          {item.name}
+                        </span>
+                        <span className="shrink-0 text-sm font-bold text-ink">{formatMoney(item.price)}</span>
+                      </div>
+
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         {item.area > 0 && <span className="text-xs text-gray-dark">{item.area} m²</span>}
-                        <span className="shrink-0 text-xs font-bold text-ink">{formatMoney(item.price)}</span>
                         {tariffInfo && (
-                          <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ color: tariffInfo.color, backgroundColor: tariffInfo.bg }}>
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[11px] font-bold"
+                            style={{ color: tariffInfo.color, backgroundColor: tariffInfo.bg }}
+                          >
                             {tariffInfo.label}
                           </span>
                         )}
                         {statusInfo ? (
-                          <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ color: statusInfo.color, backgroundColor: statusInfo.bg }}>
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[11px] font-bold"
+                            style={{ color: statusInfo.color, backgroundColor: statusInfo.bg }}
+                          >
                             {statusInfo.label}
                           </span>
                         ) : (
                           <QcDot status={item.qcStatus} />
                         )}
                       </div>
+
                       {item.status === 'returned' && item.qcNote && (
-                        <p className="ml-4 mt-0.5 text-xs font-semibold text-danger">Sabab: {item.qcNote}</p>
+                        <p className="mt-1 text-xs font-semibold text-danger">Sabab: {item.qcNote}</p>
                       )}
                       {done && item.deliveredByName && (
-                        <p className="ml-4 mt-0.5 text-xs font-semibold text-gray-dark">Yetkazdi: {item.deliveredByName}</p>
+                        <p className="mt-1 text-xs font-semibold text-gray-dark">Yetkazdi: {item.deliveredByName}</p>
                       )}
                     </div>
                   )
@@ -384,8 +407,8 @@ export function OrderDetailDrawer({
 function InfoRow({ icon: Icon, text, danger }: { icon: typeof User; text: string; danger?: boolean }) {
   return (
     <div className="flex items-start gap-2.5 py-1.5">
-      <Icon size={15} className={danger ? 'text-danger' : 'text-gray'} />
-      <span className={`text-sm ${danger ? 'font-bold text-danger' : 'text-ink'}`}>{text}</span>
+      <Icon size={15} className={`mt-0.5 shrink-0 ${danger ? 'text-danger' : 'text-gray'}`} />
+      <span className={`min-w-0 break-words text-sm ${danger ? 'font-bold text-danger' : 'text-ink'}`}>{text}</span>
     </div>
   )
 }

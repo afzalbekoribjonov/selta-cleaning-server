@@ -8,6 +8,7 @@ import { StatusBadge, TariffDots } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatDateUz } from '@/lib/date-utils'
 import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
+import { OrderSummaryCard } from '@/components/orders/OrderSummaryCard'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -129,20 +130,23 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1">
+      {/* Telefonda filtrlar bir-biriga tiqilib, har biri o'z tabiiy
+          kengligida turardi. Endi: qidiruv butun enni, qolgani ikki
+          ustunli tarmoqni egallaydi; sm dan boshlab avvalgi qator. */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
+        <div className="relative col-span-2 sm:min-w-[220px] sm:flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray" size={16} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Ism, telefon yoki # bo'yicha qidirish"
-            className="w-full rounded-xl border border-border bg-surface py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-primary"
+            className="h-11 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-brand-primary"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-primary"
+          className="h-11 w-full min-w-0 rounded-xl border border-border bg-surface px-3 text-sm outline-none focus:border-brand-primary sm:w-auto"
         >
           <option value="">Barcha holat</option>
           {Object.entries(STATUS_CONFIG).map(([key, s]) => (
@@ -154,7 +158,7 @@ export default function OrdersPage() {
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortKey)}
-          className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-primary"
+          className="h-11 w-full min-w-0 rounded-xl border border-border bg-surface px-3 text-sm outline-none focus:border-brand-primary sm:w-auto"
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.key} value={opt.key}>
@@ -167,7 +171,7 @@ export default function OrdersPage() {
           value={monthFilter}
           onChange={(e) => setMonthFilter(e.target.value)}
           max={currentYearMonth()}
-          className="rounded-xl border border-border bg-surface px-3 py-2.5 text-sm outline-none focus:border-brand-primary"
+          className="h-11 w-full min-w-0 rounded-xl border border-border bg-surface px-3 text-sm outline-none focus:border-brand-primary sm:w-auto"
         />
         {monthFilter && (
           <button onClick={() => setMonthFilter('')} className="text-xs font-bold text-brand-primary hover:underline">
@@ -176,7 +180,7 @@ export default function OrdersPage() {
         )}
         <button
           onClick={() => setOverdueOnly((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors ${
+          className={`flex h-11 items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-bold transition-colors ${
             overdueOnly ? 'border-danger bg-danger text-white' : 'border-border bg-surface text-ink'
           }`}
         >
@@ -191,7 +195,15 @@ export default function OrdersPage() {
         ) : filtered.length === 0 ? (
           <p className="p-10 text-center text-sm text-gray-dark">Buyurtmalar topilmadi</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Telefon: kartalar. lg dan boshlab to'liq jadval. */}
+            <div className="space-y-2 p-3 lg:hidden">
+              {filtered.map((o) => (
+                <OrderSummaryCard key={o.id} order={o} onClick={() => setSelectedOrder(o)} />
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-gray-dark">
@@ -236,7 +248,8 @@ export default function OrdersPage() {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
         {view === 'all' && (
           <div className="flex justify-center border-t border-border p-4">

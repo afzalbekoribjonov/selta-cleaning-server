@@ -25,6 +25,28 @@ export interface SummaryItemInput {
   dueDate?: Timestamp | Date | null;
   price?: number | null;
   category?: string | null;
+  calcType?: string | null;
+  qty?: number | null;
+}
+
+/**
+ * Hisoblash turi -> o'lchov birligi. O'lchovsiz turlar ("size"/"fixed")
+ * donada sanaladi, shuning uchun ular uchun har bir mahsulot 1 birlik.
+ */
+export const UNIT_BY_CALC_TYPE: Record<string, string> = {
+  sqm: "sqm",
+  meter: "meter",
+  kg: "kg",
+  count: "dona",
+  size: "dona",
+  fixed: "dona",
+};
+
+/** O'lchovli tur bo'lsa mahsulotning haqiqiy hajmi, aks holda 1 dona. */
+export function unitAmountOf(calcType: string | null | undefined, qty: number | null | undefined): number {
+  const unit = UNIT_BY_CALC_TYPE[calcType ?? "fixed"] ?? "dona";
+  if (unit === "dona") return 1;
+  return Number(qty) || 0;
 }
 
 /** Toifasi belgilanmagan mahsulot uchun kalit — `null` massivda saqlanmaydi. */
@@ -40,6 +62,12 @@ export interface OrderItemsSummary {
   zeroPriceItemCount: number;
   /** Har bir bosqichda nechta mahsulot borligi — ishchi ustunlari uchun. */
   itemStatusCounts: Record<string, number>;
+  /**
+   * Birlik bo'yicha umumiy hajm ({ sqm: 12.5, kg: 3, dona: 2 }) — kunlik
+   * hisobotdagi "Bugun sexga qancha hajm keldi" ko'rsatkichi buni
+   * mahsulotlarni umuman o'qimasdan yig'ishi uchun.
+   */
+  itemUnitTotals: Record<string, number>;
   /**
    * Har bir bosqichda qanday TOIFADAGI mahsulotlar borligi. Ishchi
    * ro'yxati mutaxassislik bo'yicha filtrlanadi — busiz klient buni
@@ -60,6 +88,7 @@ export function computeOrderItemsSummary(items: SummaryItemInput[]): OrderItemsS
   const tariffs = new Set<string>();
   const statusCounts: Record<string, number> = {};
   const stageCategories: Record<string, Set<string>> = {};
+  const unitTotals: Record<string, number> = {};
   let earliest: Timestamp | null = null;
   let zeroPrice = 0;
 
@@ -70,6 +99,9 @@ export function computeOrderItemsSummary(items: SummaryItemInput[]): OrderItemsS
       (stageCategories[status] ??= new Set()).add(item.category ?? NO_CATEGORY);
     }
     if (item.tariff) tariffs.add(item.tariff);
+
+    const unit = UNIT_BY_CALC_TYPE[item.calcType ?? "fixed"] ?? "dona";
+    unitTotals[unit] = (unitTotals[unit] ?? 0) + unitAmountOf(item.calcType, item.qty);
 
     const isDone = status === "done";
     if (!isDone) {
@@ -83,6 +115,9 @@ export function computeOrderItemsSummary(items: SummaryItemInput[]): OrderItemsS
 
   return {
     itemCount: items.length,
+    itemUnitTotals: Object.fromEntries(
+      Object.entries(unitTotals).map(([unit, amount]) => [unit, Math.round(amount * 100) / 100]),
+    ),
     itemTariffs: [...tariffs],
     earliestPendingDueDate: earliest,
     zeroPriceItemCount: zeroPrice,
