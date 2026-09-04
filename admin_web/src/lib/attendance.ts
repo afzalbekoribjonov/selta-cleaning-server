@@ -1,10 +1,6 @@
 import { collection, doc, onSnapshot, query, where, type Timestamp } from 'firebase/firestore'
 import { db } from './firebase'
 
-// Biznes vaqti yordamchilari `business-time.ts` da — ular davomatdan
-// tashqari kunlik hisobot va buyurtma so'rovlarida ham ishlatiladi.
-export { businessDateKey, businessMinutesNow } from './business-time'
-
 export const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5, 6]
 
 export interface AttendanceConfig {
