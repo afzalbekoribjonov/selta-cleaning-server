@@ -13,6 +13,7 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { businessDayStart } from './business-time'
 
 export interface Order {
   id: string
@@ -185,6 +186,24 @@ export function subscribeActiveOrders(callback: (orders: Order[]) => void): () =
  */
 export function subscribeRecentOrders(callback: (orders: Order[]) => void): () => void {
   const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(ACTIVE_WINDOW_SIZE))
+  return onSnapshot(q, (snap) => callback(snap.docs.map(toOrder)))
+}
+
+/**
+ * BUGUNGI buyurtmalar — boshqaruv panelidagi "Bugungi buyurtmalar" va
+ * "Bugungi tushum" uchun.
+ *
+ * Avval bu ikki son `subscribeRecentOrders`dan (oxirgi 150 ta hujjat)
+ * hisoblanardi, ya'ni panel har ochilganda 150 ta hujjat o'qilib,
+ * ulardan atigi bugungilari ishlatilardi. Kun chegarasi biznes vaqti
+ * (UTC+5) bo'yicha, brauzer zonasidan mustaqil.
+ */
+export function subscribeTodayOrders(callback: (orders: Order[]) => void): () => void {
+  const q = query(
+    collection(db, 'orders'),
+    where('createdAt', '>=', Timestamp.fromDate(businessDayStart())),
+    orderBy('createdAt', 'desc'),
+  )
   return onSnapshot(q, (snap) => callback(snap.docs.map(toOrder)))
 }
 

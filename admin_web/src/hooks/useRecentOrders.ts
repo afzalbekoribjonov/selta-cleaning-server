@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
-import { subscribeRecentOrders, subscribeActiveOrders, type Order } from '@/lib/orders'
+import { subscribeRecentOrders, subscribeActiveOrders, subscribeTodayOrders, type Order } from '@/lib/orders'
 
 /**
  * Bitta Firestore obunasini bir nechta komponent BO'LISHIB ishlatishi.
  *
- * NEGA KERAK: `useRecentOrders` boshqaruv panelida ikki joyda
- * (DashboardPage va EmployeeActivityChart), maosh va marketing
- * sahifalarida ham chaqiriladi. Har bir chaqiruv o'zining onSnapshot'ini
- * ochardi, ya'ni bitta sahifa ochilishida bir xil 150 ta hujjat ikki
- * marta o'qilardi. Endi birinchi iste'molchi obunani ochadi, qolganlari
- * darhol keshdagi qiymatni oladi, oxirgisi ajralganda obuna yopiladi.
+ * NEGA KERAK: bitta obunaga bir nechta komponent muhtoj bo'lishi mumkin
+ * (masalan boshqaruv panelida `useRecentOrders` ikki joyda chaqirilardi
+ * va bir xil 150 ta hujjat ikki marta o'qilardi). Endi birinchi
+ * iste'molchi obunani ochadi, qolganlari darhol keshdagi qiymatni
+ * oladi, oxirgisi ajralganda obuna yopiladi.
  */
 function createSharedOrders(subscribe: (cb: (orders: Order[]) => void) => () => void) {
   let value: Order[] | null = null
@@ -56,3 +55,9 @@ export const useRecentOrders = createSharedOrders(subscribeRecentOrders)
  * shuning uchun eski faol buyurtmalar ham hech qachon tushib qolmaydi.
  */
 export const useActiveOrders = createSharedOrders(subscribeActiveOrders)
+
+/**
+ * Faqat BUGUN yaratilgan buyurtmalar — boshqaruv panelidagi kunlik
+ * ikki ko'rsatkich uchun. Odatda o'nlab hujjat, 150 emas.
+ */
+export const useTodayOrders = createSharedOrders(subscribeTodayOrders)

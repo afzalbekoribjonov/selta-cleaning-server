@@ -4,11 +4,10 @@ import { CalendarCheck, Users, Settings2, CircleSlash, Clock, AlertTriangle, Che
 import { apiPost } from '@/lib/api'
 import { type Employee } from '@/lib/employees'
 import { useAttendanceConfig } from '@/hooks/useAttendanceConfig'
+import { businessDateKey, businessMinutesNow } from '@/lib/business-time'
 import {
   subscribeAttendanceRecords,
   subscribeAttendanceIssues,
-  businessDateKey,
-  businessMinutesNow,
   toDateKey,
   addDays,
   startOfIsoWeek,

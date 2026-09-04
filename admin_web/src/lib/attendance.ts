@@ -1,34 +1,9 @@
 import { collection, doc, onSnapshot, query, where, type Timestamp } from 'firebase/firestore'
 import { db } from './firebase'
 
-/**
- * Biznes (O'zbekiston, UTC+5, yozgi vaqtga o'tish yo'q) mahalliy vaqti —
- * server/src/lib/businessTime.ts bilan bir xil. Davomat yozuvlaridagi
- * `date` maydoni AYNAN shu vaqt bo'yicha yozilgani uchun, admin paneli
- * ham brauzer vaqt zonasidan emas, shundan foydalanishi shart. Aks holda
- * boshqa vaqt zonasidan kirilganda kun chegaralari surilib, bugungi
- * ustun noto'g'ri kunga tushib qolardi.
- */
-const BUSINESS_UTC_OFFSET_MINUTES = 5 * 60
-
-function toBusinessLocal(date: Date): Date {
-  return new Date(date.getTime() + BUSINESS_UTC_OFFSET_MINUTES * 60_000)
-}
-
-/** Biznes vaqti bo'yicha "YYYY-MM-DD". */
-export function businessDateKey(date: Date): string {
-  const local = toBusinessLocal(date)
-  const y = local.getUTCFullYear()
-  const m = String(local.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(local.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-/** Biznes vaqti bo'yicha yarim tundan beri o'tgan daqiqalar. */
-export function businessMinutesNow(): number {
-  const local = toBusinessLocal(new Date())
-  return local.getUTCHours() * 60 + local.getUTCMinutes()
-}
+// Biznes vaqti yordamchilari `business-time.ts` da — ular davomatdan
+// tashqari kunlik hisobot va buyurtma so'rovlarida ham ishlatiladi.
+export { businessDateKey, businessMinutesNow } from './business-time'
 
 export const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5, 6]
 

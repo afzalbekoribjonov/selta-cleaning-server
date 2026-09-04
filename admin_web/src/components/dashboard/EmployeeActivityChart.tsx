@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, ArrowRight } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
-import { businessDateKey } from '@/lib/attendance'
+import { businessDateKey } from '@/lib/business-time'
 import {
   DEPT_TABS,
   fetchEmployeeActivity,

@@ -4,7 +4,7 @@ import { ClipboardList, Clock, TrendingUp, AlertTriangle } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
 import { StatusBadge, TariffDots } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
-import { useRecentOrders, useActiveOrders } from '@/hooks/useRecentOrders'
+import { useTodayOrders, useActiveOrders } from '@/hooks/useRecentOrders'
 import { type Order } from '@/lib/orders'
 import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
 import { formatDateUz } from '@/lib/date-utils'
@@ -20,18 +20,11 @@ function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
 }
 
-function isToday(date: Date): boolean {
-  const now = new Date()
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate()
-}
-
 export default function DashboardPage() {
-  // Ikki manba: `recentOrders` — oxirgi 150 ta (YAKUNLANGANLARI bilan),
-  // bugungi ko'rsatkichlar shundan chiqadi; `activeOrders` — barcha faol
-  // buyurtmalar (holat bo'yicha, to'liq). Avval ikkalasi ham bitta
-  // cheklangan oynadan olinardi, shuning uchun eski faol buyurtmalar
-  // "Faol buyurtmalar" ro'yxatidan tushib qolardi.
-  const { orders, loading } = useRecentOrders()
+  // Ikki manba, ikkalasi ham kerakli qismini aniq so'raydi:
+  // `todayOrders` — bugun yaratilganlari (kunlik son va tushum uchun),
+  // `activeOrders` — barcha faol buyurtmalar (holat bo'yicha, to'liq).
+  const { orders, loading } = useTodayOrders()
   const { orders: activeOrders } = useActiveOrders()
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
@@ -46,9 +39,8 @@ export default function DashboardPage() {
   }, [])
 
   const stats = useMemo(() => {
-    const list = orders ?? []
+    const today = orders ?? []
     const active = activeOrders ?? []
-    const today = list.filter((o) => isToday(o.createdAt))
     const todayRevenue = today.reduce((sum, o) => sum + (o.totalPrice || 0), 0)
     const overdue = active.filter((o) => isOrderOverdue(o))
 

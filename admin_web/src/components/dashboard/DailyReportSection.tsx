@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
-import { businessDateKey } from '@/lib/attendance'
+import { businessDateKey } from '@/lib/business-time'
 import { UZ_MONTHS_FULL } from '@/lib/date-utils'
 import {
   fetchDailyReport,
