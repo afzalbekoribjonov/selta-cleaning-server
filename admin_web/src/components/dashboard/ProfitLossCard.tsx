@@ -61,15 +61,15 @@ export function ProfitLossCard() {
   const profitable = (result?.profit ?? 0) >= 0
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
       <div className="mb-1 flex items-center gap-2">
-        <Calculator size={18} className="text-brand-primary" />
-        <h2 className="font-heading font-bold text-ink">Foyda-zarar hisoblagichi</h2>
+        <Calculator size={18} className="shrink-0 text-brand-primary" />
+        <h2 className="min-w-0 truncate font-heading font-bold text-ink">Foyda-zarar hisoblagichi</h2>
       </div>
       <p className="mb-4 text-xs text-gray-dark">Tushum − hisoblangan oylik maosh xarajati = taxminiy foyda</p>
 
       <div className="flex flex-wrap items-end gap-3">
-        <div>
+        <div className="min-w-0 flex-1 sm:flex-none">
           <label className="mb-1.5 block text-sm font-semibold text-ink">Oy</label>
           <input
             type="month"
@@ -78,46 +78,46 @@ export function ProfitLossCard() {
               setYearMonth(e.target.value)
               setResult(null)
             }}
-            className="rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+            className="h-11 w-full rounded-xl border border-border bg-bg px-4 text-sm outline-none focus:border-brand-primary sm:w-48"
           />
         </div>
         <button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending}
-          className="flex items-center gap-2 rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
+          className="flex h-11 items-center gap-2 rounded-xl bg-brand-primary px-5 text-sm font-bold text-white shadow-sm disabled:opacity-60"
         >
           <Calculator size={16} />
           {mutation.isPending ? 'Hisoblanmoqda...' : 'Hisoblash'}
         </button>
         {mutation.isError && (
-          <span className="text-sm font-semibold text-danger">
+          <span className="w-full text-sm font-semibold text-danger">
             {mutation.error instanceof ApiError ? mutation.error.message : mutation.error instanceof Error ? mutation.error.message : 'Xatolik yuz berdi'}
           </span>
         )}
       </div>
 
       {result && (
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-xl bg-bg p-4">
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3 [&>*]:min-w-0">
+          <div className="min-w-0 rounded-xl bg-bg p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-dark">
-              <TrendingUp size={14} />
-              Tushum ({result.orderCount} ta buyurtma)
+              <TrendingUp size={14} className="shrink-0" />
+              <span className="truncate">Tushum ({result.orderCount} ta buyurtma)</span>
             </div>
-            <div className="mt-1 text-lg font-extrabold text-ink">{formatMoney(result.revenue)}</div>
+            <div className="mt-1 truncate text-lg font-extrabold text-ink">{formatMoney(result.revenue)}</div>
           </div>
-          <div className="rounded-xl bg-bg p-4">
+          <div className="min-w-0 rounded-xl bg-bg p-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-dark">
-              <Wallet size={14} />
-              Oylik maosh xarajati
+              <Wallet size={14} className="shrink-0" />
+              <span className="truncate">Oylik maosh xarajati</span>
             </div>
-            <div className="mt-1 text-lg font-extrabold text-ink">{formatMoney(result.payrollCost)}</div>
+            <div className="mt-1 truncate text-lg font-extrabold text-ink">{formatMoney(result.payrollCost)}</div>
           </div>
-          <div className={`rounded-xl p-4 ${profitable ? 'bg-success-bg' : 'bg-danger-bg'}`}>
+          <div className={`min-w-0 rounded-xl p-4 ${profitable ? 'bg-success-bg' : 'bg-danger-bg'}`}>
             <div className={`flex items-center gap-2 text-xs font-semibold ${profitable ? 'text-success' : 'text-danger'}`}>
               {profitable ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
               {profitable ? 'Taxminiy foyda' : 'Taxminiy zarar'}
             </div>
-            <div className={`mt-1 text-lg font-extrabold ${profitable ? 'text-success' : 'text-danger'}`}>
+            <div className={`mt-1 truncate text-lg font-extrabold ${profitable ? 'text-success' : 'text-danger'}`}>
               {profitable ? '+' : ''}
               {formatMoney(result.profit)}
             </div>

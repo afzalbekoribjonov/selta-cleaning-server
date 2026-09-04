@@ -218,7 +218,7 @@ export default function AttendancePage() {
       </div>
 
       {config.enabled && enrolledEmployees.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 [&>*]:min-w-0">
           <SummaryTile icon={Check} label="Vaqtida" value={todaySummary.on_time} tone="success" />
           <SummaryTile icon={Clock} label="Kechikkan" value={todaySummary.late} tone="warning" />
           <SummaryTile icon={AlertTriangle} label="Kelmagan" value={todaySummary.absent} tone="danger" />

@@ -77,7 +77,7 @@ export default function DashboardPage() {
           "Kunlik ko'rsatkichlar" bo'limida, batafsil ro'yxati bilan. Ikki
           joyda ikki xil manbadan hisoblanishi raqamlarning bir-biriga mos
           kelmasligiga olib kelardi. */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
         {loading ? (
           <>
             <StatCard icon={ClipboardList} label="Faol buyurtmalar" value="—" tone="primary" />
@@ -95,18 +95,21 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      {/* `[&>*]:min-w-0` — grid katakchasining standart `min-width: auto`
+          qiymati bolani o'z mazmunidan kichraytirmaydi, ya'ni bitta keng
+          bola butun tarmoqni (va sahifani) cho'zib yuboradi. */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
         <RevenueTrendChart />
         <EmployeeActivityChart />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
         <MonthlyExpensesCard />
         <ProfitLossCard />
       </div>
 
       <section className="rounded-2xl border border-border bg-surface shadow-sm">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-4 sm:px-5">
           <h2 className="font-heading font-bold text-ink">Faol buyurtmalar</h2>
           <span className="text-xs text-gray-dark">{stats.activeCount} ta</span>
         </div>

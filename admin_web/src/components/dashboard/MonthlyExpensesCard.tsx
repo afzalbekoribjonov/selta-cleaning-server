@@ -56,11 +56,11 @@ export function MonthlyExpensesCard() {
   const ringSize = Math.max(items.length * 34, 140)
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-      <div className="mb-1 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Receipt size={18} className="text-brand-primary" />
-          <h2 className="font-heading font-bold text-ink">Bu oy chiqimlari</h2>
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Receipt size={18} className="shrink-0 text-brand-primary" />
+          <h2 className="min-w-0 truncate font-heading font-bold text-ink">Bu oy chiqimlari</h2>
         </div>
         {!loading && (
           <span className="rounded-full bg-danger-bg px-2.5 py-1 text-xs font-bold text-danger">

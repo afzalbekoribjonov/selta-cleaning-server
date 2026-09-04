@@ -68,7 +68,7 @@ export default function ExpensesPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 [&>*]:min-w-0">
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm xl:col-span-2">
           <div className="mb-1 flex items-center justify-between">
             <div className="flex items-center gap-2">

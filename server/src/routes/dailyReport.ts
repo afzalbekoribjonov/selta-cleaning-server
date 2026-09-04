@@ -4,6 +4,7 @@ import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
 import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
+import { loadEmployeeNames } from "../lib/employeeNames";
 import {
   buildDailyActivityDoc,
   dailyActivityDocId,
@@ -64,27 +65,6 @@ function resolveDateKey(raw: unknown): string {
     throw new ApiError(400, "invalid-argument", "Sana YYYY-MM-DD ko'rinishida bo'lishi kerak");
   }
   return dateKey;
-}
-
-/**
- * employeeId -> to'liq ism.
- *
- * Qisqa muddatli keshda: hisobot paneli har ochilganda butun `employees`
- * jamlanmasini qayta o'qishning ma'nosi yo'q — ismlar deyarli
- * o'zgarmaydi. Eng yomon holatda yangi qo'shilgan xodim ismi bir necha
- * daqiqa "Noma'lum" ko'rinadi, keyin o'z-o'zidan to'g'rilanadi.
- */
-const EMPLOYEE_NAME_TTL_MS = 5 * 60_000;
-let employeeNameCache: { at: number; names: Map<string, string> } | null = null;
-
-async function loadEmployeeNames(): Promise<Map<string, string>> {
-  if (employeeNameCache && Date.now() - employeeNameCache.at < EMPLOYEE_NAME_TTL_MS) {
-    return employeeNameCache.names;
-  }
-  const snap = await db.collection("employees").get();
-  const names = new Map(snap.docs.map((d) => [d.id, (d.data().fullName as string) ?? "Noma'lum"]));
-  employeeNameCache = { at: Date.now(), names };
-  return names;
 }
 
 interface ActivityRow {

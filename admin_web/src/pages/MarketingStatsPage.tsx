@@ -324,7 +324,7 @@ function ManageSourcesSection({ sources }: { sources: OrderSource[] }) {
  * progress-bar bilan. */
 function BannerRow({ rows, totalCount }: { rows: Row[]; totalCount: number }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
       {rows.map((r) => (
         <SourceBanner key={r.key} row={r} totalCount={totalCount} />
       ))}

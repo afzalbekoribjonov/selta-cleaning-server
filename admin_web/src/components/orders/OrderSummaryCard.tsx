@@ -16,7 +16,18 @@ function formatMoney(value: number): string {
  * qatorda beradi: buyurtma raqami va holati, mijoz, so'ng muddat/summa.
  * Kechikkan buyurtma chap chetidagi qizil chiziq bilan ajralib turadi.
  */
-export function OrderSummaryCard({ order, onClick }: { order: Order; onClick: () => void }) {
+export function OrderSummaryCard({
+  order,
+  onClick,
+  matchedCount,
+  matchedLabel,
+}: {
+  order: Order
+  onClick: () => void
+  /** Mahsulot holati bo'yicha filtrlanganda — shu holatdagi mahsulotlar soni. */
+  matchedCount?: number | null
+  matchedLabel?: string
+}) {
   const overdue = isOrderOverdue(order)
   const dueDate = effectiveDueDate(order)
 
@@ -45,6 +56,13 @@ export function OrderSummaryCard({ order, onClick }: { order: Order; onClick: ()
         </span>
         <span className="block truncate text-xs text-gray-dark">{order.phone}</span>
 
+        {/* Holat filtri yoqilganda — buyurtma nima uchun ro'yxatda ekani. */}
+        {matchedCount != null && matchedCount > 0 && (
+          <span className="mt-1.5 inline-block rounded-full bg-brand-primary/10 px-2 py-0.5 text-[11px] font-bold text-brand-primary">
+            {matchedCount} ta {matchedLabel?.toLowerCase()}
+          </span>
+        )}
+
         <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-dark">
           <span>{order.serviceType === 'onsite' ? 'Joyida yuvish' : 'Olib kelish'}</span>
           {order.itemCount != null && order.itemCount > 0 && (
@@ -52,6 +70,9 @@ export function OrderSummaryCard({ order, onClick }: { order: Order; onClick: ()
               <Package size={11} />
               {order.itemCount} ta
             </span>
+          )}
+          {order.zeroPriceItemCount > 0 && (
+            <span className="font-bold text-danger">{order.zeroPriceItemCount} o'lchanmagan</span>
           )}
           <TariffDots tariffs={distinctTariffs(order)} />
           <span className={`ml-auto flex items-center gap-1 font-bold ${overdue ? 'text-danger' : 'text-ink'}`}>

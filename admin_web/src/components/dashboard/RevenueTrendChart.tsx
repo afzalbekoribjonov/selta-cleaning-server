@@ -48,10 +48,10 @@ export function RevenueTrendChart() {
     : []
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
       <div className="mb-1 flex items-center gap-2">
-        <TrendingUp size={18} className="text-brand-primary" />
-        <h2 className="font-heading font-bold text-ink">Oylik tushum tendensiyasi</h2>
+        <TrendingUp size={18} className="shrink-0 text-brand-primary" />
+        <h2 className="min-w-0 truncate font-heading font-bold text-ink">Oylik tushum tendensiyasi</h2>
       </div>
       <p className="mb-4 text-xs text-gray-dark">Oxirgi 6 oy haqiqiy tushum, oxirgi ustun — keyingi oy uchun taxmin</p>
 

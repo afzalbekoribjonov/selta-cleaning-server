@@ -93,7 +93,7 @@ export default function EmployeesPage() {
 
       {query.data && total > 0 && (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 [&>*]:min-w-0">
             {statDepartments.map((dept) => (
               <div key={dept.key} className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
@@ -124,7 +124,7 @@ export default function EmployeesPage() {
                     <h2 className="font-heading text-lg font-bold text-ink">{dept.label}</h2>
                     <span className="rounded-full bg-bg px-2.5 py-1 text-xs font-bold text-gray-dark">{employees.length} ta</span>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
                     {employees.map((e) => (
                       <EmployeeCard
                         key={e.id}

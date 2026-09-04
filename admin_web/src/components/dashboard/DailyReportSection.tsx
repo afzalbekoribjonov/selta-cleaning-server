@@ -134,7 +134,7 @@ export function DailyReportSection() {
         <p className="py-10 text-center text-sm font-semibold text-danger">Ko'rsatkichlarni yuklab bo'lmadi</p>
       ) : !data ? null : (
         <>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
             <MetricCard
               icon={Factory}
               tone="primary"

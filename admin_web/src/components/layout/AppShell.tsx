@@ -73,7 +73,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="font-heading font-extrabold text-ink">Selta Cleaning</span>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        {/* `overflow-x-clip` — xavfsizlik to'ri: biror ichki element
+            kutilmaganda kengayib ketsa, butun sahifa gorizontal siljimasin.
+            `hidden` emas, `clip`: u aylantirish konteyneri yaratmaydi,
+            shuning uchun `sticky` sarlavhalar ishlayveradi. Haqiqiy keng
+            mazmun (jadvallar) o'z `overflow-x-auto` idishida qoladi. */}
+        <main className="min-w-0 flex-1 overflow-x-clip p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   )

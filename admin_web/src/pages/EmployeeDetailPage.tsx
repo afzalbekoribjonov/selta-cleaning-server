@@ -215,7 +215,7 @@ export default function EmployeeDetailPage() {
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 [&>*]:min-w-0">
         <StatCard icon={CalendarDays} label="Ish staji" value={tenureLabel} tone="primary" />
         <StatCard icon={ClipboardList} label="Jami buyurtmalar" numericValue={orders?.length ?? 0} tone="primary" />
         <StatCard
@@ -276,12 +276,12 @@ export default function EmployeeDetailPage() {
       <StatsPermissionSection employee={employee} />
       {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 [&>*]:min-w-0">
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm xl:col-span-2">
-          <div className="mb-1 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TrendingUp size={18} className="text-brand-primary" />
-              <h2 className="font-heading font-bold text-ink">Oylik faollik</h2>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <TrendingUp size={18} className="shrink-0 text-brand-primary" />
+              <h2 className="min-w-0 truncate font-heading font-bold text-ink">Oylik faollik</h2>
             </div>
             {!ordersLoading && (
               <span className="flex items-center gap-1.5 rounded-full bg-brand-accent/15 px-2.5 py-1 text-xs font-bold text-ink">

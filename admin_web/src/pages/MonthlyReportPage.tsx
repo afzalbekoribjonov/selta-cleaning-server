@@ -79,7 +79,7 @@ export default function MonthlyReportPage() {
           <Sparkles size={16} className="text-brand-accent" />
           <span className="text-sm font-bold">{year}-yil xulosasi</span>
         </div>
-        <div className="relative mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="relative mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4 [&>*]:min-w-0">
           <HeroStat label="Buyurtmalar" value={yearTotals?.orders ?? 0} loading={loading} />
           <HeroStat label="Tushum" value={yearTotals?.revenue ?? 0} loading={loading} money />
           <HeroStat label="Chiqimlar" value={yearTotals?.expenses ?? 0} loading={loading} money />
@@ -96,7 +96,7 @@ export default function MonthlyReportPage() {
       {loading && <Spinner className="p-16" />}
 
       {!loading && months && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
           {months.map((m, i) => (
             <MonthCard key={m.month} report={m} delay={i * 0.04} isCurrent={m.month === currentMonth} isFuture={isCurrentYear && m.month > currentMonth} />
           ))}

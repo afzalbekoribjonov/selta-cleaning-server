@@ -17,6 +17,12 @@ export interface MonthlySelfAddedStats {
  * ("addedBy" + "addedByDepartment") qo'shgan itemlarni ajratadi —
  * collection-group so'rovsiz (order-scoped o'qishlar, qo'shimcha
  * xavfsizlik qoidasi shart emas).
+ *
+ * Mahsulotlar `addedBy` bo'yicha SERVER TOMONDA filtrlanadi: Firestore
+ * qaytarilgan hujjatlar uchun haq oladi, dastavchik esa odatda
+ * buyurtmadagi mahsulotlarning bir qismini qo'shadi. Avval har bir
+ * buyurtmaning BARCHA mahsulotlari o'qilib, keyin klientda tashlab
+ * yuborilardi, ya'ni o'qishlarning ko'p qismi behuda edi.
  */
 export function useDeliverySelfAddedItems(employeeId: string) {
   const [stats, setStats] = useState<MonthlySelfAddedStats[] | null>(null)
@@ -29,13 +35,17 @@ export function useDeliverySelfAddedItems(employeeId: string) {
       const ordersSnap = await getDocs(
         query(collection(db, 'orders'), where('deliveryAddedByEmployees', 'array-contains', employeeId), fbLimit(200)),
       )
-      const itemsSnaps = await Promise.all(ordersSnap.docs.map((d) => getDocs(collection(db, 'orders', d.id, 'items'))))
+      const itemsSnaps = await Promise.all(
+        ordersSnap.docs.map((d) =>
+          getDocs(query(collection(db, 'orders', d.id, 'items'), where('addedBy', '==', employeeId))),
+        ),
+      )
 
       const byMonth: Record<string, { count: number; revenue: number }> = {}
       for (const itemsSnap of itemsSnaps) {
         for (const itemDoc of itemsSnap.docs) {
           const data = itemDoc.data()
-          if (data.addedBy !== employeeId || data.addedByDepartment !== 'delivery') continue
+          if (data.addedByDepartment !== 'delivery') continue
           const createdAt = (data.createdAt as Timestamp | undefined)?.toDate()
           if (!createdAt) continue
           const yearMonth = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`
