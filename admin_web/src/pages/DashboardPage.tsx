@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { apiPost } from '@/lib/api'
-import { ClipboardList, Clock, TrendingUp, AlertTriangle, Truck, PackageCheck } from 'lucide-react'
+import { ClipboardList, Clock, TrendingUp, AlertTriangle } from 'lucide-react'
 import { StatCard } from '@/components/ui/StatCard'
 import { StatusBadge, TariffDots } from '@/components/ui/StatusBadge'
 import { Spinner } from '@/components/ui/Spinner'
@@ -45,16 +44,6 @@ export default function DashboardPage() {
     apiPost('/adminBackfillOrderSummary', {}).catch(() => {})
   }, [])
 
-  // "Bugun olindi/yetgazildi" — serverdan (stats.ts). Avval bu klientda
-  // har bir buyurtmaning mahsulotlarini o'qib hisoblanardi; server buni
-  // ancha arzon qiladi (faqat bugun tegilgan buyurtmalarni ko'radi).
-  const dailyStats = useQuery({
-    queryKey: ['dailyStats'],
-    queryFn: () =>
-      apiPost<{ broughtInToday: { count: number }; deliveredToday: { count: number } }>('/employeeDailyStats'),
-    staleTime: 60_000,
-  })
-
   const stats = useMemo(() => {
     const list = orders ?? []
     const active = activeOrders ?? []
@@ -64,9 +53,6 @@ export default function DashboardPage() {
 
     return { activeCount: active.length, todayCount: today.length, todayRevenue, overdueCount: overdue.length, active }
   }, [orders, activeOrders])
-
-  const pickedUpToday = dailyStats.data?.broughtInToday.count ?? 0
-  const deliveredToday = dailyStats.data?.deliveredToday.count ?? 0
 
   const activeSorted = useMemo(() => {
     return [...stats.active].sort((a, b) => {
@@ -86,15 +72,17 @@ export default function DashboardPage() {
 
       <DailyReportSection />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* "Bugun olindi/yetgazildi" kartalari olib tashlandi — ular endi
+          "Kunlik ko'rsatkichlar" bo'limida, batafsil ro'yxati bilan. Ikki
+          joyda ikki xil manbadan hisoblanishi raqamlarning bir-biriga mos
+          kelmasligiga olib kelardi. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {loading ? (
           <>
             <StatCard icon={ClipboardList} label="Faol buyurtmalar" value="—" tone="primary" />
             <StatCard icon={Clock} label="Bugungi buyurtmalar" value="—" tone="primary" />
             <StatCard icon={TrendingUp} label="Bugungi tushum" value="—" tone="success" />
             <StatCard icon={AlertTriangle} label="Kechikkan buyurtmalar" value="—" tone="danger" />
-            <StatCard icon={Truck} label="Bugun olindi" value="—" tone="primary" />
-            <StatCard icon={PackageCheck} label="Bugun yetgazildi" value="—" tone="success" />
           </>
         ) : (
           <>
@@ -102,8 +90,6 @@ export default function DashboardPage() {
             <StatCard icon={Clock} label="Bugungi buyurtmalar" numericValue={stats.todayCount} tone="primary" />
             <StatCard icon={TrendingUp} label="Bugungi tushum" numericValue={stats.todayRevenue} format={formatMoney} tone="success" />
             <StatCard icon={AlertTriangle} label="Kechikkan buyurtmalar" numericValue={stats.overdueCount} tone="danger" />
-            <StatCard icon={Truck} label="Bugun olindi" numericValue={pickedUpToday} tone="primary" />
-            <StatCard icon={PackageCheck} label="Bugun yetgazildi" numericValue={deliveredToday} tone="success" />
           </>
         )}
       </div>

@@ -158,7 +158,48 @@ export default function ExpensesPage() {
           </div>
         )}
         {!loading && expenses && expenses.length > 0 && (
-          <div className="overflow-x-auto">
+          <>
+          {/* Telefon: kartalar (jadval 5 ustunli va amallar ustuni bilan
+              375px ekranga sig'masdi). */}
+          <ul className="space-y-2 p-3 lg:hidden">
+            {expenses.map((e) => (
+              <li key={e.id} className="flex items-start gap-2 rounded-2xl border border-border bg-bg/40 p-3.5">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-bold text-ink">{e.name}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-dark">
+                    <span>{formatDateUz(e.date)}</span>
+                    {e.recurring ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-primary/10 px-2 py-0.5 font-bold text-brand-primary">
+                        <Repeat size={10} />
+                        Har oy
+                      </span>
+                    ) : (
+                      <span>Bir martalik</span>
+                    )}
+                  </div>
+                  <div className="mt-1.5 font-heading text-sm font-extrabold text-danger">{formatMoney(e.amount)}</div>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    aria-label="Tahrirlash"
+                    onClick={() => setEditTarget(e)}
+                    className="rounded-lg p-2 text-gray-dark hover:bg-brand-primary/10 hover:text-brand-primary"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    aria-label="O'chirish"
+                    onClick={() => setDeleteTarget(e)}
+                    className="rounded-lg p-2 text-gray-dark hover:bg-danger-bg hover:text-danger"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-gray-dark">
@@ -208,6 +249,7 @@ export default function ExpensesPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
 

@@ -53,7 +53,56 @@ export default function ProductsPage() {
           </div>
         )}
         {!loading && products && products.length > 0 && (
-          <div className="overflow-x-auto">
+          <>
+          {/* Telefon: kartalar. 6 ustunli jadval 375px ekranda faqat
+              gorizontal siljish bilan o'qilardi. */}
+          <ul className="space-y-2 p-3 lg:hidden">
+            {products.map((p) => (
+              <li key={p.id} className="rounded-2xl border border-border bg-bg/40 p-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-ink">{p.name}</div>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      <span className="rounded-full bg-brand-secondary/10 px-2 py-0.5 text-[11px] font-bold text-brand-secondary">
+                        {PRODUCT_CATEGORY_CONFIG[p.category]?.label ?? p.category}
+                      </span>
+                      <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 text-[11px] font-bold text-brand-primary">
+                        {CALC_TYPE_CONFIG[p.calcType].label}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      aria-label="Tahrirlash"
+                      onClick={() => setEditTarget(p)}
+                      className="rounded-lg p-2 text-gray-dark hover:bg-brand-primary/10 hover:text-brand-primary"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      aria-label="O'chirish"
+                      onClick={() => setDeleteTarget(p)}
+                      className="rounded-lg p-2 text-gray-dark hover:bg-danger-bg hover:text-danger"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2.5 space-y-1 border-t border-border pt-2.5">
+                  {p.tariffs.map((t) => (
+                    <div key={t} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="font-bold" style={{ color: TARIFF_CONFIG[t]?.color }}>
+                        {TARIFF_CONFIG[t]?.label ?? t}
+                      </span>
+                      <span className="text-ink">{tariffPriceLabel(p, t)}</span>
+                    </div>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-gray-dark">
@@ -127,6 +176,7 @@ export default function ProductsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
 
