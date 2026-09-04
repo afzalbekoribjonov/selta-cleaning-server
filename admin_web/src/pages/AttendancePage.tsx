@@ -100,8 +100,11 @@ export default function AttendancePage() {
     queryKey: ['employees'],
     queryFn: () => apiPost<{ employees: Employee[] }>('/adminListEmployees'),
   })
-  const enrolledEmployees = (employeesQuery.data?.employees ?? []).filter(
-    (e) => e.status === 'active' && e.attendanceEnabled,
+  // useMemo shart: bu ro'yxat quyidagi `todaySummary` ning bog'liqligi —
+  // har renderda yangi massiv bo'lsa, u hech qachon keshlanmaydi.
+  const enrolledEmployees = useMemo(
+    () => (employeesQuery.data?.employees ?? []).filter((e) => e.status === 'active' && e.attendanceEnabled),
+    [employeesQuery.data],
   )
 
   const { config, loading: configLoading } = useAttendanceConfig()
