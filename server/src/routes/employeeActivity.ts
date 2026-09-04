@@ -44,8 +44,10 @@ function dateKeysBetween(from: string, to: string): string[] {
   const end = businessDayRangeUtc(to);
   if (!start || !end || start.start > end.start) return [];
   const keys: string[] = [];
+  // `start.start` allaqachon biznes yarim tunining UTC payti, shuning
+  // uchun har bir qadam to'g'ridan-to'g'ri o'sha kunning kalitini beradi.
   for (let t = start.start.getTime(); t <= end.start.getTime() && keys.length < MAX_DAYS; t += 24 * 60 * 60_000) {
-    keys.push(businessDateString(new Date(t + 5 * 60 * 60_000)));
+    keys.push(businessDateString(new Date(t)));
   }
   return keys;
 }

@@ -141,19 +141,23 @@ export default function EmployeeDetailPage() {
 
       {/* Profil bannerini — Selta Cleaning brend gradienti bilan */}
       <section
-        className="relative overflow-hidden rounded-3xl p-6 shadow-lg sm:p-8"
+        className="relative overflow-hidden rounded-3xl p-5 shadow-lg sm:p-8"
         style={{ background: 'linear-gradient(135deg, var(--color-brand-primary), var(--color-brand-primary-dark))' }}
       >
         <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/5" />
         <div className="absolute -bottom-16 right-24 h-56 w-56 rounded-full bg-white/5" />
 
         <div className="relative flex flex-wrap items-start justify-between gap-5">
+          {/* `flex-1` ATAYLAB yo'q: asosi 0 bo'lgan bola har doim "sig'adi",
+              shuning uchun o'rash ishga tushmasdi va uzun ism tor ustunda
+              harfma-harf sinib ketardi. O'z tabiiy kengligida qolsa,
+              tugmalar keyingi qatorga tushadi. */}
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/15 p-2.5 ring-1 ring-white/25 backdrop-blur-sm">
               <img src="/brand/icon_white.png" alt="Selta Cleaning" className="h-full w-full object-contain" />
             </div>
-            <div>
-              <h1 className="font-heading text-2xl font-extrabold text-white">{employee.fullName}</h1>
+            <div className="min-w-0">
+              <h1 className="break-words font-heading text-2xl font-extrabold text-white">{employee.fullName}</h1>
               <div className="mt-1 flex items-center gap-1.5 text-sm font-bold text-white/85">
                 {dept && <dept.icon size={15} />}
                 {dept?.label ?? employee.department}

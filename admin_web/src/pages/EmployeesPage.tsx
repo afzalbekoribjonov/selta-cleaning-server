@@ -65,13 +65,13 @@ export default function EmployeesPage() {
       </div>
 
       {query.data && total > 0 && (
-        <div className="relative max-w-md">
+        <div className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray" size={16} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Ism yoki telefon bo'yicha qidirish"
-            className="w-full rounded-xl border border-border bg-surface py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand-primary"
+            className="h-11 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-brand-primary"
           />
         </div>
       )}
@@ -99,9 +99,11 @@ export default function EmployeesPage() {
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
                   <dept.icon size={20} />
                 </div>
-                <div>
-                  <div className="font-heading text-xl font-extrabold text-ink leading-tight">{byDepartment[dept.key]?.length ?? 0}</div>
-                  <div className="text-xs font-semibold text-gray-dark">{dept.label}</div>
+                <div className="min-w-0">
+                  <div className="font-heading text-xl font-extrabold leading-tight text-ink">
+                    {byDepartment[dept.key]?.length ?? 0}
+                  </div>
+                  <div className="truncate text-xs font-semibold text-gray-dark">{dept.label}</div>
                 </div>
               </div>
             ))}
@@ -118,11 +120,13 @@ export default function EmployeesPage() {
               return (
                 <div key={dept.key}>
                   <div className="mb-3 flex items-center gap-2.5">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
                       <dept.icon size={17} />
                     </div>
-                    <h2 className="font-heading text-lg font-bold text-ink">{dept.label}</h2>
-                    <span className="rounded-full bg-bg px-2.5 py-1 text-xs font-bold text-gray-dark">{employees.length} ta</span>
+                    <h2 className="min-w-0 truncate font-heading text-lg font-bold text-ink">{dept.label}</h2>
+                    <span className="shrink-0 rounded-full bg-bg px-2.5 py-1 text-xs font-bold text-gray-dark">
+                      {employees.length} ta
+                    </span>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
                     {employees.map((e) => (

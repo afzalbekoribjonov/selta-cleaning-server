@@ -4,10 +4,10 @@ export function StatusBadge({ status }: { status: string }) {
   const info = STATUS_CONFIG[status] ?? STATUS_CONFIG.new
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold"
       style={{ color: info.color, backgroundColor: info.bg }}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: info.color }} />
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: info.color }} />
       {info.label}
     </span>
   )

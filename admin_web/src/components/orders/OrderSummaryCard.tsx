@@ -41,18 +41,22 @@ export function OrderSummaryCard({
       <span className={`w-1 shrink-0 ${overdue ? 'bg-danger' : 'bg-brand-primary/30'}`} />
 
       <span className="min-w-0 flex-1 py-3 pr-3">
-        <span className="flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="font-heading text-sm font-extrabold text-ink">#{order.orderNumber}</span>
-            <StatusBadge status={order.status} />
-          </span>
-          <span className="shrink-0 font-heading text-sm font-extrabold text-brand-primary">
-            {formatMoney(order.totalPrice)}
-          </span>
+        {/* Raqam va holat birinchi qatorda, summa esa mijoz nomi bilan
+            ikkinchi qatorda: uchalasi bitta qatorda turganda uzun holat
+            nomi ("Sifat nazoratida") bilan katta summa telefonda
+            bir-birining ustiga chiqib ketardi. */}
+        <span className="flex items-center gap-2">
+          <span className="font-heading text-sm font-extrabold text-ink">#{order.orderNumber}</span>
+          <StatusBadge status={order.status} />
         </span>
 
-        <span className="mt-1.5 block truncate text-sm font-semibold text-ink">
-          {order.customerName || "Noma'lum"}
+        <span className="mt-1.5 flex items-baseline justify-between gap-2">
+          <span className="min-w-0 truncate text-sm font-semibold text-ink">
+            {order.customerName || "Noma'lum"}
+          </span>
+          <span className="shrink-0 whitespace-nowrap font-heading text-sm font-extrabold text-brand-primary">
+            {formatMoney(order.totalPrice)}
+          </span>
         </span>
         <span className="block truncate text-xs text-gray-dark">{order.phone}</span>
 
