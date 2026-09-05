@@ -33,6 +33,9 @@ export interface ActivityRow {
   employeeId: string
   employeeName: string
   collectedAmount: number | null
+  /** Buyurtmaning JORIY umumiy summasi — qator narxi bitta mahsulotniki. */
+  orderTotalPrice: number | null
+  orderItemCount: number | null
 }
 
 export interface StageSummary {
@@ -147,12 +150,6 @@ export async function runDailyActivityBackfill(): Promise<boolean> {
 
 export function setCashHandover(date: string, employeeId: string, handedOver: boolean, amount?: number) {
   return apiPost('/adminSetCashHandover', { date, employeeId, handedOver, amount })
-}
-
-/** [{label:"m²",amount:12.5}] -> "12.5 m² · 3 dona" */
-export function formatUnitTotals(totals: UnitTotal[] | null | undefined): string {
-  if (!totals || totals.length === 0) return '—'
-  return totals.map((t) => `${formatAmount(t.amount)} ${t.label}`).join(' · ')
 }
 
 export function formatAmount(value: number): string {

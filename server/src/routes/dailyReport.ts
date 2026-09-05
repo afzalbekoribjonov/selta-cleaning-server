@@ -39,6 +39,9 @@ const UNIT_LABELS: Record<string, string> = {
 
 const UNIT_ORDER = ["sqm", "meter", "kg", "dona"];
 
+/** Qatorlarga buyurtma summasini bog'lashda bir so'rovda olinadigan chegara. */
+const MAX_ORDERS_JOINED = 300;
+
 interface UnitTotal {
   unit: string;
   label: string;
@@ -86,6 +89,13 @@ interface ActivityRow {
   employeeId: string;
   employeeName: string;
   collectedAmount: number | null;
+  /**
+   * Buyurtmaning JORIY umumiy summasi. Qator narxi bitta MAHSULOTNIKI,
+   * shuning uchun ikkalasi yonma-yon ko'rsatiladi: aks holda "buyurtma
+   * 312 000 edi, hisobotda 31 000 turibdi" degan chalkashlik chiqadi.
+   */
+  orderTotalPrice: number | null;
+  orderItemCount: number | null;
 }
 
 dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
@@ -106,6 +116,7 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
 
     // --- Bosqich hodisalari ---
     const rowsByType: Record<string, ActivityRow[]> = { washed: [], packed: [], delivered: [], onsite_done: [] };
+    const referencedOrderIds = new Set<string>();
 
     for (const doc of eventsSnap.docs) {
       const e = doc.data();
@@ -114,10 +125,12 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
       const calcType = (e.calcType as string | null) ?? null;
       const unit = UNIT_BY_CALC_TYPE[calcType ?? "fixed"] ?? "dona";
       const employeeId = (e.employeeId as string) ?? "";
+      const orderId = (e.orderId as string) ?? "";
+      referencedOrderIds.add(orderId);
       rowsByType[type].push({
         id: doc.id,
         at: toIso(e.at),
-        orderId: (e.orderId as string) ?? "",
+        orderId,
         orderNumber: (e.orderNumber as number) ?? 0,
         customerName: (e.customerName as string) ?? "",
         phone: (e.phone as string) ?? "",
@@ -132,7 +145,35 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
         employeeId,
         employeeName: employeeNames.get(employeeId) ?? "Noma'lum",
         collectedAmount: (e.collectedAmount as number | null) ?? null,
+        orderTotalPrice: null,
+        orderItemCount: null,
       });
+    }
+
+    // Qatorlarga buyurtmaning JORIY summasini bog'lash. Hodisa yozuvida
+    // faqat mahsulot narxi bor; buyurtma jami esa keyin o'zgargan
+    // bo'lishi mumkin (masalan mahsulot qayta o'lchangan). Bitta kunda
+    // tegishli buyurtmalar soni kam, shuning uchun bu arzon.
+    const orderTotals = new Map<string, { totalPrice: number; itemCount: number }>();
+    const idsToFetch = [...referencedOrderIds].filter(Boolean).slice(0, MAX_ORDERS_JOINED);
+    if (idsToFetch.length > 0) {
+      const docs = await db.getAll(...idsToFetch.map((id) => db.collection("orders").doc(id)));
+      for (const doc of docs) {
+        if (!doc.exists) continue;
+        const o = doc.data()!;
+        orderTotals.set(doc.id, {
+          totalPrice: (o.totalPrice as number | undefined) ?? 0,
+          itemCount: (o.itemCount as number | undefined) ?? 0,
+        });
+      }
+    }
+    for (const rows of Object.values(rowsByType)) {
+      for (const row of rows) {
+        const totals = orderTotals.get(row.orderId);
+        if (!totals) continue;
+        row.orderTotalPrice = totals.totalPrice;
+        row.orderItemCount = totals.itemCount;
+      }
     }
 
     const byTimeDesc = (a: ActivityRow, b: ActivityRow) => (b.at ?? "").localeCompare(a.at ?? "");

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Search, AlertTriangle, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Search, AlertTriangle, X, Loader2 } from 'lucide-react'
 import { useActiveOrders } from '@/hooks/useRecentOrders'
-import { fetchOrdersPage, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
+import { fetchOrdersPage, searchOrders, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
 import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
 import {
   ITEM_STATUS_OPTIONS,
@@ -79,16 +79,59 @@ export default function OrdersPage() {
 
   const activeStatus = useMemo(() => (statusFilter ? parseStatusFilter(statusFilter) : null), [statusFilter])
 
+  // Qidiruv TO'G'RIDAN-TO'G'RI Firestore'dan ham so'raladi, faqat
+  // yuklangan sahifa ustidan emas. Avval "Barchasi" ko'rinishida
+  // 175-raqamli buyurtmani topish uchun "Yana yuklash"ni bir necha marta
+  // bosish kerak edi; endi raqam kiritilishi bilan bitta aniq so'rov
+  // ketadi va natija darhol chiqadi.
+  const [remoteResults, setRemoteResults] = useState<Order[]>([])
+  const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    const term = search.trim()
+    if (!term) {
+      setRemoteResults([])
+      setSearching(false)
+      return
+    }
+    let cancelled = false
+    setSearching(true)
+    // Har bosilgan harfga so'rov yubormaslik uchun kichik kechikish.
+    const timer = setTimeout(() => {
+      searchOrders(term)
+        .then((found) => {
+          if (!cancelled) setRemoteResults(found)
+        })
+        .catch(() => {
+          if (!cancelled) setRemoteResults([])
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false)
+        })
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [search])
+
   const filtered = useMemo(() => {
     let list = baseOrders
     const q = search.trim().toLowerCase()
     if (q) {
-      list = list.filter(
+      const local = list.filter(
         (o) =>
           o.customerName.toLowerCase().includes(q) ||
           o.phone.toLowerCase().includes(q) ||
           o.orderNumber.toString().includes(q),
       )
+      // Serverdan kelgan natijalar mahalliy matn filtridan O'TKAZILMAYDI:
+      // telefon bazada boshqa formatda saqlangan bo'lishi mumkin, ya'ni
+      // aniq topilgan buyurtma shu yerda tushib qolardi.
+      const byId = new Map<string, Order>()
+      for (const o of remoteResults) byId.set(o.id, o)
+      for (const o of local) byId.set(o.id, o)
+      list = [...byId.values()]
     }
     if (activeStatus) list = list.filter((o) => orderMatchesStatus(o, activeStatus))
     if (monthFilter) {
@@ -112,7 +155,7 @@ export default function OrdersPage() {
       }
     })
     return list
-  }, [baseOrders, search, activeStatus, monthFilter, overdueOnly, sortBy])
+  }, [baseOrders, search, remoteResults, activeStatus, monthFilter, overdueOnly, sortBy])
 
   /** Mahsulot holati bo'yicha filtrlanganda — mos kelgan mahsulotlar jami. */
   const matchedItemsTotal = useMemo(() => {
@@ -160,9 +203,12 @@ export default function OrdersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Ism, telefon yoki # bo'yicha qidirish"
-            className="h-11 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-brand-primary"
+            placeholder="Buyurtma raqami, ism yoki telefon"
+            className="h-11 w-full rounded-xl border border-border bg-surface pl-9 pr-9 text-sm outline-none focus:border-brand-primary"
           />
+          {searching && (
+            <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-brand-primary" />
+          )}
         </div>
 
         {/* Ikki qamrov ataylab ajratilgan: olib kelish buyurtmasi butun
@@ -241,7 +287,9 @@ export default function OrdersPage() {
         {showLoader ? (
           <Spinner className="p-8" />
         ) : filtered.length === 0 ? (
-          <p className="p-10 text-center text-sm text-gray-dark">Buyurtmalar topilmadi</p>
+          <p className="p-10 text-center text-sm text-gray-dark">
+            {searching ? 'Qidirilmoqda...' : 'Buyurtmalar topilmadi'}
+          </p>
         ) : (
           <>
             {/* Telefon: kartalar. lg dan boshlab to'liq jadval. */}

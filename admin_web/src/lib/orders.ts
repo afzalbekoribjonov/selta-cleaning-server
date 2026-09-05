@@ -8,8 +8,12 @@ import {
   startAfter,
   getDocs,
   onSnapshot,
+  startAt,
+  endAt,
   type QueryDocumentSnapshot,
   type DocumentSnapshot,
+  type Query,
+  type DocumentData,
   Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -205,6 +209,61 @@ export function subscribeTodayOrders(callback: (orders: Order[]) => void): () =>
     orderBy('createdAt', 'desc'),
   )
   return onSnapshot(q, (snap) => callback(snap.docs.map(toOrder)))
+}
+
+/**
+ * Buyurtmani TO'G'RIDAN-TO'G'RI Firestore'dan qidiradi.
+ *
+ * Avval qidiruv faqat allaqachon yuklangan ro'yxat ustidan ishlardi:
+ * "Barchasi" ko'rinishi 25 tadan sahifalanadi, shuning uchun 175-raqamli
+ * buyurtmani topish uchun "Yana yuklash"ni bir necha marta bosish kerak
+ * edi. Endi raqam bo'yicha bitta aniq so'rov yuboriladi va natija
+ * darhol chiqadi, ro'yxat qanchalik uzun bo'lishidan qat'i nazar.
+ *
+ * Uchta yo'l, kiritilgan matn shakliga qarab:
+ *  - butun son -> `orderNumber` bo'yicha aniq moslik (1 ta hujjat);
+ *  - 7+ raqam  -> telefon, bir nechta yozilish shaklini birdaniga
+ *    tekshiradi (`in`), chunki raqam turli formatlarda kiritilgan;
+ *  - matn      -> mijoz ismi bo'yicha prefiks oralig'i.
+ */
+export async function searchOrders(term: string): Promise<Order[]> {
+  const trimmed = term.trim()
+  if (!trimmed) return []
+
+  const queries: Query<DocumentData>[] = []
+
+  const asNumber = Number(trimmed.replace(/^#/, ''))
+  if (Number.isInteger(asNumber) && asNumber > 0) {
+    queries.push(query(collection(db, 'orders'), where('orderNumber', '==', asNumber), limit(5)))
+  }
+
+  const digits = trimmed.replace(/\D/g, '')
+  if (digits.length >= 7) {
+    // Telefon bazada qanday kiritilgan bo'lsa, shundayligicha saqlanadi —
+    // shuning uchun ehtimoliy shakllar birdaniga tekshiriladi.
+    const candidates = [...new Set([trimmed, digits, `+${digits}`, `+998${digits.slice(-9)}`, digits.slice(-9)])]
+    queries.push(query(collection(db, 'orders'), where('phone', 'in', candidates.slice(0, 10)), limit(25)))
+  }
+
+  if (!/^\d+$/.test(trimmed) && trimmed.length >= 2) {
+    queries.push(
+      query(
+        collection(db, 'orders'),
+        orderBy('customerName'),
+        startAt(trimmed),
+        endAt(`${trimmed}\uf8ff`),
+        limit(25),
+      ),
+    )
+  }
+
+  const snaps = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)))
+  const byId = new Map<string, Order>()
+  for (const snap of snaps) {
+    if (!snap) continue
+    for (const doc of snap.docs) byId.set(doc.id, toOrder(doc))
+  }
+  return [...byId.values()]
 }
 
 const PAGE_SIZE = 25

@@ -6,7 +6,7 @@ import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from 
 import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 import { computeItems, type ItemInput } from "../lib/pricing";
 import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
-import { logDailyActivity } from "../lib/dailyActivity";
+import { logDailyActivity, itemActivityRefs } from "../lib/dailyActivity";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -810,6 +810,12 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
       if (!itemSnap.exists) throw new ApiError(404, "not-found", "Mahsulot topilmadi");
       assertItemsEditable(orderSnap.data()!, role, employeeId, itemSnap.data());
 
+      // Ikkinchi o'qish to'lqini: shu mahsulotning kunlik jurnaldagi
+      // yozuvlari. Tranzaksiyada barcha o'qishlar yozuvlardan oldin
+      // bo'lishi shart, shuning uchun aynan shu yerda.
+      const activityRefs = itemActivityRefs(itemId, itemSnap.data()!);
+      const activitySnaps = await Promise.all(activityRefs.map((a) => tx.get(a.ref)));
+
       const prevPrice = Number(itemSnap.data()!.price) || 0;
       const prevArea = Number(itemSnap.data()!.area) || 0;
       const now = new Date();
@@ -840,6 +846,19 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
         totalPrice: FieldValue.increment(computed.price - prevPrice),
         updatedAt: FieldValue.serverTimestamp(),
         ...computeOrderItemsSummary(summaryItems),
+      });
+
+      // Mahsulot qayta o'lchanganda kunlik hisobot ham to'g'rilanadi —
+      // aks holda hisobotda eski narx/hajm qolib, buyurtma summasi bilan
+      // mos kelmasdi.
+      activitySnaps.forEach((snap, i) => {
+        if (!snap.exists) return;
+        tx.update(activityRefs[i].ref, {
+          itemName: computed.name,
+          calcType: computed.calcType,
+          qty: computed.qty ?? null,
+          price: computed.price,
+        });
       });
     });
 
@@ -876,6 +895,12 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
       const area = Number(itemSnap.data()!.area) || 0;
 
       tx.delete(itemRef);
+      // Mahsulot o'chirilsa, u haqidagi kunlik hisobot yozuvlari ham
+      // qolmasligi kerak: aks holda o'chirilgan mahsulot hisobotda
+      // sanalib turaverardi.
+      for (const { ref } of itemActivityRefs(itemId, itemSnap.data()!)) {
+        tx.delete(ref);
+      }
 
       const summaryItems: SummaryItemInput[] = allItemsSnap.docs
         .filter((d) => d.id !== itemId)

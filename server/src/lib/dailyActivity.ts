@@ -86,3 +86,28 @@ export function logDailyActivity(tx: Transaction, at: Date, event: DailyActivity
   const ref = dailyActivityEvents(dateKey).doc(dailyActivityDocId(event, dateKey));
   tx.set(ref, buildDailyActivityDoc(at, event));
 }
+
+/**
+ * Shu mahsulot uchun jurnalda mavjud bo'lishi mumkin bo'lgan yozuvlar.
+ *
+ * Yozuv hodisa paytidagi narx/hajm nusxasini saqlaydi. Agar mahsulot
+ * keyinchalik qayta o'lchanib narxi to'g'rilansa (masalan 31 000 dan
+ * 312 000 ga), jurnal eski qiymatda qolib ketardi va kunlik hisobotda
+ * buyurtma summasi bilan mos kelmasdi. Shu funksiya orqali tahrirlash
+ * va o'chirish yo'llari o'z yozuvlarini ham yangilaydi.
+ *
+ * `packed` uchun eski mahsulotlarda `packedAt` yo'q — o'sha paytni
+ * bildiruvchi `qcAt` ishlatiladi (backfill bilan bir xil qoida).
+ */
+export function itemActivityRefs(itemId: string, item: Record<string, unknown>) {
+  const refs: { type: DailyActivityType; ref: FirebaseFirestore.DocumentReference }[] = [];
+  const add = (type: DailyActivityType, at: unknown) => {
+    if (!(at instanceof Timestamp)) return;
+    const dateKey = businessDateString(at.toDate());
+    refs.push({ type, ref: dailyActivityEvents(dateKey).doc(`${type}__${itemId}__${dateKey}`) });
+  };
+  add("washed", item.washedAt);
+  add("packed", item.packedAt ?? item.qcAt);
+  add("delivered", item.deliveredAt);
+  return refs;
+}

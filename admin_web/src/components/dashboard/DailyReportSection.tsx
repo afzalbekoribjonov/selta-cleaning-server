@@ -23,9 +23,10 @@ import {
   runDailyActivityBackfill,
   setCashHandover,
   formatMoney,
-  formatUnitTotals,
   type DailyReport,
+  type UnitTotal,
 } from '@/lib/daily-report'
+import { UnitTotals } from './UnitTotals'
 import { DailyReportDrawer, type DrawerKind } from './DailyReportDrawer'
 
 /** "2026-09-05" -> "5-sentabr, 2026" */
@@ -141,7 +142,8 @@ export function DailyReportSection() {
               label="Sexga keldi"
               count={data.intake.orderCount}
               countLabel="buyurtma"
-              detail={`${data.intake.itemCount} ta mahsulot · ${formatUnitTotals(data.intake.totals)}`}
+              detail={`${data.intake.itemCount} ta mahsulot`}
+              totals={data.intake.totals}
               warning={data.intake.unmeasuredCount > 0 ? `${data.intake.unmeasuredCount} ta hali o'lchanmagan` : null}
               onView={() => setDrawer('intake')}
             />
@@ -151,7 +153,8 @@ export function DailyReportSection() {
               label="Yuvildi"
               count={data.washed.count}
               countLabel="mahsulot"
-              detail={`${data.washed.orderCount} ta buyurtma · ${formatUnitTotals(data.washed.totals)}`}
+              detail={`${data.washed.orderCount} ta buyurtma`}
+              totals={data.washed.totals}
               onView={() => setDrawer('washed')}
             />
             <MetricCard
@@ -160,7 +163,8 @@ export function DailyReportSection() {
               label="Upakovka qilindi"
               count={data.packed.count}
               countLabel="mahsulot"
-              detail={`${data.packed.orderCount} ta buyurtma · ${formatUnitTotals(data.packed.totals)}`}
+              detail={`${data.packed.orderCount} ta buyurtma`}
+              totals={data.packed.totals}
               onView={() => setDrawer('packed')}
             />
             <MetricCard
@@ -170,6 +174,7 @@ export function DailyReportSection() {
               count={data.delivered.orderCount}
               countLabel="buyurtma"
               detail={`${data.delivered.count} ta mahsulot · ${formatMoney(data.delivered.deliveredAmount)}`}
+              totals={data.delivered.totals}
               onView={() => setDrawer('delivered')}
             />
           </div>
@@ -220,6 +225,7 @@ function MetricCard({
   count,
   countLabel,
   detail,
+  totals,
   warning,
   onView,
 }: {
@@ -229,6 +235,8 @@ function MetricCard({
   count: number
   countLabel: string
   detail: string
+  /** Birlik bo'yicha hajmlar — har biri ALOHIDA QATORDA ko'rsatiladi. */
+  totals: UnitTotal[]
   warning?: string | null
   onView: () => void
 }) {
@@ -252,7 +260,12 @@ function MetricCard({
         <div className="mt-1.5 truncate text-xs text-gray-dark" title={detail}>
           {empty ? "Bu kunda yozuv yo'q" : detail}
         </div>
-        {warning && <div className="mt-1 truncate text-xs font-bold text-danger">{warning}</div>}
+        {!empty && totals.length > 0 && (
+          <div className="mt-2 border-t border-border pt-2">
+            <UnitTotals totals={totals} size="sm" />
+          </div>
+        )}
+        {warning && <div className="mt-1.5 truncate text-xs font-bold text-danger">{warning}</div>}
       </div>
 
       <button
@@ -288,53 +301,58 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
   if (report.drivers.length === 0) return null
 
   return (
-    <div className="mt-3 rounded-2xl border border-border bg-bg/40 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success-bg text-success">
-            <Wallet size={17} />
-          </div>
-          <div>
-            <div className="text-sm font-bold text-ink">Dastavchiklar qo'lidagi pul</div>
-            <div className="text-xs text-gray-dark">Shu kuni yetkazgan buyurtmalari summasi</div>
-          </div>
+    <div className="mt-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
+      {/* Sarlavha va jami summa ALOHIDA qatorlarda: telefonda ular bitta
+          qatorga sig'masdi va sarlavha ingichka ustunga siqilib, har bir
+          so'zi alohida qatorga tushib ketardi. */}
+      <div className="flex items-start gap-2.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success-bg text-success">
+          <Wallet size={17} />
         </div>
-        <div className="text-right">
-          <div className="font-heading text-lg font-extrabold text-ink">{formatMoney(pending)}</div>
-          <div className="text-xs text-gray-dark">topshirilmagan</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold text-ink">Dastavchiklar qo'lidagi pul</div>
+          <div className="text-xs text-gray-dark">Shu kuni yetkazgan buyurtmalari summasi</div>
         </div>
       </div>
 
-      <ul className="mt-3 space-y-2">
+      <div className="mt-3 flex items-baseline justify-between gap-2 rounded-xl bg-bg px-3 py-2.5">
+        <span className="text-xs font-semibold text-gray-dark">Topshirilmagan</span>
+        <span className="whitespace-nowrap font-heading text-base font-extrabold text-ink">{formatMoney(pending)}</span>
+      </div>
+
+      {/* Har bir dastavchik: ism va summa bitta qatorda, tugma pastda.
+          Avval uchalasi bitta o'ralaydigan qatorda edi va telefonda tugma
+          goh ism, goh summa yoniga tushib, ro'yxat notekis chiqardi. */}
+      <ul className="mt-2 divide-y divide-border">
         {report.drivers.map((d) => (
-          <li
-            key={d.employeeId}
-            className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border p-3 ${
-              d.handedOver ? 'border-success/30 bg-success-bg/40' : 'border-border bg-surface'
-            }`}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-bold text-ink">{d.name}</div>
-              <div className="text-xs text-gray-dark">
-                {d.orderCount} ta buyurtma · {d.itemCount} ta mahsulot
+          <li key={d.employeeId} className="py-3 last:pb-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-bold text-ink">{d.name}</div>
+                <div className="text-xs text-gray-dark">
+                  {d.orderCount} ta buyurtma · {d.itemCount} ta mahsulot
+                </div>
+              </div>
+              <div
+                className={`shrink-0 whitespace-nowrap font-heading text-sm font-extrabold ${
+                  d.handedOver ? 'text-success line-through' : 'text-ink'
+                }`}
+              >
+                {formatMoney(d.amount)}
               </div>
             </div>
-            <div
-              className={`font-heading text-base font-extrabold ${d.handedOver ? 'text-success line-through' : 'text-ink'}`}
-            >
-              {formatMoney(d.amount)}
-            </div>
+
             <button
               onClick={() => mutation.mutate({ employeeId: d.employeeId, handedOver: !d.handedOver, amount: d.amount })}
               disabled={mutation.isPending}
-              className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
+              className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50 sm:w-auto ${
                 d.handedOver
                   ? 'border border-border bg-bg text-gray-dark hover:text-ink'
                   : 'bg-brand-primary text-white hover:opacity-90'
               }`}
             >
               {d.handedOver ? <Undo2 size={14} /> : <Check size={14} />}
-              {d.handedOver ? 'Bekor qilish' : 'Topshirdi'}
+              {d.handedOver ? 'Topshirishni bekor qilish' : 'Pulni topshirdi'}
             </button>
           </li>
         ))}

@@ -8,7 +8,6 @@ import {
   formatAmount,
   formatMoney,
   formatTime,
-  formatUnitTotals,
   type ActivityRow,
   type IntakeItemRow,
   type IntakeOrderRow,
@@ -16,6 +15,7 @@ import {
 } from '@/lib/daily-report'
 import { TARIFF_CONFIG, STATUS_CONFIG } from '@/lib/status-config'
 import { ReportTable, type ReportColumn } from './ReportTable'
+import { UnitTotals } from './UnitTotals'
 
 export type DrawerKind = 'intake' | 'washed' | 'packed' | 'delivered'
 
@@ -121,11 +121,15 @@ export function DailyReportDrawer({
             <p className="mt-0.5 text-xs text-gray-dark">{subtitle}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="rounded-lg bg-bg px-2.5 py-1 text-xs font-bold text-ink">{date}</span>
-              <span className="rounded-lg bg-brand-primary/10 px-2.5 py-1 text-xs font-bold text-brand-primary">
-                {formatUnitTotals(totals)}
-              </span>
               <span className="text-xs font-semibold text-gray-dark">{shownCount} ta yozuv</span>
             </div>
+            {totals.length > 0 && (
+              <div className="mt-2 inline-flex rounded-lg bg-brand-primary/10 px-2.5 py-1.5">
+                <span className="text-brand-primary">
+                  <UnitTotals totals={totals} size="sm" />
+                </span>
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-gray-dark hover:bg-bg" aria-label="Yopish">
             <X size={20} />
@@ -265,13 +269,52 @@ function activityColumns(kind: DrawerKind): ReportColumn<ActivityRow>[] {
       ),
     },
     {
+      // ATAYLAB "Mahsulot narxi": qator BITTA mahsulotga tegishli, buyurtma
+      // esa bir nechta mahsulotdan iborat bo'lishi mumkin. Avval ustun
+      // shunchaki "Summa" deb nomlangani uchun uni buyurtma summasi deb
+      // tushunish va "raqam noto'g'ri" degan xulosaga kelish oson edi.
       key: 'price',
-      label: 'Summa',
+      label: 'Mahsulot narxi',
       align: 'right',
       mobile: 'value',
-      render: (r) => <span className="text-gray-dark">{formatMoney(r.collectedAmount ?? r.price)}</span>,
+      render: (r) => <span className="text-gray-dark">{formatMoney(r.price)}</span>,
+    },
+    {
+      key: 'orderTotal',
+      label: 'Buyurtma jami',
+      align: 'right',
+      mobile: 'meta',
+      render: (r) =>
+        r.orderTotalPrice == null ? (
+          '—'
+        ) : (
+          <span>
+            {formatMoney(r.orderTotalPrice)}
+            {r.orderItemCount != null && r.orderItemCount > 1 && (
+              <span className="ml-1 text-gray">({r.orderItemCount} ta mahsulot)</span>
+            )}
+          </span>
+        ),
     },
     { key: 'actor', label: ACTOR_LABEL[kind], mobile: 'meta', render: (r) => r.employeeName },
+    ...(kind === 'delivered'
+      ? [
+          {
+            // Faqat dastavchik qo'lda boshqa summa kiritgan bo'lsa
+            // ko'rsatiladi — kassa hisobida aynan shu raqam ishlatiladi.
+            key: 'collected',
+            label: 'Olingan summa',
+            align: 'right' as const,
+            mobile: 'meta' as const,
+            render: (r: ActivityRow) =>
+              r.collectedAmount != null && r.collectedAmount !== r.price ? (
+                <span className="font-bold text-warning">{formatMoney(r.collectedAmount)}</span>
+              ) : (
+                '—'
+              ),
+          },
+        ]
+      : []),
   ]
 }
 
@@ -309,7 +352,11 @@ const intakeOrderColumns: ReportColumn<IntakeOrderRow>[] = [
     label: 'Hajmi',
     align: 'right',
     mobile: 'value',
-    render: (o) => <span className="font-bold text-ink">{formatUnitTotals(o.totals)}</span>,
+    render: (o) => (
+      <span className="inline-flex justify-end">
+        <UnitTotals totals={o.totals} size="sm" />
+      </span>
+    ),
   },
   {
     key: 'price',
