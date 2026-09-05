@@ -171,7 +171,14 @@ export default function OrdersPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-extrabold text-ink">Buyurtmalar</h1>
           <p className="mt-1 text-sm text-gray-dark">
-            {view === 'active' ? 'Faol buyurtmalar (yakunlanmagan)' : 'Barcha buyurtmalar tarixi'}
+            {/* Qidiruv ATAYLAB ko'rinishdan qat'i nazar butun jamlanma
+                bo'yicha ishlaydi: raqam bo'yicha izlaganda buyurtma
+                yakunlangan bo'lsa ham topilishi kerak. */}
+            {search.trim()
+              ? 'Qidiruv — barcha buyurtmalar orasidan'
+              : view === 'active'
+                ? 'Faol buyurtmalar (yakunlanmagan)'
+                : 'Barcha buyurtmalar tarixi'}
           </p>
         </div>
         <div className="flex rounded-xl border border-border bg-surface p-1">
