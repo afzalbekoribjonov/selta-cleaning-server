@@ -425,6 +425,21 @@ dailyReportRouter.post("/adminSetCashHandover", withAuth, requireAdmin, async (r
  */
 const BACKFILL_ORDERS_PER_CALL = 150;
 
+/**
+ * Migratsiya versiyasi. Qayta qurish mantiqi o'zgarganda oshiriladi va
+ * shu bilan bir marta qayta ishga tushadi.
+ *
+ * 2 -> jurnaldagi narx/hajm mahsulotning JORIY qiymatidan qayta
+ * yoziladi. Hodisa yozuvi o'sha paytdagi narx nusxasini saqlaydi;
+ * mahsulot keyin qayta o'lchangan bo'lsa (masalan 31 000 dan 312 000
+ * ga), jurnal eski qiymatda qolib ketgan edi. Bundan keyin uni
+ * `updateOrderItem` ning o'zi yangilab boradi.
+ *
+ * FAQAT hosila `dailyActivity` jamlanmasiga yozadi — buyurtma va
+ * mahsulot hujjatlariga umuman tegmaydi.
+ */
+const BACKFILL_VERSION = 2;
+
 dailyReportRouter.post("/adminBackfillDailyActivity", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
     const force = req.body?.force === true;
@@ -433,7 +448,7 @@ dailyReportRouter.post("/adminBackfillDailyActivity", withAuth, requireAdmin, as
 
     if (!cursor) {
       const marker = await markerRef.get();
-      if (!force && marker.data()?.completedAt) {
+      if (!force && marker.data()?.version === BACKFILL_VERSION) {
         res.json({ ok: true, done: true, skipped: true, completedAt: toIso(marker.data()?.completedAt) });
         return;
       }
@@ -465,7 +480,9 @@ dailyReportRouter.post("/adminBackfillDailyActivity", withAuth, requireAdmin, as
     }
 
     const done = ordersSnap.size < BACKFILL_ORDERS_PER_CALL;
-    if (done) await markerRef.set({ completedAt: Timestamp.fromDate(new Date()) }, { merge: true });
+    if (done) {
+      await markerRef.set({ completedAt: Timestamp.fromDate(new Date()), version: BACKFILL_VERSION }, { merge: true });
+    }
 
     res.json({
       ok: true,
