@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../core/services/auth_service.dart' show describeApiError;
 import '../../core/services/my_activity_repository.dart';
+import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/money_utils.dart';
 
@@ -190,14 +193,60 @@ const _kindColors = {
   'discount': AppColors.info,
 };
 
-class _PaymentTile extends StatelessWidget {
+/// Qarz/qisman to'lov yozuvi. Mijoz qolgan pulni bergan bo'lsa,
+/// dastavchik uni shu yerdan yopa oladi (admin ham panelda yopa oladi).
+class _PaymentTile extends ConsumerStatefulWidget {
   final PaymentEntry entry;
   const _PaymentTile({required this.entry});
 
   @override
+  ConsumerState<_PaymentTile> createState() => _PaymentTileState();
+}
+
+class _PaymentTileState extends ConsumerState<_PaymentTile> {
+  bool _busy = false;
+  bool _done = false;
+  String? _error;
+
+  Future<void> _settle() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Qolgan pul olindimi?'),
+        content: Text(
+          '#${widget.entry.orderNumber} — ${formatMoneyUz(widget.entry.shortfall)} to\'liq olingan bo\'lsa tasdiqlang.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Bekor qilish')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Tasdiqlash')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(ordersRepositoryProvider).settlePayment(paymentId: widget.entry.id);
+      if (mounted) setState(() => _done = true);
+      ref.invalidate(myDailyActivityProvider);
+    } catch (err) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = describeApiError(err);
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final entry = widget.entry;
     final tone = _kindColors[entry.kind] ?? AppColors.grayDark;
-    final open = entry.shortfall > 0 && !entry.settled;
+    final open = entry.shortfall > 0 && !entry.settled && !_done;
 
     return _Card(
       borderColor: open ? tone.withValues(alpha: 0.4) : null,
@@ -218,7 +267,7 @@ class _PaymentTile extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (entry.settled && entry.shortfall > 0)
+              if ((entry.settled || _done) && entry.shortfall > 0)
                 const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.success),
             ],
           ),
@@ -238,6 +287,38 @@ class _PaymentTile extends StatelessWidget {
             ),
           const SizedBox(height: 6),
           _MetaRow(items: [if (entry.at != null) formatTimeHm(entry.at!), entry.phone]),
+          if (open) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _settle,
+                icon: const Icon(Icons.check_rounded, size: 16),
+                label: Text(_busy ? '...' : 'Qolgan pul olindi', style: const TextStyle(fontWeight: FontWeight.w800)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
+          if (_done)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Yopildi',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.success),
+              ),
+            ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _error!,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.danger),
+              ),
+            ),
         ],
       ),
     );
