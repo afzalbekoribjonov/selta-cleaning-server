@@ -116,7 +116,7 @@ class _HeroHeader extends StatelessWidget {
                     const _AdminPanelHoldTarget(
                       child: Image(image: AssetImage('assets/brand/lockup_white.png'), height: 30),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                     const Text(
                       'Xush kelibsiz',
                       style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w800),
@@ -230,12 +230,14 @@ class _AdminPanelHoldTarget extends StatefulWidget {
 class _AdminPanelHoldTargetState extends State<_AdminPanelHoldTarget> {
   static const _holdDuration = Duration(seconds: 4);
   Timer? _timer;
+  bool _holding = false;
 
   void _start() {
-    if (!kAdminPanelEnabled) return;
     _timer?.cancel();
+    setState(() => _holding = true);
     _timer = Timer(_holdDuration, () {
       if (!mounted) return;
+      setState(() => _holding = false);
       HapticFeedback.mediumImpact();
       context.push('/admin-panel');
     });
@@ -244,22 +246,41 @@ class _AdminPanelHoldTargetState extends State<_AdminPanelHoldTarget> {
   void _cancel() {
     _timer?.cancel();
     _timer = null;
+    if (_holding && mounted) setState(() => _holding = false);
   }
 
   @override
   void dispose() {
-    _cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Bayroqsiz buildda butun mexanizm yo'q — bolaning o'zi qaytariladi.
     if (!kAdminPanelEnabled) return widget.child;
+
     return Listener(
+      // `opaque` ATAYLAB: logotip PNG'ining shaffof joylariga tegilganda
+      // ham bosish qayd etilsin, va nishon maydoni logotipning o'zidan
+      // kattaroq bo'lsin — 30px balandlikdagi rasmni 4 soniya aniq
+      // ushlab turish qiyin edi.
+      behavior: HitTestBehavior.opaque,
       onPointerDown: (_) => _start(),
       onPointerUp: (_) => _cancel(),
       onPointerCancel: (_) => _cancel(),
-      child: widget.child,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        // Bosib turilganda logotip sekin xiralashadi — mexanizm
+        // ishlayotganining yagona belgisi. Chetdan qaraganda bilinmaydi:
+        // u faqat barmoq bir necha soniya turgandagina sezilarli bo'ladi.
+        child: AnimatedOpacity(
+          opacity: _holding ? 0.45 : 1,
+          duration: _holdDuration,
+          curve: Curves.easeIn,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }
