@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -106,18 +108,13 @@ class _HeroHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Logotipni BOSIB TURISH admin panelni ochadi — faqat
-                    // ADMIN_PANEL bayrog'i bilan yig'ilgan buildda. Yashirin
-                    // ataylab: bu tugma xodimlarga ko'rinmasligi kerak, oddiy
-                    // buildda esa u umuman mavjud emas (router.dart).
-                    GestureDetector(
-                      onLongPress: kAdminPanelEnabled
-                          ? () {
-                              HapticFeedback.mediumImpact();
-                              context.push('/admin-panel');
-                            }
-                          : null,
-                      child: Image.asset('assets/brand/lockup_white.png', height: 30),
+                    // Logotipni 4 SONIYA bosib turish admin panelni ochadi —
+                    // faqat ADMIN_PANEL bayrog'i bilan yig'ilgan buildda.
+                    // Yashirin ataylab: bu tugma xodimlarga ko'rinmasligi
+                    // kerak, oddiy buildda esa u umuman mavjud emas
+                    // (router.dart).
+                    const _AdminPanelHoldTarget(
+                      child: Image(image: AssetImage('assets/brand/lockup_white.png'), height: 30),
                     ),
                     const SizedBox(height: 24),
                     const Text(
@@ -207,6 +204,62 @@ class _DepartmentTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// Logotipni UZOQ bosib turish orqali admin panelni ochadi.
+///
+/// Flutterning `onLongPress` hodisasi ~0.5 soniyada ishlaydi — tasodifan
+/// tegib ketish uchun yetarli. Shu sababli o'z taymerimiz: barmoq
+/// [_holdDuration] davomida uzluksiz turishi kerak, ko'tarilsa yoki
+/// gesture bekor qilinsa taymer to'xtaydi.
+///
+/// `Listener` ishlatiladi (`GestureDetector` emas): u xom ko'rsatkich
+/// hodisalarini oladi va boshqa gesture'lar bilan raqobatga kirishmaydi,
+/// ya'ni ekran aylantirilganda ham to'g'ri bekor bo'ladi.
+class _AdminPanelHoldTarget extends StatefulWidget {
+  final Widget child;
+  const _AdminPanelHoldTarget({required this.child});
+
+  @override
+  State<_AdminPanelHoldTarget> createState() => _AdminPanelHoldTargetState();
+}
+
+class _AdminPanelHoldTargetState extends State<_AdminPanelHoldTarget> {
+  static const _holdDuration = Duration(seconds: 4);
+  Timer? _timer;
+
+  void _start() {
+    if (!kAdminPanelEnabled) return;
+    _timer?.cancel();
+    _timer = Timer(_holdDuration, () {
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      context.push('/admin-panel');
+    });
+  }
+
+  void _cancel() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void dispose() {
+    _cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kAdminPanelEnabled) return widget.child;
+    return Listener(
+      onPointerDown: (_) => _start(),
+      onPointerUp: (_) => _cancel(),
+      onPointerCancel: (_) => _cancel(),
+      child: widget.child,
     );
   }
 }
