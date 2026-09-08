@@ -15,6 +15,7 @@ import { ProfitLossCard } from '@/components/dashboard/ProfitLossCard'
 import { EmployeeActivityChart } from '@/components/dashboard/EmployeeActivityChart'
 import { MonthlyExpensesCard } from '@/components/dashboard/MonthlyExpensesCard'
 import { DailyReportSection } from '@/components/dashboard/DailyReportSection'
+import { OutstandingCard } from '@/components/dashboard/OutstandingCard'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -97,8 +98,10 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
         <MonthlyExpensesCard />
-        <ProfitLossCard />
+        <OutstandingCard />
       </div>
+
+      <ProfitLossCard />
 
       <section className="rounded-2xl border border-border bg-surface shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-4 sm:px-5">

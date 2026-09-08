@@ -42,6 +42,7 @@ import { SpecializationsSection } from '@/components/employees/SpecializationsSe
 import { OrderPermissionSection } from '@/components/employees/OrderPermissionSection'
 import { OnsiteWashingPermissionSection } from '@/components/employees/OnsiteWashingPermissionSection'
 import { StatsPermissionSection } from '@/components/employees/StatsPermissionSection'
+import { FinancePermissionSection } from '@/components/employees/FinancePermissionSection'
 import { WorkshopVisibilitySection } from '@/components/employees/WorkshopVisibilitySection'
 import { DeliverySelfAddedSection } from '@/components/employees/DeliverySelfAddedSection'
 
@@ -278,6 +279,7 @@ export default function EmployeeDetailPage() {
       {/* Kunlik ko'rsatkichlar — bo'limdan qat'i nazar istalgan xodimga
           berilishi mumkin (server ham bo'limni tekshirmaydi). */}
       <StatsPermissionSection employee={employee} />
+      <FinancePermissionSection employee={employee} />
       {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 [&>*]:min-w-0">
