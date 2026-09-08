@@ -4,6 +4,7 @@ import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
 import { dailyActivityEvents } from "../lib/dailyActivity";
+import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
 import { loadEmployeeNames } from "../lib/employeeNames";
 
 /**
@@ -140,3 +141,198 @@ employeeActivityRouter.post("/adminEmployeeActivity", withAuth, requireAdmin, as
     sendError(res, err);
   }
 });
+
+/**
+ * XODIMNING O'ZI bajargan bugungi ish — ilovadagi profil sahifasi uchun.
+ *
+ * Har bir bo'lim o'ziga kerakli qismini oladi: dastavchik olib kelgan va
+ * yetkazgan buyurtmalarini, ishchi yuvgan va upakovka qilgan
+ * mahsulotlarini (birlik bo'yicha hajmi bilan), sotuv menejeri o'zi
+ * ochgan buyurtmalarini.
+ *
+ * NEGA SERVERDA: avval ilova buni o'zi hisoblardi va har bir buyurtmaning
+ * `items` pastki jamlanmasiga alohida obuna ochardi — profil sahifasini
+ * ochish o'nlab jonli obunani ishga tushirardi. Bu yerda esa xodimning
+ * O'Z hodisalari bitta so'rov bilan olinadi (`employeeId` bo'yicha
+ * filtrlanadi, ya'ni boshqa xodimlarning yozuvlari umuman o'qilmaydi).
+ *
+ * Ro'yxatlar eng yangisi birinchi bo'lib qaytariladi.
+ */
+employeeActivityRouter.post("/myDailyActivity", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    const dateKey = resolveDateKey(req.body?.date);
+    const range = businessDayRangeUtc(dateKey)!;
+    const start = Timestamp.fromDate(range.start);
+    const end = Timestamp.fromDate(range.end);
+
+    const [eventsSnap, pickedUpSnap, createdSnap, paymentsSnap] = await Promise.all([
+      dailyActivityEvents(dateKey).where("employeeId", "==", employeeId).get(),
+      db.collection("orders").where("pickedUpAt", ">=", start).where("pickedUpAt", "<", end).get(),
+      db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
+      db.collection("payments").where("dateKey", "==", dateKey).get(),
+    ]);
+
+    // --- Bosqich hodisalari (yuvildi / upakovka / yetkazildi) ---
+    const washed: StageRow[] = [];
+    const packed: StageRow[] = [];
+    const delivered: StageRow[] = [];
+
+    for (const doc of eventsSnap.docs) {
+      const e = doc.data();
+      const calcType = (e.calcType as string | null) ?? null;
+      const unit = UNIT_BY_CALC_TYPE[calcType ?? "fixed"] ?? "dona";
+      const row: StageRow = {
+        id: doc.id,
+        at: toIso(e.at),
+        orderId: (e.orderId as string) ?? "",
+        orderNumber: (e.orderNumber as number) ?? 0,
+        customerName: (e.customerName as string) ?? "",
+        itemName: (e.itemName as string) ?? "Mahsulot",
+        itemNumber: (e.itemNumber as number | null) ?? null,
+        unit,
+        unitLabel: UNIT_LABELS[unit] ?? unit,
+        unitAmount: unitAmountOf(calcType, e.qty as number | null),
+        price: (e.price as number | undefined) ?? 0,
+        collectedAmount: (e.collectedAmount as number | null) ?? null,
+      };
+      if (e.type === "washed") washed.push(row);
+      else if (e.type === "packed") packed.push(row);
+      else if (e.type === "delivered" || e.type === "onsite_done") delivered.push(row);
+    }
+
+    const newestFirst = (a: { at: string | null }, b: { at: string | null }) =>
+      (b.at ?? "").localeCompare(a.at ?? "");
+    washed.sort(newestFirst);
+    packed.sort(newestFirst);
+    delivered.sort(newestFirst);
+
+    // --- Buyurtma darajasidagi ish ---
+    const broughtIn = pickedUpSnap.docs
+      .filter((d) => d.data().pickedUpBy === employeeId)
+      .map((d) => toOrderRow(d, d.data().pickedUpAt))
+      .sort(newestFirst);
+
+    const created = createdSnap.docs
+      .filter((d) => d.data().createdBy === employeeId)
+      .map((d) => toOrderRow(d, d.data().createdAt))
+      .sort(newestFirst);
+
+    // --- To'lovlar ---
+    const payments = paymentsSnap.docs
+      .filter((d) => d.data().employeeId === employeeId)
+      .map((d) => {
+        const p = d.data();
+        return {
+          id: d.id,
+          at: toIso(p.at),
+          orderId: (p.orderId as string) ?? "",
+          orderNumber: (p.orderNumber as number) ?? 0,
+          customerName: (p.customerName as string) ?? "",
+          phone: (p.phone as string) ?? "",
+          dueAmount: (p.dueAmount as number | undefined) ?? 0,
+          paidAmount: (p.paidAmount as number | undefined) ?? 0,
+          shortfall: (p.shortfall as number | undefined) ?? 0,
+          kind: (p.kind as string) ?? "full",
+          settled: p.settled === true,
+        };
+      })
+      .sort(newestFirst);
+
+    const cash = payments.reduce((sum, p) => sum + p.paidAmount, 0);
+    const byKind = (kind: string, onlyOpen: boolean) =>
+      payments.filter((p) => p.kind === kind && (!onlyOpen || !p.settled));
+
+    res.json({
+      date: dateKey,
+      broughtIn: {
+        count: broughtIn.length,
+        totalPrice: broughtIn.reduce((s, o) => s + o.totalPrice, 0),
+        orders: broughtIn,
+      },
+      delivered: {
+        count: delivered.length,
+        orderCount: new Set(delivered.map((r) => r.orderId)).size,
+        totalPrice: delivered.reduce((s, r) => s + r.price, 0),
+        rows: delivered,
+      },
+      washed: { count: washed.length, totals: unitTotalsOf(washed), rows: washed },
+      packed: { count: packed.length, totals: unitTotalsOf(packed), rows: packed },
+      created: {
+        count: created.length,
+        totalPrice: created.reduce((s, o) => s + o.totalPrice, 0),
+        orders: created,
+      },
+      payments: {
+        cash,
+        debt: sumShortfall(byKind("debt", true)),
+        partial: sumShortfall(byKind("partial", true)),
+        discount: sumShortfall(byKind("discount", false)),
+        rows: payments,
+      },
+    });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+interface StageRow {
+  id: string;
+  at: string | null;
+  orderId: string;
+  orderNumber: number;
+  customerName: string;
+  itemName: string;
+  itemNumber: number | null;
+  unit: string;
+  unitLabel: string;
+  unitAmount: number;
+  price: number;
+  collectedAmount: number | null;
+}
+
+const UNIT_LABELS: Record<string, string> = { sqm: "m²", meter: "metr", kg: "kg", dona: "dona" };
+const UNIT_ORDER = ["sqm", "meter", "kg", "dona"];
+
+function toIso(value: unknown): string | null {
+  return value instanceof Timestamp ? value.toDate().toISOString() : null;
+}
+
+/** Kun kalitini tekshiradi; berilmasa bugungi biznes kuni. */
+function resolveDateKey(raw: unknown): string {
+  if (raw === undefined || raw === null || raw === "") return businessDateString(new Date());
+  const dateKey = String(raw);
+  if (!businessDayRangeUtc(dateKey)) {
+    throw new ApiError(400, "invalid-argument", "Sana YYYY-MM-DD ko'rinishida bo'lishi kerak");
+  }
+  return dateKey;
+}
+
+function toOrderRow(doc: FirebaseFirestore.QueryDocumentSnapshot, at: unknown) {
+  const o = doc.data();
+  return {
+    id: doc.id,
+    at: toIso(at),
+    orderNumber: (o.orderNumber as number) ?? 0,
+    customerName: (o.customerName as string) ?? "",
+    phone: (o.phone as string) ?? "",
+    location: (o.location as string) ?? "",
+    itemCount: (o.itemCount as number | undefined) ?? 0,
+    totalPrice: (o.totalPrice as number | undefined) ?? 0,
+    serviceType: (o.serviceType as string) ?? "pickup",
+  };
+}
+
+/** Birlik bo'yicha jami hajm — har biri alohida ko'rsatiladi. */
+function unitTotalsOf(rows: StageRow[]) {
+  const map = new Map<string, number>();
+  for (const r of rows) map.set(r.unit, (map.get(r.unit) ?? 0) + r.unitAmount);
+  return [...map.entries()]
+    .filter(([, amount]) => amount > 0)
+    .sort((a, b) => UNIT_ORDER.indexOf(a[0]) - UNIT_ORDER.indexOf(b[0]))
+    .map(([unit, amount]) => ({ unit, label: UNIT_LABELS[unit] ?? unit, amount: Math.round(amount * 100) / 100 }));
+}
+
+function sumShortfall(rows: { shortfall: number }[]) {
+  return { count: rows.length, amount: rows.reduce((s, r) => s + r.shortfall, 0) };
+}

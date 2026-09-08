@@ -186,5 +186,14 @@ service cloud.firestore {
     match /cashHandovers/{dateKey} {
       allow read, write: if false;
     }
+
+    // --- payments -------------------------------------------------------
+    // Yetkazishdagi to'lov yozuvlari (qarz / qisman to'lov / chegirma).
+    // FAQAT server (Admin SDK) yozadi va o'qiydi — ilova ham, admin panel
+    // ham ularni /deliverOrderItems, /listPayments, /settlePayment orqali
+    // oladi, chunki bu yerda vakolat tekshiruvi bor.
+    match /payments/{paymentId} {
+      allow read, write: if false;
+    }
   }
 }

@@ -110,6 +110,7 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           canDoOnsiteWashing: data.canDoOnsiteWashing ?? false,
           canSeeWorkshopQueue: data.canSeeWorkshopQueue ?? true,
           canViewStats: data.canViewStats ?? false,
+          canViewFinance: data.canViewFinance ?? false,
           attendanceEnabled: data.attendanceEnabled ?? false,
           attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -399,6 +400,35 @@ employeeAdminRouter.post("/adminSetEmployeeStatsPermission", withAuth, requireAd
     }
 
     await employeeRef.update({ canViewStats });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Qarz, qisman to'lov va chegirmalarni ko'rish huquqi. Server
+ * (routes/payments.ts: listPayments) shu bayroqni qayta tekshiradi.
+ * Standart holat `false` — moliyaviy ma'lumot hech kimga o'z-o'zidan
+ * ko'rinmaydi.
+ */
+employeeAdminRouter.post("/adminSetEmployeeFinancePermission", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, canViewFinance } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (typeof canViewFinance !== "boolean") {
+      throw new ApiError(400, "invalid-argument", "canViewFinance noto'g'ri");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+
+    await employeeRef.update({ canViewFinance });
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);
