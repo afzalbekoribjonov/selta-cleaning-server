@@ -60,12 +60,25 @@ class ItemDetailRow extends StatelessWidget {
     // hali yakunlanmagan pickup itemlarida ko'rsatiladi.
     final showColorDot = item.status != null && !item.isDone && item.tariff != null && item.createdAt != null;
     final colorStage = showColorDot ? colorStageFor(item.tariff, item.createdAt!) : null;
+    // Talab: o'lchanmagan mahsulot KARTASI butunlay qizarib tursin — u
+    // yuvishga ham, upakovkaga ham o'ta olmaydi, shuning uchun ro'yxatda
+    // birinchi bo'lib ko'zga tashlanishi kerak.
+    final unmeasured = item.price <= 0 && !item.isDone;
 
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Container(
+        decoration: unmeasured
+            ? BoxDecoration(
+                color: AppColors.danger.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+              )
+            : null,
+        padding: unmeasured
+            ? const EdgeInsets.fromLTRB(8, 7, 8, 7)
+            : const EdgeInsets.symmetric(vertical: 7),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -113,7 +126,7 @@ class ItemDetailRow extends StatelessWidget {
                     // Talab: narxi 0 bo'lgan (hali o'lchanmagan) mahsulot
                     // qizarib, darhol ko'zga tashlanib tursin — u
                     // upakovkaga o'tolmaydi (server: changeItemStatus).
-                    if (item.price <= 0 && !item.isDone)
+                    if (unmeasured)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(

@@ -102,30 +102,6 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
     if (confirmed == true) await _changeStatus('ready');
   }
 
-  Future<void> _confirmDeliver() async {
-    final controller = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Mijozga yetkazildi'),
-        content: TextField(
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Qabul qilingan summa (ixtiyoriy)', suffixText: "so'm"),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Bekor qilish')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Tasdiqlash')),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      final amount = num.tryParse(controller.text.replaceAll(',', '.'));
-      await _changeStatus('done', collectedAmount: amount != null && amount > 0 ? amount : null);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final employeeData = ref.watch(currentEmployeeProvider).valueOrNull;
@@ -165,7 +141,10 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
               // Server ham buni bloklaydi (changeItemStatus) — bu yerdagi
               // tugma xodimga nima qilish kerakligini oldindan aytadi va
               // to'g'ridan-to'g'ri o'lchash oynasiga olib boradi.
-              if (status == 'washing' && widget.item.price <= 0)
+              // Narxi 0 bo'lgan mahsulot na yuvishga, na upakovkaga
+              // o'ta oladi (server ham bloklaydi) — tugma xodimni
+              // to'g'ridan-to'g'ri o'lchash oynasiga olib boradi.
+              if ((status == 'pending' || status == 'washing') && widget.item.price <= 0)
                 _ActionButton(
                   label: "Narxi 0 — avval o'lchang",
                   icon: Icons.straighten_rounded,
@@ -214,8 +193,11 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
             else
               const _LavozimHint(text: "Sizga upakovkachi huquqi berilmagan — admin bilan bog'laning"),
           ],
-          if (status == 'ready' && department == 'delivery')
-            _ActionButton(label: 'Mijozga yetkazildi', icon: Icons.check_circle_rounded, onTap: _confirmDeliver),
+          // Yetkazish tugmasi ATAYLAB bu yerda emas: to'lov butun
+          // yetkazish uchun bir marta so'raladi, shuning uchun u
+          // buyurtma darajasida (delivery_order_detail_sheet.dart ->
+          // openDeliveryPaymentSheet). Avval har bir mahsulot alohida
+          // topshirilib, summa har safar qaytadan so'ralardi.
         ],
         if (_error != null)
           Padding(

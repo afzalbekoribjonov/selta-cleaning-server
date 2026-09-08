@@ -166,6 +166,92 @@ class OrdersRepository {
     );
   }
 
+  /// Ilova keshida (faol + oxirgi buyurtmalar) topilmagan buyurtmani
+  /// TO'G'RIDAN-TO'G'RI Firestore'dan qidiradi.
+  ///
+  /// Dastavchik ko'pincha allaqachon yuklangan ro'yxatdan topadi —
+  /// shuning uchun chaqiruvchi avval keshni tekshiradi va faqat natija
+  /// bo'lmaganda bu yerga murojaat qiladi. Shunda odatdagi qidiruv
+  /// bitta ham qo'shimcha o'qishga sabab bo'lmaydi.
+  ///
+  /// Telefon bo'yicha qidiruv FAQAT raqam to'liq kiritilganda ishlaydi
+  /// (kamida 9 raqam) — yarim kiritilgan raqamga so'rov yuborishning
+  /// ma'nosi yo'q. "+998" shart emas: bazadagi turli yozilish shakllari
+  /// birdaniga tekshiriladi.
+  Future<List<Order>> searchOrders(String term) async {
+    final trimmed = term.trim();
+    if (trimmed.isEmpty) return const [];
+
+    final orders = FirebaseFirestore.instance.collection('orders');
+    final queries = <Query<Map<String, dynamic>>>[];
+
+    final asNumber = int.tryParse(trimmed.replaceFirst('#', ''));
+    if (asNumber != null && asNumber > 0) {
+      queries.add(orders.where('orderNumber', isEqualTo: asNumber).limit(5));
+    }
+
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 9) {
+      final last9 = digits.substring(digits.length - 9);
+      final candidates = <String>{trimmed, digits, last9, '+998$last9', '998$last9'}.toList();
+      queries.add(orders.where('phone', whereIn: candidates.take(10).toList()).limit(25));
+    }
+
+    if (queries.isEmpty) return const [];
+
+    final results = <String, Order>{};
+    for (final query in queries) {
+      try {
+        final snap = await query.get();
+        for (final doc in snap.docs) {
+          results[doc.id] = Order.fromFirestore(doc);
+        }
+      } catch (_) {
+        // Bitta so'rov muvaffaqiyatsiz bo'lsa (masalan indeks yo'q),
+        // qolganlari baribir natija berishi mumkin.
+      }
+    }
+
+    final list = results.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  /// Buyurtmaning tayyor mahsulotlarini BIR HARAKATDA topshiradi va
+  /// to'lovni qayd etadi (server: routes/payments.ts).
+  ///
+  /// Summa majburiy. U mahsulotlar narxidan kam bo'lsa, `kind` bilan
+  /// sababi ko'rsatiladi: 'partial' | 'debt' | 'discount'.
+  Future<void> deliverOrderItems({
+    required String orderId,
+    required List<String> itemIds,
+    required num paidAmount,
+    String? kind,
+    String? note,
+    String? actorName,
+  }) async {
+    await _api.post(
+      '/deliverOrderItems',
+      idToken: await _idToken(),
+      body: {
+        'orderId': orderId,
+        'itemIds': itemIds,
+        'paidAmount': paidAmount,
+        if (kind != null) 'kind': kind,
+        if (note != null) 'note': note,
+        if (actorName != null) 'actorName': actorName,
+      },
+    );
+  }
+
+  /// Qarz yoki qisman to'lovni yopadi — mijoz qolgan pulni bergach.
+  Future<void> settlePayment({required String paymentId, num? amount}) async {
+    await _api.post(
+      '/settlePayment',
+      idToken: await _idToken(),
+      body: {'paymentId': paymentId, if (amount != null) 'amount': amount},
+    );
+  }
+
   /// Izoh — to'g'ridan-to'g'ri Firestore'ga yoziladi (firestore.rules past
   /// xavfli yozuv sifatida ruxsat beradi, server round-trip shart emas).
   /// `authorName` faqat ko'rsatish uchun (rules faqat authorId'ni tekshiradi).

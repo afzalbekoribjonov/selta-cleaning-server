@@ -537,6 +537,21 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         price: (item.price as number | undefined) ?? null,
       });
 
+      // Talab: hali o'lchanmagan (narxi 0) mahsulot YUVISHGA ham
+      // o'tolmaydi — ishchi avval uni o'lchab, narxini kiritishi shart.
+      // Avval to'siq faqat upakovka bosqichida edi va o'lchanmagan
+      // mahsulot butun yuvish jarayonidan narxsiz o'tib ketardi.
+      if (fromStatus === "pending" && toStatus === "washing") {
+        const itemPrice = (item.price as number | undefined) ?? 0;
+        if (!(itemPrice > 0)) {
+          throw new ApiError(
+            412,
+            "failed-precondition",
+            "Mahsulot o'lchanmagan — avval hajmini o'lchab, narxini kiriting",
+          );
+        }
+      }
+
       const itemUpdate: Record<string, unknown> = { status: toStatus, updatedAt: FieldValue.serverTimestamp() };
       // `washedByEmployees`/`deliveredByEmployees` — order-level denormalizatsiya
       // (arrayUnion) faqat maosh/faollik statistikasi UCHUN, xodim

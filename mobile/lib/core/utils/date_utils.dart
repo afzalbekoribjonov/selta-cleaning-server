@@ -35,3 +35,7 @@ String formatDaysLeftUz(DateTime dueDate) {
   if (diff == 1) return 'Ertaga muddati tugaydi';
   return '$diff kun qoldi';
 }
+
+/// "14:35" — bugungi ro'yxatlarda vaqt ko'rsatish uchun.
+String formatTimeHm(DateTime date) =>
+    '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';

@@ -44,6 +44,44 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
   int _stageIndex = 0;
   String _search = '';
 
+  /// Firestore'dan topilgan, ilova keshida yo'q buyurtmalar.
+  ///
+  /// Qidiruv AVVAL keshdan (faol va oxirgi yuklangan buyurtmalar) izlaydi
+  /// — odatdagi holat shu va u bitta ham qo'shimcha o'qishga sabab
+  /// bo'lmaydi. Faqat keshda hech narsa topilmaganda serverga murojaat
+  /// qilinadi: raqam bo'yicha aniq moslik, telefon esa faqat TO'LIQ
+  /// kiritilganda.
+  List<Order> _remote = const [];
+  bool _searching = false;
+  String _remoteFor = '';
+
+  /// `build` ichidan chaqiriladi, shuning uchun holat qurish tugagandan
+  /// KEYIN o'zgartiriladi — aks holda "setState() called during build"
+  /// istisnosi tushardi.
+  void _scheduleRemoteSearch(String term) {
+    if (term.isEmpty || _remoteFor == term || _searching) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _searchRemote(term));
+  }
+
+  Future<void> _searchRemote(String term) async {
+    if (!mounted || term.isEmpty || _remoteFor == term) return;
+    setState(() {
+      _searching = true;
+      _remoteFor = term;
+    });
+    try {
+      final found = await ref.read(ordersRepositoryProvider).searchOrders(term);
+      if (mounted && _remoteFor == term) {
+        setState(() {
+          _remote = found.where((o) => o.serviceType == 'pickup').toList();
+          _searching = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final employeeAsync = ref.watch(currentEmployeeProvider);
@@ -59,7 +97,12 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: TextField(
-              onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
+              onChanged: (v) => setState(() {
+                _search = v.trim().toLowerCase();
+                _remote = const [];
+                _remoteFor = '';
+                _searching = false;
+              }),
               decoration: InputDecoration(
                 hintText: 'Ism, telefon yoki # bo\'yicha qidirish',
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -90,26 +133,33 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
                 }
                 filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
-                // Talab #11: buyurtma raqami bo'yicha qidiruv joriy tabga
-                // cheklanmasin.
-                final searchNumber = RegExp(r'^\d+$').hasMatch(_search) ? int.tryParse(_search) : null;
-                if (filtered.isEmpty && searchNumber != null) {
-                  final elsewhere = orders.where((o) => o.orderNumber == searchNumber && o.serviceType == 'pickup').toList();
+                // Qidiruv joriy tabga cheklanmaydi: avval butun keshdan
+                // (boshqa bosqichlardan ham) izlanadi.
+                if (filtered.isEmpty && _search.isNotEmpty) {
+                  final elsewhere = orders
+                      .where((o) =>
+                          o.serviceType == 'pickup' &&
+                          (o.orderNumber.toString().contains(_search) ||
+                              o.phone.toLowerCase().contains(_search) ||
+                              o.customerName.toLowerCase().contains(_search)))
+                      .toList();
                   if (elsewhere.isNotEmpty) {
-                    return ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 8),
-                          child: Text('Boshqa bosqichda topildi', style: TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 12.5)),
-                        ),
-                        for (final order in elsewhere) ...[
-                          OrderCard(order: order, onTap: () => openDeliveryOrderDetailSheet(context, order)),
-                          const SizedBox(height: 10),
-                        ],
-                      ],
-                    );
+                    return _SearchResults(title: 'Boshqa bosqichda topildi', orders: elsewhere);
                   }
+
+                  // Keshda yo'q — endi Firestore'dan.
+                  _scheduleRemoteSearch(_search);
+                  // So'rov hali yakunlanmagan bo'lsa yuklanish ko'rsatiladi:
+                  // aks holda natija kelgunga qadar bir lahza "topilmadi"
+                  // yonib ketardi.
+                  final done = _remoteFor == _search && !_searching;
+                  if (!done) return const SeltaLoadingView();
+                  if (_remote.isNotEmpty) {
+                    return _SearchResults(title: 'Bazadan topildi', orders: _remote);
+                  }
+                  return const Center(
+                    child: Text('Buyurtma topilmadi', style: TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600)),
+                  );
                 }
 
                 if (filtered.isEmpty) {
@@ -174,6 +224,35 @@ class _BadgedIcon extends StatelessWidget {
       label: Text(count > 99 ? '99+' : '$count'),
       backgroundColor: AppColors.danger,
       child: Icon(icon),
+    );
+  }
+}
+
+
+/// Qidiruv natijalari — joriy bosqichdan tashqarida topilganlar.
+class _SearchResults extends StatelessWidget {
+  final String title;
+  final List<Order> orders;
+
+  const _SearchResults({required this.title, required this.orders});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            title,
+            style: const TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 12.5),
+          ),
+        ),
+        for (final order in orders) ...[
+          OrderCard(order: order, onTap: () => openDeliveryOrderDetailSheet(context, order)),
+          const SizedBox(height: 10),
+        ],
+      ],
     );
   }
 }

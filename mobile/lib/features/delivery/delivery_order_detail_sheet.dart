@@ -15,6 +15,7 @@ import '../dispatcher/widgets/order_card.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_action_row.dart';
+import 'delivery_payment_sheet.dart';
 import '../shared/item_detail_row.dart';
 import 'zero_price_attention_sheet.dart';
 
@@ -311,10 +312,12 @@ class _PickupItemsCard extends StatelessWidget {
   }
 }
 
-/// "Sexga keldi"dan keyin har bir mahsulot mustaqil ishlov olinadi —
-/// dastavchik shu yerda faqat "ready" bo'lganlarini alohida mijozga
-/// yetkazadi (talab #9: qisman yetkazish, ItemActionRow shu tugmani
-/// o'zida taqdim etadi).
+/// "Sexga keldi"dan keyin har bir mahsulot mustaqil ishlov olinadi.
+/// Dastavchik "ready" bo'lganlarini mijozga topshiradi — TOPSHIRISH VA
+/// TO'LOV bitta oynada, buyurtma darajasida: summa butun yetkazish
+/// uchun bir marta so'raladi (avval har bir mahsulot uchun alohida
+/// so'ralardi). Qisman yetkazish saqlanadi — o'sha oynada qaysi
+/// mahsulotlar topshirilayotgani belgilanadi.
 class _DeliverableItemsCard extends StatelessWidget {
   final Order order;
   final List<OrderItem> items;
@@ -323,6 +326,8 @@ class _DeliverableItemsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
+    final ready = items.where((i) => i.status == 'ready').toList();
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
@@ -332,6 +337,25 @@ class _DeliverableItemsCard extends StatelessWidget {
           const Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
           const SizedBox(height: 4),
           for (final item in items) ItemActionRow(order: order, item: item),
+          if (ready.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => openDeliveryPaymentSheet(context, order: order, readyItems: ready),
+                icon: const Icon(Icons.payments_rounded, size: 18),
+                label: Text(
+                  ready.length == 1 ? "Topshirish va to'lov" : "Topshirish va to'lov (${ready.length} ta)",
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
