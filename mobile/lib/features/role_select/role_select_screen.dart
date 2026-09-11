@@ -108,7 +108,7 @@ class _HeroHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Logotipni 4 SONIYA bosib turish admin panelni ochadi —
+                    // Logotipni 2 SONIYA bosib turish admin panelni ochadi —
                     // faqat ADMIN_PANEL bayrog'i bilan yig'ilgan buildda.
                     // Yashirin ataylab: bu tugma xodimlarga ko'rinmasligi
                     // kerak, oddiy buildda esa u umuman mavjud emas
@@ -228,7 +228,7 @@ class _AdminPanelHoldTarget extends StatefulWidget {
 }
 
 class _AdminPanelHoldTargetState extends State<_AdminPanelHoldTarget> {
-  static const _holdDuration = Duration(seconds: 4);
+  static const _holdDuration = Duration(seconds: 2);
   Timer? _timer;
   bool _holding = false;
 

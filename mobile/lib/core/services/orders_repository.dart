@@ -225,6 +225,8 @@ class OrdersRepository {
     required String orderId,
     required List<String> itemIds,
     required num paidAmount,
+    required num cashAmount,
+    required num cardAmount,
     String? kind,
     String? note,
     String? actorName,
@@ -236,6 +238,8 @@ class OrdersRepository {
         'orderId': orderId,
         'itemIds': itemIds,
         'paidAmount': paidAmount,
+        'cashAmount': cashAmount,
+        'cardAmount': cardAmount,
         if (kind != null) 'kind': kind,
         if (note != null) 'note': note,
         if (actorName != null) 'actorName': actorName,
@@ -244,11 +248,24 @@ class OrdersRepository {
   }
 
   /// Qarz yoki qisman to'lovni yopadi — mijoz qolgan pulni bergach.
-  Future<void> settlePayment({required String paymentId, num? amount}) async {
+  ///
+  /// Naqd/karta ulushi ham yoziladi: yopilgan pul o'sha kuni xodim
+  /// qo'liga tushadi va kunlik kassa hisobida ko'rinishi kerak.
+  Future<void> settlePayment({
+    required String paymentId,
+    num? amount,
+    num? cashAmount,
+    num? cardAmount,
+  }) async {
     await _api.post(
       '/settlePayment',
       idToken: await _idToken(),
-      body: {'paymentId': paymentId, if (amount != null) 'amount': amount},
+      body: {
+        'paymentId': paymentId,
+        if (amount != null) 'amount': amount,
+        if (cashAmount != null) 'cashAmount': cashAmount,
+        if (cardAmount != null) 'cardAmount': cardAmount,
+      },
     );
   }
 

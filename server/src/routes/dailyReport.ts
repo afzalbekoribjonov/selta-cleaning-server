@@ -60,6 +60,22 @@ function toIso(value: unknown): string | null {
   return value instanceof Timestamp ? value.toDate().toISOString() : null;
 }
 
+/**
+ * Yozuvning naqd va karta ulushlari.
+ *
+ * Maydonlar joriy etilishidan oldingi hodisalarda ular yo'q — o'sha
+ * paytda mijoz pulni faqat naqd berardi, shuning uchun butun summa naqd
+ * deb hisoblanadi. Aks holda eski kunlar birdan "0 naqd" bo'lib
+ * ko'rinardi.
+ */
+function cashOf(r: { cashAmount: number | null; collectedAmount: number | null; price: number }): number {
+  return r.cashAmount ?? r.collectedAmount ?? r.price;
+}
+
+function cardOf(r: { cardAmount: number | null }): number {
+  return r.cardAmount ?? 0;
+}
+
 /** Kun kalitini tekshiradi; berilmasa bugungi biznes kuni qaytariladi. */
 function resolveDateKey(raw: unknown): string {
   if (raw === undefined || raw === null || raw === "") return businessDateString(new Date());
@@ -90,6 +106,12 @@ interface ActivityRow {
   employeeName: string;
   collectedAmount: number | null;
   /**
+   * Olingan summaning naqd/karta ulushlari. `null` — bu maydonlar joriy
+   * etilishidan oldingi yozuv; o'sha paytda pul har doim naqd olingan.
+   */
+  cashAmount: number | null;
+  cardAmount: number | null;
+  /**
    * Buyurtmaning JORIY umumiy summasi. Qator narxi bitta MAHSULOTNIKI,
    * shuning uchun ikkalasi yonma-yon ko'rsatiladi: aks holda "buyurtma
    * 312 000 edi, hisobotda 31 000 turibdi" degan chalkashlik chiqadi.
@@ -115,7 +137,15 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
     ]);
 
     // --- Bosqich hodisalari ---
-    const rowsByType: Record<string, ActivityRow[]> = { washed: [], packed: [], delivered: [], onsite_done: [] };
+    const rowsByType: Record<string, ActivityRow[]> = {
+      washed: [],
+      packed: [],
+      delivered: [],
+      onsite_done: [],
+      // Boshqa kuni qolgan qarz shu kuni yopilgan bo'lsa — pul hodisasi,
+      // mahsulot bosqichi emas. Faqat kassa hisobida ishtirok etadi.
+      settled: [],
+    };
     const referencedOrderIds = new Set<string>();
 
     for (const doc of eventsSnap.docs) {
@@ -145,6 +175,8 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
         employeeId,
         employeeName: employeeNames.get(employeeId) ?? "Noma'lum",
         collectedAmount: (e.collectedAmount as number | null) ?? null,
+        cashAmount: (e.cashAmount as number | null) ?? null,
+        cardAmount: (e.cardAmount as number | null) ?? null,
         orderTotalPrice: null,
         orderItemCount: null,
       });
@@ -202,22 +234,55 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
     // oladi — ya'ni pul kun oxirida shu dastavchikda bo'ladi. Qo'lda
     // kiritilgan summa (`collectedAmount`) bo'lsa u ustun, aks holda
     // mahsulot/buyurtma narxi. Raqam HAR KUNI yangidan boshlanadi.
-    const driverMap = new Map<
-      string,
-      { employeeId: string; name: string; amount: number; itemCount: number; orderIds: Set<string> }
-    >();
+    interface DriverEntry {
+      employeeId: string;
+      name: string;
+      amount: number;
+      cashAmount: number;
+      cardAmount: number;
+      settledAmount: number;
+      itemCount: number;
+      orderIds: Set<string>;
+    }
+    const driverMap = new Map<string, DriverEntry>();
+    const driverEntry = (r: ActivityRow): DriverEntry => {
+      let entry = driverMap.get(r.employeeId);
+      if (!entry) {
+        entry = {
+          employeeId: r.employeeId,
+          name: r.employeeName,
+          amount: 0,
+          cashAmount: 0,
+          cardAmount: 0,
+          settledAmount: 0,
+          itemCount: 0,
+          orderIds: new Set<string>(),
+        };
+        driverMap.set(r.employeeId, entry);
+      }
+      return entry;
+    };
+
     for (const r of deliveredRows) {
-      const entry = driverMap.get(r.employeeId) ?? {
-        employeeId: r.employeeId,
-        name: r.employeeName,
-        amount: 0,
-        itemCount: 0,
-        orderIds: new Set<string>(),
-      };
+      const entry = driverEntry(r);
       entry.amount += r.collectedAmount ?? r.price;
+      entry.cashAmount += cashOf(r);
+      entry.cardAmount += cardOf(r);
       entry.itemCount += 1;
       entry.orderIds.add(r.orderId);
-      driverMap.set(r.employeeId, entry);
+    }
+
+    // Shu kuni yopilgan qarz/qisman to'lov ham xodim qo'liga BUGUN
+    // tushgan pul. Mahsulot va buyurtma soniga qo'shilmaydi — mahsulot
+    // boshqa kuni yetkazilgan, uni bugungi ish hajmiga qo'shish
+    // ko'rsatkichni buzardi.
+    for (const r of rowsByType.settled) {
+      const entry = driverEntry(r);
+      const settled = r.collectedAmount ?? 0;
+      entry.amount += settled;
+      entry.settledAmount += settled;
+      entry.cashAmount += cashOf(r);
+      entry.cardAmount += cardOf(r);
     }
 
     const handedOver =
@@ -227,6 +292,9 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
         employeeId: d.employeeId,
         name: d.name,
         amount: Math.round(d.amount),
+        cashAmount: Math.round(d.cashAmount),
+        cardAmount: Math.round(d.cardAmount),
+        settledAmount: Math.round(d.settledAmount),
         itemCount: d.itemCount,
         orderCount: d.orderIds.size,
         handedOver: handedOver[d.employeeId] !== undefined,
@@ -296,6 +364,8 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
         // Yetkazishda "nechta buyurtma" asosiy ko'rsatkich (talab), shuning
         // uchun pul summasi ham alohida beriladi.
         deliveredAmount: Math.round(deliveredRows.reduce((s, r) => s + (r.collectedAmount ?? r.price), 0)),
+        cashAmount: Math.round(deliveredRows.reduce((s, r) => s + cashOf(r), 0)),
+        cardAmount: Math.round(deliveredRows.reduce((s, r) => s + cardOf(r), 0)),
       },
       drivers,
     });

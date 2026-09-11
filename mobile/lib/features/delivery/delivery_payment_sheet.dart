@@ -9,6 +9,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/money_utils.dart';
+import '../shared/payment_method_field.dart';
 
 /// Kamomad sababi — server bilan bir xil kalitlar (lib/payments.ts).
 enum ShortfallKind { partial, debt, discount }
@@ -59,6 +60,9 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
   late final Set<String> _selected = widget.readyItems.map((i) => i.id).toSet();
   final _amountController = TextEditingController();
   ShortfallKind? _kind;
+  /// Naqd/karta taqsimoti. `null` — aralash usul tanlangan, lekin naqd
+  /// qismi hali to'g'ri kiritilmagan.
+  PaymentSplit? _split;
   bool _busy = false;
   String? _error;
 
@@ -107,6 +111,11 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
       setState(() => _error = 'Summa kam — sababini tanlang');
       return;
     }
+    final split = _split;
+    if (split == null) {
+      setState(() => _error = "Naqd qismini to'g'ri kiriting");
+      return;
+    }
 
     setState(() {
       _busy = true;
@@ -118,6 +127,8 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
             orderId: widget.order.id,
             itemIds: _selected.toList(),
             paidAmount: paid,
+            cashAmount: split.cash,
+            cardAmount: split.card,
             kind: _kind == null ? null : _kindKeys[_kind!],
             actorName: name,
           );
@@ -229,6 +240,17 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
                 }),
                 child: const Text("To'liq summani kiritish", style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
               ),
+
+              // To'lov usuli summa kiritilgandan keyin so'raladi —
+              // taqsimot aynan shu summadan kelib chiqadi.
+              if (amountEntered) ...[
+                const SizedBox(height: 4),
+                PaymentMethodField(
+                  total: paid,
+                  onChanged: (split) => setState(() => _split = split),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               if (amountEntered && shortfall > 0) ...[
                 const SizedBox(height: 4),

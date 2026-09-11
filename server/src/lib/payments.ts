@@ -51,3 +51,39 @@ export function splitPaidAmount(prices: number[], paidAmount: number): number[] 
   shares[shares.length - 1] += Math.round(paidAmount) - assigned;
   return shares;
 }
+
+/** Olingan summaning naqd va karta ulushlari. */
+export interface PaymentSplit {
+  cashAmount: number;
+  cardAmount: number;
+}
+
+/**
+ * Olingan summani naqd/karta bo'yicha ajratadi va TEKSHIRADI.
+ *
+ * Ikkala maydon ham berilmasa — hammasi NAQD. Bu ataylab: maydonlar
+ * joriy etilishidan oldingi yozuvlarda pul har doim dastavchik qo'liga
+ * naqd tushgan, shuning uchun eski yozuv ham, eski ilova versiyasidan
+ * kelgan so'rov ham to'g'ri ma'noni saqlaydi.
+ *
+ * Ulushlar yig'indisi olingan summaga aynan teng bo'lishi shart —
+ * bo'lmasa `null`. Chaqiruvchi buni foydalanuvchiga xato sifatida
+ * qaytaradi: yig'indi mos kelmasa kassa hisobi jimgina buziladi.
+ */
+export function normalizePaymentSplit(
+  paidAmount: number,
+  rawCash: unknown,
+  rawCard: unknown,
+): PaymentSplit | null {
+  const paid = Math.round(paidAmount);
+  if (rawCash === undefined && rawCard === undefined) {
+    return { cashAmount: paid, cardAmount: 0 };
+  }
+
+  const cash = typeof rawCash === "number" && Number.isFinite(rawCash) ? Math.round(rawCash) : NaN;
+  const card = typeof rawCard === "number" && Number.isFinite(rawCard) ? Math.round(rawCard) : NaN;
+  if (Number.isNaN(cash) || Number.isNaN(card) || cash < 0 || card < 0) return null;
+  if (cash + card !== paid) return null;
+
+  return { cashAmount: cash, cardAmount: card };
+}

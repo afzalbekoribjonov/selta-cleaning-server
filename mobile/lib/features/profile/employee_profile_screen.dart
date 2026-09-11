@@ -3,10 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../core/constants.dart';
-import '../../core/models/order.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/employee_repository.dart';
-import '../../core/services/orders_repository.dart';
 import '../../core/widgets/confirm_logout.dart';
 import '../../core/widgets/selta_loader.dart';
 import 'today_activity_section.dart';
@@ -25,15 +23,6 @@ String _categoryLabel(String key) => _categoryLabels[key] ?? key;
 /// Pickup buyurtmalarda yuvish/yetkazish item-darajasida bo'lgani uchun
 /// ishchi/dastavchik uchun massiv (array-contains mantig'i) tekshiriladi
 /// — admin_web'dagi DEPARTMENT_ATTRIBUTION_FIELD bilan bir xil.
-int _attributedCount(Department department, Order o, String employeeId) {
-  final matches = switch (department) {
-    Department.dispatcher => o.createdBy == employeeId,
-    Department.worker => o.washedByEmployees.contains(employeeId),
-    Department.delivery => o.deliveredByEmployees.contains(employeeId),
-  };
-  return matches ? 1 : 0;
-}
-
 /// Xodim ismini bosgach ochiladigan sahifa (talab #6) — yuqori o'ngdagi
 /// alohida "chiqish" tugmasi olib tashlanib, o'rniga shu sahifa ichida
 /// "Tizimdan chiqish" (tasdiqlashdan so'ng) joylashtirildi. Shu oydagi
@@ -92,10 +81,6 @@ class EmployeeProfileScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 28),
                     ],
-                    const Text('Bu oy statistikasi', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
-                    const SizedBox(height: 12),
-                    _MonthlyStatsCard(departmentKey: departmentKey),
-                    const SizedBox(height: 28),
                     TodayActivitySection(departmentKey: departmentKey, canCreateOrders: canCreateOrders),
                     const SizedBox(height: 32),
                     SizedBox(
@@ -170,52 +155,6 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
-class _MonthlyStatsCard extends ConsumerWidget {
-  final String? departmentKey;
-  const _MonthlyStatsCard({required this.departmentKey});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    Department? dept;
-    for (final d in Department.values) {
-      if (d.name == departmentKey) dept = d;
-    }
-    final claims = ref.watch(employeeClaimsProvider).value;
-
-    if (dept == null || claims == null) {
-      return const _StatTile(
-        icon: Icons.info_outline_rounded,
-        label: "Bu kasb uchun buyurtma statistikasi yo'q",
-        value: '—',
-      );
-    }
-    final resolvedDept = dept;
-    final employeeId = claims.employeeId;
-
-    final ordersAsync = ref.watch(ordersProvider);
-    return ordersAsync.when(
-      loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: SeltaLoader(size: 32))),
-      error: (_, __) => const Text("Statistikani yuklab bo'lmadi", style: TextStyle(color: AppColors.grayDark)),
-      data: (orders) {
-        final now = DateTime.now();
-        final monthStart = DateTime(now.year, now.month, 1);
-        final monthCount = orders
-            .where((o) => !o.createdAt.isBefore(monthStart))
-            .fold<int>(0, (s, o) => s + _attributedCount(resolvedDept, o, employeeId));
-        final totalCount = orders.fold<int>(0, (s, o) => s + _attributedCount(resolvedDept, o, employeeId));
-
-        return Row(
-          children: [
-            Expanded(child: _StatTile(icon: Icons.calendar_month_rounded, label: 'Bu oy qatnashgan', value: '$monthCount ta')),
-            const SizedBox(width: 12),
-            Expanded(child: _StatTile(icon: Icons.list_alt_rounded, label: "So'nggi ro'yxatda", value: '$totalCount ta')),
-          ],
-        );
-      },
-    );
-  }
-}
-
 class _PositionBadge extends StatelessWidget {
   final String label;
   final bool accent;
@@ -232,37 +171,3 @@ class _PositionBadge extends StatelessWidget {
   }
 }
 
-class _StatTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _StatTile({required this.icon, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: AppColors.primary, size: 18),
-          ),
-          const SizedBox(height: 10),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.ink)),
-          const SizedBox(height: 2),
-          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.grayDark, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-}

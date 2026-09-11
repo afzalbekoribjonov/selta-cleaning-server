@@ -6,7 +6,7 @@ import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
 import { logDailyActivity } from "../lib/dailyActivity";
 import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
 import { loadEmployeeNames } from "../lib/employeeNames";
-import { isPaymentKind, splitPaidAmount, type PaymentKind } from "../lib/payments";
+import { isPaymentKind, normalizePaymentSplit, splitPaidAmount, type PaymentKind } from "../lib/payments";
 
 export const paymentsRouter = Router();
 
@@ -31,12 +31,23 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
       throw new ApiError(403, "permission-denied", "Faqat dastavchik buyurtmani yetkaza oladi");
     }
 
-    const { orderId, itemIds, paidAmount, kind, note, actorName } = req.body ?? {};
+    const { orderId, itemIds, paidAmount, cashAmount, cardAmount, kind, note, actorName } = req.body ?? {};
     if (!orderId || !Array.isArray(itemIds) || itemIds.length === 0) {
       throw new ApiError(400, "invalid-argument", "orderId va kamida bitta mahsulot kerak");
     }
     if (typeof paidAmount !== "number" || !Number.isFinite(paidAmount) || paidAmount < 0) {
       throw new ApiError(400, "invalid-argument", "Mijozdan olingan summani kiriting");
+    }
+
+    // Naqd/karta ulushi tranzaksiyadan OLDIN tekshiriladi — noto'g'ri
+    // so'rov bitta ham o'qishsiz rad etiladi.
+    const split = normalizePaymentSplit(paidAmount, cashAmount, cardAmount);
+    if (!split) {
+      throw new ApiError(
+        400,
+        "invalid-argument",
+        "Naqd va karta summalarining yig'indisi olingan summaga teng bo'lishi kerak",
+      );
     }
 
     const orderRef = db.collection("orders").doc(orderId);
@@ -83,6 +94,11 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
       }
 
       const shares = splitPaidAmount(prices, paidAmount);
+      // Naqd va karta ALOHIDA taqsimlanadi: kunlik kassa hisobida
+      // ikkalasi mustaqil yig'iladi, shuning uchun har biri o'z
+      // yig'indisiga aynan teng chiqishi kerak.
+      const cashShares = splitPaidAmount(prices, split.cashAmount);
+      const cardShares = splitPaidAmount(prices, split.cardAmount);
       const deliveredIds = new Set(targets.map((d) => d.id));
       const remainingItemCount = itemsSnap.docs.filter(
         (d) => !deliveredIds.has(d.id) && d.data().status !== "done",
@@ -118,6 +134,8 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
           qty: (item.qty as number | undefined) ?? null,
           price: (item.price as number | undefined) ?? null,
           collectedAmount: shares[i],
+          cashAmount: cashShares[i],
+          cardAmount: cardShares[i],
         });
       });
 
@@ -160,6 +178,8 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
         remainingItemCount,
         dueAmount: Math.round(dueAmount),
         paidAmount: Math.round(paidAmount),
+        cashAmount: split.cashAmount,
+        cardAmount: split.cardAmount,
         shortfall,
         kind: resolvedKind,
         // Chegirma va to'liq to'lov bo'yicha olinadigan narsa qolmaydi.
@@ -188,10 +208,11 @@ paymentsRouter.post("/settlePayment", withAuth, async (req: AuthedRequest, res) 
   try {
     const role = req.auth!.role!;
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
-    const { paymentId, amount, note } = req.body ?? {};
+    const { paymentId, amount, cashAmount, cardAmount, note } = req.body ?? {};
     if (!paymentId) throw new ApiError(400, "invalid-argument", "paymentId majburiy");
 
     const ref = db.collection("payments").doc(paymentId);
+    const now = new Date();
 
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -208,12 +229,41 @@ paymentsRouter.post("/settlePayment", withAuth, async (req: AuthedRequest, res) 
       const shortfall = (payment.shortfall as number | undefined) ?? 0;
       const settledAmount = typeof amount === "number" && amount > 0 ? Math.round(amount) : shortfall;
 
+      const split = normalizePaymentSplit(settledAmount, cashAmount, cardAmount);
+      if (!split) {
+        throw new ApiError(
+          400,
+          "invalid-argument",
+          "Naqd va karta summalarining yig'indisi yopilayotgan summaga teng bo'lishi kerak",
+        );
+      }
+
       tx.update(ref, {
         settled: true,
-        settledAt: Timestamp.fromDate(new Date()),
+        settledAt: Timestamp.fromDate(now),
         settledBy: employeeId,
         settledAmount,
+        settledCashAmount: split.cashAmount,
+        settledCardAmount: split.cardAmount,
         settledNote: typeof note === "string" && note.trim() ? note.trim() : null,
+      });
+
+      // Yopilgan pul YOPILGAN KUNGA yoziladi: u shu kuni xodim qo'liga
+      // tushadi, shuning uchun o'sha kunning kassa hisobida ko'rinishi
+      // kerak. Buyurtma esa boshqa kuni yetkazilgan bo'lishi mumkin.
+      logDailyActivity(tx, now, {
+        type: "settled",
+        paymentId,
+        orderId: (payment.orderId as string) ?? "",
+        orderNumber: (payment.orderNumber as number) ?? 0,
+        customerName: (payment.customerName as string) ?? "",
+        phone: (payment.phone as string) ?? "",
+        serviceType: "pickup",
+        employeeId,
+        itemName: "Yopilgan to'lov",
+        collectedAmount: settledAmount,
+        cashAmount: split.cashAmount,
+        cardAmount: split.cardAmount,
       });
     });
 
@@ -237,12 +287,16 @@ interface PaymentRow {
   remainingItemCount: number;
   dueAmount: number;
   paidAmount: number;
+  cashAmount: number;
+  cardAmount: number;
   shortfall: number;
   kind: PaymentKind;
   settled: boolean;
   settledAt: string | null;
   settledByName: string | null;
   settledAmount: number;
+  settledCashAmount: number;
+  settledCardAmount: number;
   note: string | null;
 }
 
@@ -257,6 +311,8 @@ function toRow(
   const p = doc.data();
   const employeeId = (p.employeeId as string) ?? "";
   const settledBy = (p.settledBy as string | null) ?? null;
+  const paid = (p.paidAmount as number | undefined) ?? 0;
+  const settledAmount = (p.settledAmount as number | undefined) ?? 0;
   return {
     id: doc.id,
     orderId: (p.orderId as string) ?? "",
@@ -270,13 +326,19 @@ function toRow(
     itemCount: (p.itemCount as number | undefined) ?? 0,
     remainingItemCount: (p.remainingItemCount as number | undefined) ?? 0,
     dueAmount: (p.dueAmount as number | undefined) ?? 0,
-    paidAmount: (p.paidAmount as number | undefined) ?? 0,
+    paidAmount: paid,
+    // Maydonlar joriy etilishidan oldingi yozuvlarda pul har doim naqd
+    // olingan — shuning uchun eski yozuv butunlay naqd deb ko'rsatiladi.
+    cashAmount: (p.cashAmount as number | undefined) ?? paid,
+    cardAmount: (p.cardAmount as number | undefined) ?? 0,
     shortfall: (p.shortfall as number | undefined) ?? 0,
     kind: (p.kind as PaymentKind) ?? "full",
     settled: p.settled === true,
     settledAt: toIso(p.settledAt),
     settledByName: settledBy ? (names.get(settledBy) ?? "Noma'lum") : null,
-    settledAmount: (p.settledAmount as number | undefined) ?? 0,
+    settledAmount,
+    settledCashAmount: (p.settledCashAmount as number | undefined) ?? settledAmount,
+    settledCardAmount: (p.settledCardAmount as number | undefined) ?? 0,
     note: (p.note as string | null) ?? null,
   };
 }
@@ -335,8 +397,14 @@ paymentsRouter.post("/listPayments", withAuth, async (req: AuthedRequest, res) =
       partialAmount: 0,
       discountCount: 0,
       discountAmount: 0,
+      // Shu tanlovdagi yozuvlar bo'yicha olingan pul — naqd/karta
+      // bo'yicha ajratilgan holda.
+      cashAmount: 0,
+      cardAmount: 0,
     };
     for (const r of rows) {
+      totals.cashAmount += r.cashAmount;
+      totals.cardAmount += r.cardAmount;
       if (r.kind === "debt" && !r.settled) {
         totals.debtCount += 1;
         totals.debtAmount += r.shortfall;

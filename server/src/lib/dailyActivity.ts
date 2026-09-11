@@ -28,7 +28,7 @@ import { businessDateString } from "./businessTime";
  * kunlik hisobda bir marta sanaladi — bu ataylab, chunki savol "bugun
  * nechta mahsulot yuvildi", "nechta yuvish amali bo'ldi" emas.
  */
-export type DailyActivityType = "washed" | "packed" | "delivered" | "onsite_done";
+export type DailyActivityType = "washed" | "packed" | "delivered" | "onsite_done" | "settled";
 
 export interface DailyActivityInput {
   type: DailyActivityType;
@@ -48,6 +48,18 @@ export interface DailyActivityInput {
   price?: number | null;
   /** Dastavchik mijozdan olgan summa, agar alohida kiritilgan bo'lsa. */
   collectedAmount?: number | null;
+  /**
+   * Shu summaning naqd va karta ulushlari. Berilmasa `null` yoziladi va
+   * o'quvchi uni "hammasi naqd" deb talqin qiladi — maydonlar joriy
+   * etilishidan oldingi yozuvlar bilan bir xil ma'no.
+   */
+  cashAmount?: number | null;
+  cardAmount?: number | null;
+  /**
+   * `settled` hodisasi uchun yopilgan to'lov yozuvi. Hodisa mahsulotga
+   * emas, to'lovga tegishli — ID shu maydondan quriladi.
+   */
+  paymentId?: string | null;
 }
 
 /** Berilgan kunning hodisalari jamlanmasi. */
@@ -57,7 +69,7 @@ export function dailyActivityEvents(dateKey: string) {
 
 /** `tur__manba__kun` — bir xil hodisa uchun har doim bir xil ID. */
 export function dailyActivityDocId(event: DailyActivityInput, dateKey: string): string {
-  return `${event.type}__${event.itemId ?? event.orderId}__${dateKey}`;
+  return `${event.type}__${event.paymentId ?? event.itemId ?? event.orderId}__${dateKey}`;
 }
 
 /** Hodisa hujjatining tarkibi — jonli yozuv ham, backfill ham shuni ishlatadi. */
@@ -71,6 +83,9 @@ export function buildDailyActivityDoc(at: Date, event: DailyActivityInput) {
     qty: event.qty ?? null,
     price: event.price ?? null,
     collectedAmount: event.collectedAmount ?? null,
+    cashAmount: event.cashAmount ?? null,
+    cardAmount: event.cardAmount ?? null,
+    paymentId: event.paymentId ?? null,
     dateKey: businessDateString(at),
     at: Timestamp.fromDate(at),
   };

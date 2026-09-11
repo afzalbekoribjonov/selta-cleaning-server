@@ -7,6 +7,7 @@ import '../../core/services/my_activity_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/money_utils.dart';
+import '../shared/payment_method_field.dart';
 
 enum TodayListKind { broughtIn, delivered, washed, packed, created, payments }
 
@@ -209,27 +210,26 @@ class _PaymentTileState extends ConsumerState<_PaymentTile> {
   String? _error;
 
   Future<void> _settle() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Qolgan pul olindimi?'),
-        content: Text(
-          '#${widget.entry.orderNumber} — ${formatMoneyUz(widget.entry.shortfall)} to\'liq olingan bo\'lsa tasdiqlang.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Bekor qilish')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Tasdiqlash')),
-        ],
-      ),
+    // Oddiy tasdiqlash dialogi emas, balki oyna: yopilgan pul naqd ham,
+    // karta orqali ham kelishi mumkin va u o'sha kunning kassa hisobiga
+    // tushadi — usul so'ralmasa, karta puli naqd deb sanalardi.
+    final split = await openSettleSheet(
+      context,
+      orderNumber: widget.entry.orderNumber,
+      amount: widget.entry.shortfall,
     );
-    if (confirmed != true) return;
+    if (split == null) return;
 
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await ref.read(ordersRepositoryProvider).settlePayment(paymentId: widget.entry.id);
+      await ref.read(ordersRepositoryProvider).settlePayment(
+            paymentId: widget.entry.id,
+            cashAmount: split.cash,
+            cardAmount: split.card,
+          );
       if (mounted) setState(() => _done = true);
       ref.invalidate(myDailyActivityProvider);
     } catch (err) {
