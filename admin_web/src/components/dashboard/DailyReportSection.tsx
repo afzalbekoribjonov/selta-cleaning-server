@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Banknote,
+  CreditCard,
+  HandCoins,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -175,6 +178,7 @@ export function DailyReportSection() {
               countLabel="buyurtma"
               detail={`${data.delivered.count} ta mahsulot · ${formatMoney(data.delivered.deliveredAmount)}`}
               totals={data.delivered.totals}
+              money={{ cash: data.delivered.cashAmount, card: data.delivered.cardAmount }}
               onView={() => setDrawer('delivered')}
             />
           </div>
@@ -226,6 +230,7 @@ function MetricCard({
   countLabel,
   detail,
   totals,
+  money,
   warning,
   onView,
 }: {
@@ -237,6 +242,8 @@ function MetricCard({
   detail: string
   /** Birlik bo'yicha hajmlar — har biri ALOHIDA QATORDA ko'rsatiladi. */
   totals: UnitTotal[]
+  /** Pul qanday olingani — faqat yetkazish kartasida mazmunli. */
+  money?: { cash: number; card: number }
   warning?: string | null
   onView: () => void
 }) {
@@ -265,6 +272,12 @@ function MetricCard({
             <UnitTotals totals={totals} size="sm" />
           </div>
         )}
+        {!empty && money && (
+          <div className="mt-2 space-y-1 border-t border-border pt-2">
+            <MoneyLine icon={Banknote} label="Naqd" amount={money.cash} />
+            <MoneyLine icon={CreditCard} label="Karta" amount={money.card} />
+          </div>
+        )}
         {warning && <div className="mt-1.5 truncate text-xs font-bold text-danger">{warning}</div>}
       </div>
 
@@ -276,6 +289,32 @@ function MetricCard({
         <Eye size={14} />
         Ko'rish
       </button>
+    </div>
+  )
+}
+
+/**
+ * Kichik pul qatori: belgi, nomi va summa. Naqd/karta ajratmasi hamma
+ * joyda AYNAN shu ko'rinishda — kartada ham, dastavchik ro'yxatida ham.
+ */
+function MoneyLine({
+  icon: Icon,
+  label,
+  amount,
+  struck = false,
+}: {
+  icon: LucideIcon
+  label: string
+  amount: number
+  struck?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-1.5 text-[11px]">
+      <Icon size={12} className={`shrink-0 ${struck ? 'text-success' : 'text-gray'}`} />
+      <span className="text-gray-dark">{label}</span>
+      <span className={`ml-auto whitespace-nowrap font-bold ${struck ? 'text-success line-through' : 'text-ink'}`}>
+        {formatMoney(amount)}
+      </span>
     </div>
   )
 }
@@ -293,8 +332,10 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dailyReport', date] }),
   })
 
-  const pending = useMemo(
-    () => report.drivers.filter((d) => !d.handedOver).reduce((sum, d) => sum + d.amount, 0),
+  // Topshiriladigan narsa — faqat NAQD: karta puli to'g'ridan-to'g'ri
+  // kompaniya hisobiga tushadi va dastavchik qo'lidan o'tmaydi.
+  const pendingCash = useMemo(
+    () => report.drivers.filter((d) => !d.handedOver).reduce((sum, d) => sum + d.cashAmount, 0),
     [report.drivers],
   )
 
@@ -311,13 +352,17 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold text-ink">Dastavchiklar qo'lidagi pul</div>
-          <div className="text-xs text-gray-dark">Shu kuni yetkazgan buyurtmalari summasi</div>
+          <div className="text-xs text-gray-dark">
+            Shu kuni yetkazgani va yopgan qarzlari. Topshiriladigan — faqat naqd qismi.
+          </div>
         </div>
       </div>
 
       <div className="mt-3 flex items-baseline justify-between gap-2 rounded-xl bg-bg px-3 py-2.5">
-        <span className="text-xs font-semibold text-gray-dark">Topshirilmagan</span>
-        <span className="whitespace-nowrap font-heading text-base font-extrabold text-ink">{formatMoney(pending)}</span>
+        <span className="text-xs font-semibold text-gray-dark">Topshirilmagan naqd</span>
+        <span className="whitespace-nowrap font-heading text-base font-extrabold text-ink">
+          {formatMoney(pendingCash)}
+        </span>
       </div>
 
       {/* Har bir dastavchik: ism va summa bitta qatorda, tugma pastda.
@@ -333,17 +378,25 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
                   {d.orderCount} ta buyurtma · {d.itemCount} ta mahsulot
                 </div>
               </div>
-              <div
-                className={`shrink-0 whitespace-nowrap font-heading text-sm font-extrabold ${
-                  d.handedOver ? 'text-success line-through' : 'text-ink'
-                }`}
-              >
+              <div className="shrink-0 whitespace-nowrap font-heading text-sm font-extrabold text-ink">
                 {formatMoney(d.amount)}
               </div>
             </div>
 
+            {/* Naqd va karta ALOHIDA qatorlarda: topshirish faqat naqdga
+                tegishli, shuning uchun ular bitta summaga qo'shilmaydi. */}
+            <div className="mt-2 space-y-1 rounded-xl bg-bg px-3 py-2">
+              <MoneyLine icon={Banknote} label="Naqd" amount={d.cashAmount} struck={d.handedOver} />
+              <MoneyLine icon={CreditCard} label="Karta" amount={d.cardAmount} />
+              {d.settledAmount > 0 && (
+                <MoneyLine icon={HandCoins} label="Shundan yopilgan qarz" amount={d.settledAmount} />
+              )}
+            </div>
+
             <button
-              onClick={() => mutation.mutate({ employeeId: d.employeeId, handedOver: !d.handedOver, amount: d.amount })}
+              onClick={() =>
+                mutation.mutate({ employeeId: d.employeeId, handedOver: !d.handedOver, amount: d.cashAmount })
+              }
               disabled={mutation.isPending}
               className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50 sm:w-auto ${
                 d.handedOver
@@ -352,7 +405,7 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
               }`}
             >
               {d.handedOver ? <Undo2 size={14} /> : <Check size={14} />}
-              {d.handedOver ? 'Topshirishni bekor qilish' : 'Pulni topshirdi'}
+              {d.handedOver ? 'Topshirishni bekor qilish' : 'Naqd pulni topshirdi'}
             </button>
           </li>
         ))}

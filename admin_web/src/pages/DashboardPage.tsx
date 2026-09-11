@@ -11,7 +11,6 @@ import { formatDateUz } from '@/lib/date-utils'
 import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
 import { OrderSummaryCard } from '@/components/orders/OrderSummaryCard'
 import { RevenueTrendChart } from '@/components/dashboard/RevenueTrendChart'
-import { ProfitLossCard } from '@/components/dashboard/ProfitLossCard'
 import { EmployeeActivityChart } from '@/components/dashboard/EmployeeActivityChart'
 import { MonthlyExpensesCard } from '@/components/dashboard/MonthlyExpensesCard'
 import { DailyReportSection } from '@/components/dashboard/DailyReportSection'
@@ -100,8 +99,6 @@ export default function DashboardPage() {
         <MonthlyExpensesCard />
         <OutstandingCard />
       </div>
-
-      <ProfitLossCard />
 
       <section className="rounded-2xl border border-border bg-surface shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-4 sm:px-5">

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, Search, Package, Layers } from 'lucide-react'
+import { X, Search, Package, Layers, Users } from 'lucide-react'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { Spinner } from '@/components/ui/Spinner'
 import {
@@ -73,6 +73,33 @@ export function DailyReportDrawer({
     enabled: kind === 'intake' && intakeView === 'items',
     staleTime: 60_000,
   })
+
+  /**
+   * "Shu kuni kim qancha yuvdi / upakovka qildi" — xodim kesimidagi
+   * hajm. Qatorlar kunlik hisobot bilan ALLAQACHON kelgan, shuning uchun
+   * bu faqat guruhlash: serverga qo'shimcha so'rov yuborilmaydi.
+   *
+   * Ataylab QIDIRUV va FILTRDAN tashqarida hisoblanadi — bu kunning
+   * to'liq manzarasi, pastdagi jadval esa tanlangan kesim.
+   */
+  const employeeVolumes = useMemo(() => {
+    if (kind !== 'washed' && kind !== 'packed') return []
+    const map = new Map<string, { id: string; name: string; count: number; units: Map<string, UnitTotal> }>()
+    for (const r of rows) {
+      let entry = map.get(r.employeeId)
+      if (!entry) {
+        entry = { id: r.employeeId, name: r.employeeName, count: 0, units: new Map() }
+        map.set(r.employeeId, entry)
+      }
+      entry.count += 1
+      const unit = entry.units.get(r.unit)
+      if (unit) unit.amount += r.unitAmount
+      else entry.units.set(r.unit, { unit: r.unit, label: r.unitLabel, amount: r.unitAmount })
+    }
+    return [...map.values()]
+      .map((e) => ({ id: e.id, name: e.name, count: e.count, totals: [...e.units.values()] }))
+      .sort((a, b) => b.count - a.count)
+  }, [kind, rows])
 
   const employees = useMemo(() => {
     const map = new Map<string, string>()
@@ -184,6 +211,43 @@ export function DailyReportDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6">
+          {employeeVolumes.length > 0 && (
+            <div className="mb-4 rounded-2xl border border-border bg-bg p-3 sm:p-4">
+              <div className="flex items-center gap-2">
+                <Users size={15} className="shrink-0 text-brand-primary" />
+                <h3 className="text-sm font-bold text-ink">
+                  {kind === 'washed' ? 'Kim qancha yuvdi' : 'Kim qancha upakovka qildi'}
+                </h3>
+              </div>
+              <p className="mt-0.5 text-xs text-gray-dark">Shu kundagi to'liq hajm. Ustiga bosilsa ro'yxat filtrlanadi.</p>
+
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
+                {employeeVolumes.map((e) => {
+                  const active = employeeFilter === e.id
+                  return (
+                    <button
+                      key={e.id}
+                      onClick={() => setEmployeeFilter(active ? null : e.id)}
+                      className={`flex items-start gap-3 rounded-xl border p-3 text-left transition-colors ${
+                        active
+                          ? 'border-brand-primary bg-brand-primary/5'
+                          : 'border-border bg-surface hover:border-brand-primary/40'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-bold text-ink">{e.name}</div>
+                        <div className="text-xs text-gray-dark">{e.count} ta mahsulot</div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <UnitTotals totals={e.totals} size="sm" />
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {kind === 'intake' ? (
             intakeView === 'orders' ? (
               <ReportTable

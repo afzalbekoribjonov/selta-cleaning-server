@@ -1,11 +1,23 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { HandCoins, Wallet, Percent, Check, Search, CalendarDays } from 'lucide-react'
+import {
+  HandCoins,
+  Wallet,
+  Percent,
+  Check,
+  Search,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Banknote,
+  CreditCard,
+} from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 import { ReportTable, type ReportColumn } from '@/components/dashboard/ReportTable'
 import { businessDateKey } from '@/lib/business-time'
 import { ApiError } from '@/lib/api'
 import { fetchPayments, settlePayment, type PaymentRow } from '@/lib/payments'
+import { useEscapeClose } from '@/hooks/useEscapeClose'
 
 type Tab = 'debt' | 'partial' | 'discount'
 
@@ -23,6 +35,41 @@ function formatDay(dateKey: string): string {
   return dateKey
 }
 
+function shiftDateKey(dateKey: string, days: number): string {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const next = new Date(Date.UTC(y, m - 1, d + days))
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * Pul qanday olingani — qisqa ko'rinishda. Bitta usul bo'lsa faqat uning
+ * nomi chiqadi, aralashda esa ikkala summa ham ko'rsatiladi.
+ */
+function MethodCell({ cash, card }: { cash: number; card: number }) {
+  if (card <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-dark">
+        <Banknote size={12} className="shrink-0" />
+        Naqd
+      </span>
+    )
+  }
+  if (cash <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-dark">
+        <CreditCard size={12} className="shrink-0" />
+        Karta
+      </span>
+    )
+  }
+  return (
+    <span className="flex flex-col items-end gap-0.5 text-[11px] font-semibold text-gray-dark">
+      <span className="whitespace-nowrap">Naqd {formatMoney(cash)}</span>
+      <span className="whitespace-nowrap">Karta {formatMoney(card)}</span>
+    </span>
+  )
+}
+
 /**
  * Qarz, qisman to'lov va chegirmalar — bitta bo'limda, uchtasi alohida
  * ko'rinishda.
@@ -36,7 +83,11 @@ export default function FinancePage() {
   const [tab, setTab] = useState<Tab>('debt')
   const [search, setSearch] = useState('')
   const today = businessDateKey(new Date())
-  const [from, setFrom] = useState(() => businessDateKey(new Date(Date.now() - 29 * 24 * 60 * 60_000)))
+  // Chegirma YOPILMAYDIGAN hodisa: u ro'yxatdan hech qachon chiqmaydi va
+  // oylar davomida yig'ilib ketadi. Shuning uchun BITTA kun bo'yicha
+  // ko'rsatiladi. Qarz va qisman to'lov esa yopilgach ro'yxatdan o'zi
+  // chiqadi, shuning uchun ularda sana chegarasi shart emas.
+  const [day, setDay] = useState(today)
 
   const outstanding = useQuery({
     queryKey: ['payments', 'outstanding'],
@@ -45,10 +96,11 @@ export default function FinancePage() {
   })
 
   const history = useQuery({
-    queryKey: ['payments', 'history', from, today],
-    queryFn: () => fetchPayments({ scope: 'history', from, to: today }),
+    queryKey: ['payments', 'history', day],
+    queryFn: () => fetchPayments({ scope: 'history', from: day, to: day }),
     enabled: tab === 'discount',
-    staleTime: 60_000,
+    // Bugungi kun jonli o'zgaradi, o'tgan kunlar esa o'zgarmaydi.
+    staleTime: day === today ? 30_000 : Infinity,
   })
 
   const loading = tab === 'discount' ? history.isLoading : outstanding.isLoading
@@ -102,7 +154,11 @@ export default function FinancePage() {
           count={discountTotals?.discountCount ?? 0}
           amount={discountTotals?.discountAmount ?? 0}
           loading={tab === 'discount' && history.isLoading}
-          hint={tab === 'discount' ? undefined : "Chegirmalar bo'limini oching"}
+          hint={
+            tab === 'discount'
+              ? `${discountTotals?.discountCount ?? 0} ta · ${day === today ? 'bugun' : day}`
+              : "Chegirmalar bo'limini oching"
+          }
         />
       </div>
 
@@ -134,15 +190,40 @@ export default function FinancePage() {
               />
             </div>
             {tab === 'discount' && (
-              <div className="relative min-w-0">
-                <CalendarDays size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray" />
-                <input
-                  type="date"
-                  value={from}
-                  max={today}
-                  onChange={(e) => e.target.value && setFrom(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-bg pl-9 pr-3 text-sm font-semibold text-ink outline-none focus:border-brand-primary sm:w-44"
-                />
+              <div className="flex min-w-0 items-center gap-1.5">
+                <button
+                  onClick={() => setDay(shiftDateKey(day, -1))}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border text-gray-dark hover:bg-bg"
+                  aria-label="Oldingi kun"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <div className="relative min-w-0 flex-1">
+                  <CalendarDays size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray" />
+                  <input
+                    type="date"
+                    value={day}
+                    max={today}
+                    onChange={(e) => e.target.value && setDay(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-bg pl-9 pr-3 text-sm font-semibold text-ink outline-none focus:border-brand-primary sm:w-44"
+                  />
+                </div>
+                <button
+                  onClick={() => setDay(shiftDateKey(day, 1))}
+                  disabled={day >= today}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border text-gray-dark hover:bg-bg disabled:opacity-40"
+                  aria-label="Keyingi kun"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                {day !== today && (
+                  <button
+                    onClick={() => setDay(today)}
+                    className="h-11 shrink-0 rounded-xl bg-brand-primary px-3 text-xs font-bold text-white"
+                  >
+                    Bugun
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -230,6 +311,13 @@ const outstandingColumns: ReportColumn<PaymentRow>[] = [
     render: (r) => `${formatMoney(r.paidAmount)} / ${formatMoney(r.dueAmount)}`,
   },
   {
+    key: 'method',
+    label: 'Usul',
+    align: 'right',
+    mobile: 'meta',
+    render: (r) => <MethodCell cash={r.cashAmount} card={r.cardAmount} />,
+  },
+  {
     key: 'shortfall',
     label: 'Qoldi',
     align: 'right',
@@ -258,6 +346,13 @@ const discountColumns: ReportColumn<PaymentRow>[] = [
     render: (r) => `${formatMoney(r.paidAmount)} / ${formatMoney(r.dueAmount)}`,
   },
   {
+    key: 'method',
+    label: 'Usul',
+    align: 'right',
+    mobile: 'meta',
+    render: (r) => <MethodCell cash={r.cashAmount} card={r.cardAmount} />,
+  },
+  {
     key: 'discount',
     label: 'Chegirma',
     align: 'right',
@@ -267,25 +362,132 @@ const discountColumns: ReportColumn<PaymentRow>[] = [
 ]
 
 function SettleButton({ row }: { row: PaymentRow }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-xl bg-brand-primary px-3 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+      >
+        <Check size={13} />
+        To'landi
+      </button>
+      {open && <SettleDialog row={row} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+/**
+ * Qarzni yopish oynasi — summani ko'rsatadi va pul QANDAY olinganini
+ * so'raydi.
+ *
+ * Usul so'ralmasa yopilgan pulning hammasi naqd deb sanalar va kunlik
+ * kassa hisobi noto'g'ri chiqardi: karta orqali yopilgan qarz ham
+ * dastavchik qo'lidagi pulga qo'shilib ketardi.
+ */
+function SettleDialog({ row, onClose }: { row: PaymentRow; onClose: () => void }) {
   const queryClient = useQueryClient()
+  const [method, setMethod] = useState<'cash' | 'card' | 'mixed'>('cash')
+  const [cashPart, setCashPart] = useState('')
   const [error, setError] = useState<string | null>(null)
+  useEscapeClose(onClose)
+
+  const amount = row.shortfall
+  const parsedCash = cashPart.trim() === '' ? null : Number(cashPart)
+  const split =
+    method === 'cash'
+      ? { cashAmount: amount, cardAmount: 0 }
+      : method === 'card'
+        ? { cashAmount: 0, cardAmount: amount }
+        : parsedCash != null && Number.isFinite(parsedCash) && parsedCash >= 0 && parsedCash <= amount
+          ? { cashAmount: parsedCash, cardAmount: amount - parsedCash }
+          : null
 
   const mutation = useMutation({
-    mutationFn: () => settlePayment(row.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments'] }),
+    mutationFn: () => settlePayment({ paymentId: row.id, ...split! }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      queryClient.invalidateQueries({ queryKey: ['dailyReport'] })
+      onClose()
+    },
     onError: (err) => setError(err instanceof ApiError ? err.message : 'Xatolik'),
   })
 
-  if (error) return <span className="text-[11px] font-semibold text-danger">{error}</span>
-
   return (
-    <button
-      onClick={() => mutation.mutate()}
-      disabled={mutation.isPending}
-      className="inline-flex items-center gap-1.5 rounded-xl bg-brand-primary px-3 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-    >
-      <Check size={13} />
-      {mutation.isPending ? '...' : "To'landi"}
-    </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-surface p-5 shadow-2xl">
+        <h3 className="font-heading text-lg font-extrabold text-ink">Qolgan pulni yopish</h3>
+        <p className="mt-0.5 text-xs text-gray-dark">
+          Buyurtma #{row.orderNumber} · {row.customerName || "Noma'lum"}
+        </p>
+
+        <div className="mt-4 flex items-center justify-between rounded-xl bg-bg px-3 py-2.5">
+          <span className="text-xs font-semibold text-gray-dark">Olinayotgan summa</span>
+          <span className="whitespace-nowrap font-heading text-base font-extrabold text-ink">{formatMoney(amount)}</span>
+        </div>
+
+        <p className="mt-4 text-xs font-bold text-ink">Qanday to'landi?</p>
+        <div className="mt-2 flex gap-2">
+          {(
+            [
+              { id: 'cash', label: 'Naqd', icon: Banknote },
+              { id: 'card', label: 'Karta', icon: CreditCard },
+              { id: 'mixed', label: 'Aralash', icon: Wallet },
+            ] as const
+          ).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setMethod(id)}
+              className={`flex flex-1 flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-bold transition-colors ${
+                method === id
+                  ? 'border-brand-primary bg-brand-primary/10 text-brand-primary'
+                  : 'border-border bg-bg text-gray-dark hover:border-brand-primary/40'
+              }`}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {method === 'mixed' && (
+          <div className="mt-3">
+            <label className="text-xs font-semibold text-gray-dark">Naqd qismi</label>
+            <input
+              type="number"
+              min={0}
+              max={amount}
+              value={cashPart}
+              onChange={(e) => setCashPart(e.target.value)}
+              placeholder="0"
+              className="mt-1 h-11 w-full rounded-xl border border-border bg-bg px-3 text-sm font-bold text-ink outline-none focus:border-brand-primary"
+            />
+            <p className={`mt-1.5 text-xs font-semibold ${split ? 'text-gray-dark' : 'text-danger'}`}>
+              {split ? `Karta orqali: ${formatMoney(split.cardAmount)}` : 'Naqd qismini 0 va summa orasida kiriting'}
+            </p>
+          </div>
+        )}
+
+        {error && <p className="mt-3 text-xs font-semibold text-danger">{error}</p>}
+
+        <div className="mt-5 flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-border bg-bg py-2.5 text-sm font-bold text-gray-dark hover:text-ink"
+          >
+            Bekor qilish
+          </button>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={!split || mutation.isPending}
+            className="flex-1 rounded-xl bg-brand-primary py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {mutation.isPending ? '...' : 'Tasdiqlash'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

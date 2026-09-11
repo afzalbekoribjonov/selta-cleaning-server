@@ -33,6 +33,12 @@ export interface ActivityRow {
   employeeId: string
   employeeName: string
   collectedAmount: number | null
+  /**
+   * Olingan summaning naqd/karta ulushlari. `null` — bu maydonlar joriy
+   * etilishidan oldingi yozuv; o'sha paytda pul faqat naqd olingan.
+   */
+  cashAmount: number | null
+  cardAmount: number | null
   /** Buyurtmaning JORIY umumiy summasi — qator narxi bitta mahsulotniki. */
   orderTotalPrice: number | null
   orderItemCount: number | null
@@ -66,7 +72,15 @@ export interface IntakeOrderRow {
 export interface DriverCashRow {
   employeeId: string
   name: string
+  /** Naqd + karta + shu kuni yopilgan qarzlar. */
   amount: number
+  cashAmount: number
+  cardAmount: number
+  /**
+   * Shu summaning boshqa kuni yetkazilgan, bugun yopilgan qarz/qisman
+   * to'lovlardan kelgan qismi — yetkazish summasidan farqini tushuntiradi.
+   */
+  settledAmount: number
   itemCount: number
   orderCount: number
   handedOver: boolean
@@ -87,7 +101,7 @@ export interface DailyReport {
   }
   washed: StageSummary
   packed: StageSummary
-  delivered: StageSummary & { deliveredAmount: number }
+  delivered: StageSummary & { deliveredAmount: number; cashAmount: number; cardAmount: number }
   drivers: DriverCashRow[]
 }
 

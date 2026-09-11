@@ -23,12 +23,17 @@ export interface PaymentRow {
   remainingItemCount: number
   dueAmount: number
   paidAmount: number
+  /** Olingan summaning naqd/karta ulushlari (eski yozuvda hammasi naqd). */
+  cashAmount: number
+  cardAmount: number
   shortfall: number
   kind: PaymentKind
   settled: boolean
   settledAt: string | null
   settledByName: string | null
   settledAmount: number
+  settledCashAmount: number
+  settledCardAmount: number
   note: string | null
 }
 
@@ -39,6 +44,9 @@ export interface PaymentTotals {
   partialAmount: number
   discountCount: number
   discountAmount: number
+  /** Tanlangan yozuvlar bo'yicha olingan pul, usul bo'yicha ajratilgan. */
+  cashAmount: number
+  cardAmount: number
 }
 
 export interface PaymentsResponse {
@@ -60,8 +68,20 @@ export function fetchPayments(params: {
   return apiPost('/listPayments', params)
 }
 
-export function settlePayment(paymentId: string, amount?: number) {
-  return apiPost('/settlePayment', { paymentId, amount })
+/**
+ * Qarz yoki qisman to'lovni yopadi.
+ *
+ * `cashAmount`/`cardAmount` — olingan pulning ulushlari; yig'indisi
+ * yopilayotgan summaga teng bo'lishi shart (serverda ham tekshiriladi).
+ * Berilmasa server hammasini naqd deb hisoblaydi.
+ */
+export function settlePayment(params: {
+  paymentId: string
+  amount?: number
+  cashAmount?: number
+  cardAmount?: number
+}) {
+  return apiPost('/settlePayment', params)
 }
 
 export const PAYMENT_KIND_LABELS: Record<PaymentKind, string> = {
