@@ -397,14 +397,8 @@ paymentsRouter.post("/listPayments", withAuth, async (req: AuthedRequest, res) =
       partialAmount: 0,
       discountCount: 0,
       discountAmount: 0,
-      // Shu tanlovdagi yozuvlar bo'yicha olingan pul — naqd/karta
-      // bo'yicha ajratilgan holda.
-      cashAmount: 0,
-      cardAmount: 0,
     };
     for (const r of rows) {
-      totals.cashAmount += r.cashAmount;
-      totals.cardAmount += r.cardAmount;
       if (r.kind === "debt" && !r.settled) {
         totals.debtCount += 1;
         totals.debtAmount += r.shortfall;

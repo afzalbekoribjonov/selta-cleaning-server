@@ -44,9 +44,6 @@ export interface PaymentTotals {
   partialAmount: number
   discountCount: number
   discountAmount: number
-  /** Tanlangan yozuvlar bo'yicha olingan pul, usul bo'yicha ajratilgan. */
-  cashAmount: number
-  cardAmount: number
 }
 
 export interface PaymentsResponse {

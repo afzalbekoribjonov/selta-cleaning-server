@@ -134,6 +134,23 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
         washedTotals.set(unit, (washedTotals.get(unit) ?? 0) + unitAmountOf(calcType, e.qty as number | null));
       }
 
+      // Boshqa kuni qolgan qarz BUGUN yopilgan bo'lsa, pul bugun
+      // olingan. Admin panelidagi kunlik kassa ham aynan shu qoida
+      // bo'yicha hisoblaydi — ikki joyda ikki xil raqam chiqmasligi
+      // uchun shart.
+      if (type === "settled") {
+        const amount = (e.collectedAmount as number | undefined) ?? 0;
+        if (amount > 0) {
+          cashTotal += amount;
+          cashEntries.push({
+            ...base,
+            amount,
+            itemName: "Yopilgan qarz",
+            at: toIso(e.at),
+          });
+        }
+      }
+
       if (type === "delivered" || type === "onsite_done") {
         deliveredOrderIds.set(base.orderId, {
           ...base,
