@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/models/order_item.dart';
+import '../../core/services/tariff_settings.dart';
 
 const _conditionLabels = {
   'average': "O'rtacha",
@@ -37,7 +39,7 @@ String itemMeasurementLabel(OrderItem item) {
 /// mahsulot holati (agar belgilangan bo'lsa — ustama foizi bilan), narx,
 /// va QC rad etilgan bo'lsa sababi. Ishchi, Dastavchik, Jamoa va
 /// Dispetcher ekranlarida bir xil ko'rinishda ishlatiladi.
-class ItemDetailRow extends StatelessWidget {
+class ItemDetailRow extends ConsumerWidget {
   final OrderItem item;
   final String subId;
   final bool editable;
@@ -52,14 +54,14 @@ class ItemDetailRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final failed = item.qcStatus == 'failed';
     final measurement = itemMeasurementLabel(item);
     final conditionLabel = _conditionLabels[item.condition];
     // Talab #8: har bir tarif uchun kun-asosidagi rang bosqichi — faqat
     // hali yakunlanmagan pickup itemlarida ko'rsatiladi.
     final showColorDot = item.status != null && !item.isDone && item.tariff != null && item.createdAt != null;
-    final colorStage = showColorDot ? colorStageFor(item.tariff, item.createdAt!) : null;
+    final colorStage = showColorDot ? colorStageFor(item.tariff, item.createdAt!, ref.tariffs) : null;
     // Talab: o'lchanmagan mahsulot KARTASI butunlay qizarib tursin — u
     // yuvishga ham, upakovkaga ham o'ta olmaydi, shuning uchun ro'yxatda
     // birinchi bo'lib ko'zga tashlanishi kerak.

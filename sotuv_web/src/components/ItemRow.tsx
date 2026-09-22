@@ -1,5 +1,6 @@
 import { AlertCircle } from 'lucide-react'
 import { STATUS_CONFIG, TARIFF_CONFIG, colorStageFor, COLOR_STAGE_HEX } from '@/lib/status-config'
+import { useTariffs } from '@/hooks/useTariffs'
 import { isItemDone, type OrderItem } from '@/lib/order-items'
 
 const CONDITION_LABELS: Record<string, string> = { average: "O'rtacha", bad: 'Yomon', veryBad: 'Juda yomon' }
@@ -25,12 +26,13 @@ function measurementLabel(item: OrderItem): string {
 }
 
 export function ItemRow({ item, subId, onClick }: { item: OrderItem; subId: string; onClick?: () => void }) {
+  const tariffs = useTariffs()
   const failed = item.qcStatus === 'failed'
   const measurement = measurementLabel(item)
   const conditionLabel = item.condition ? CONDITION_LABELS[item.condition] : null
   const done = isItemDone(item)
   const showDot = item.status != null && !done && item.tariff != null && item.createdAt != null
-  const colorStage = showDot ? colorStageFor(item.tariff!, item.createdAt!) : null
+  const colorStage = showDot ? colorStageFor(item.tariff!, item.createdAt!, tariffs) : null
 
   return (
     <button onClick={onClick} disabled={!onClick} className="w-full py-2 text-left disabled:cursor-default">

@@ -1,9 +1,21 @@
-import { useState, type FormEvent } from 'react'
-import { Mail, ShieldCheck, Info, Clock3, KeyRound } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { Mail, ShieldCheck, Info, Clock3, KeyRound, Check, RotateCcw } from 'lucide-react'
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth'
 import { useAuth } from '@/lib/auth-context'
+import { ApiError } from '@/lib/api'
 import { TARIFF_CONFIG } from '@/lib/status-config'
 import { SALARY_METHODS } from '@/lib/salary-methods'
+import { useTariffs } from '@/hooks/useTariffs'
+import {
+  DEFAULT_TARIFFS,
+  TARIFF_KEYS,
+  updateTariffs,
+  validateTariffSetting,
+  type TariffConfig,
+  type TariffSetting,
+} from '@/lib/tariffs'
+import { Spinner } from '@/components/ui/Spinner'
 
 const TARIFF_NOTES: Record<string, string> = {
   express: 'Eng tezkor xizmat — muddat ustuvor.',
@@ -40,31 +52,7 @@ export default function SettingsPage() {
 
       <ChangePasswordCard />
 
-      <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
-        <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
-          <Clock3 size={18} className="text-brand-primary" />
-          Tariflar
-        </h2>
-        <p className="mb-4 text-xs text-gray-dark">
-          Har bir tarifning muddati biznes qoidalari bilan belgilangan va bu yerdan o'zgartirilmaydi.
-        </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {Object.entries(TARIFF_CONFIG).map(([key, t]) => (
-            <div key={key} className="rounded-xl border border-border p-4">
-              <div className="flex items-center justify-between">
-                <span
-                  className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold"
-                  style={{ color: t.color, backgroundColor: t.bg }}
-                >
-                  {t.label}
-                </span>
-                <span className="text-sm font-bold text-ink">{t.days}</span>
-              </div>
-              <p className="mt-2 text-xs text-gray-dark">{TARIFF_NOTES[key]}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <TariffSettingsCard />
 
       <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
@@ -208,5 +196,234 @@ function ChangePasswordCard() {
         </button>
       </form>
     </section>
+  )
+}
+
+/** Tahrirlanayotgan qiymatlar matn sifatida — yozayotganda bo'sh maydon
+ *  ham bo'lishi mumkin, shuning uchun raqamga faqat tekshirish paytida
+ *  aylantiriladi. */
+type Draft = Record<string, { days: string; green: string; yellow: string }>
+
+function toDraft(config: TariffConfig): Draft {
+  const draft: Draft = {}
+  for (const key of TARIFF_KEYS) {
+    const t = config[key] ?? DEFAULT_TARIFFS[key]
+    draft[key] = { days: String(t.days), green: String(t.green), yellow: String(t.yellow) }
+  }
+  return draft
+}
+
+function parseRow(row: { days: string; green: string; yellow: string }): TariffSetting | null {
+  return validateTariffSetting({
+    days: Number(row.days),
+    green: Number(row.green),
+    yellow: Number(row.yellow),
+  })
+}
+
+function sameAs(draft: Draft, config: TariffConfig): boolean {
+  return TARIFF_KEYS.every((key) => {
+    const parsed = parseRow(draft[key])
+    const current = config[key]
+    return parsed != null && parsed.days === current.days && parsed.green === current.green && parsed.yellow === current.yellow
+  })
+}
+
+/**
+ * Tarif muddatlari va rang bosqichlari — admin panel orqali sozlanadi.
+ *
+ * MUHIM: o'zgarish faqat YANGI mahsulotlarga ta'sir qiladi. Mavjud
+ * buyurtmalarning muddati yaratilganda hisoblanib, hujjatga yozib
+ * qo'yilgan — aks holda sozlamani o'zgartirish butun sexdagi ishlarning
+ * muddatini birdaniga surib yuborardi.
+ */
+function TariffSettingsCard() {
+  const { tariffs, loading } = useTariffs()
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Boshlang'ich qiymat bir marta — sozlama yuklangach. Keyingi jonli
+  // yangilanishlar tahrirni yuvib yubormaydi.
+  useEffect(() => {
+    if (!loading) setDraft((current) => current ?? toDraft(tariffs))
+  }, [loading, tariffs])
+
+  const mutation = useMutation({
+    mutationFn: (config: TariffConfig) => updateTariffs(config),
+    onSuccess: (res) => {
+      setDraft(toDraft(res.tariffs))
+      setSaved(true)
+      setError(null)
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.message : 'Saqlab bo\'lmadi')
+      setSaved(false)
+    },
+  })
+
+  function setField(key: string, field: 'days' | 'green' | 'yellow', value: string) {
+    setDraft((current) => (current ? { ...current, [key]: { ...current[key], [field]: value } } : current))
+    setSaved(false)
+    setError(null)
+  }
+
+  function save() {
+    if (!draft) return
+    const config: TariffConfig = {}
+    for (const key of TARIFF_KEYS) {
+      const parsed = parseRow(draft[key])
+      if (!parsed) return
+      config[key] = parsed
+    }
+    mutation.mutate(config)
+  }
+
+  const allValid = draft != null && TARIFF_KEYS.every((key) => parseRow(draft[key]) != null)
+  const dirty = draft != null && !sameAs(draft, tariffs)
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+      <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
+        <Clock3 size={18} className="text-brand-primary" />
+        Tariflar
+      </h2>
+      <p className="mb-4 text-xs text-gray-dark">
+        Muddat va rang bosqichlarini shu yerdan o'zgartirasiz. O'zgarish faqat{' '}
+        <span className="font-bold text-ink">yangi qo'shiladigan mahsulotlarga</span> tegishli — mavjud
+        buyurtmalarning muddati yaratilganda belgilangan va o'zgarmaydi.
+      </p>
+
+      {!draft ? (
+        <Spinner className="py-10" />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {TARIFF_KEYS.map((key) => {
+              const info = TARIFF_CONFIG[key]
+              const row = draft[key]
+              const parsed = parseRow(row)
+              return (
+                <div key={key} className="rounded-xl border border-border p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold"
+                      style={{ color: info.color, backgroundColor: info.bg }}
+                    >
+                      {info.label}
+                    </span>
+                    <span className="text-xs font-bold text-ink">
+                      {parsed ? `${parsed.days} kunlik` : '—'}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-dark">{TARIFF_NOTES[key]}</p>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <NumberField
+                      label="Muddat"
+                      value={row.days}
+                      onChange={(v) => setField(key, 'days', v)}
+                    />
+                    <NumberField
+                      label="Yashil"
+                      value={row.green}
+                      onChange={(v) => setField(key, 'green', v)}
+                    />
+                    <NumberField
+                      label="Sariq"
+                      value={row.yellow}
+                      onChange={(v) => setField(key, 'yellow', v)}
+                    />
+                  </div>
+
+                  {parsed ? (
+                    <StagePreview setting={parsed} />
+                  ) : (
+                    <p className="mt-2 text-xs font-semibold text-danger">
+                      1 ≤ yashil &lt; sariq ≤ muddat bo'lishi kerak (muddat 1-365 kun)
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              onClick={save}
+              disabled={!allValid || !dirty || mutation.isPending}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              <Check size={15} />
+              {mutation.isPending ? 'Saqlanmoqda...' : 'Saqlash'}
+            </button>
+            {dirty && (
+              <button
+                onClick={() => {
+                  setDraft(toDraft(tariffs))
+                  setError(null)
+                  setSaved(false)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-bg px-4 py-2.5 text-sm font-bold text-gray-dark hover:text-ink"
+              >
+                <RotateCcw size={15} />
+                Bekor qilish
+              </button>
+            )}
+            {saved && !dirty && <span className="text-xs font-bold text-success">Saqlandi</span>}
+            {error && <span className="text-xs font-bold text-danger">{error}</span>}
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="block">
+      <span className="text-[11px] font-semibold text-gray-dark">{label}</span>
+      <input
+        type="number"
+        min={1}
+        max={365}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-0.5 h-10 w-full rounded-lg border border-border bg-bg px-2 text-center text-sm font-bold text-ink outline-none focus:border-brand-primary"
+      />
+    </label>
+  )
+}
+
+/**
+ * Kun bo'linishi — chizma sifatida. Raqamlarning o'zidan nima
+ * chiqishini ko'rsatadi: "2 kun yashil · 1 kun sariq · 1 kun qizil".
+ */
+function StagePreview({ setting }: { setting: TariffSetting }) {
+  const stages = [
+    { label: 'yashil', days: setting.green, color: '#1E9E5A' },
+    { label: 'sariq', days: setting.yellow - setting.green, color: '#F59E0B' },
+    { label: 'qizil', days: setting.days - setting.yellow, color: '#D64545' },
+  ].filter((s) => s.days > 0)
+
+  return (
+    <div className="mt-3">
+      <div className="flex h-2 overflow-hidden rounded-full">
+        {stages.map((s) => (
+          <div key={s.label} style={{ flexGrow: s.days, backgroundColor: s.color }} />
+        ))}
+      </div>
+      <p className="mt-1.5 text-[11px] text-gray-dark">
+        {stages.map((s) => `${s.days} kun ${s.label}`).join(' · ')}
+      </p>
+    </div>
   )
 }

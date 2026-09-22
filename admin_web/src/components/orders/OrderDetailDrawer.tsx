@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase'
 import { isOverdue, subscribeOrder, type Order } from '@/lib/orders'
 import { StatusBadge, TariffBadge } from '@/components/ui/StatusBadge'
 import { STATUS_CONFIG, TARIFF_CONFIG, colorStageFor, COLOR_STAGE_HEX } from '@/lib/status-config'
+import { useTariffs } from '@/hooks/useTariffs'
 import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -145,6 +146,7 @@ export function OrderDetailDrawer({
 }) {
   useEscapeClose(onClose)
   const employees = useEmployeesMap()
+  const { tariffs } = useTariffs()
   const { sources: orderSources } = useOrderSources()
   const order = useLiveOrder(initialOrder, (orderId) => {
     onDeleted?.(orderId)
@@ -257,7 +259,7 @@ export function OrderDetailDrawer({
                 {items.map((item) => {
                   const done = item.status === 'done'
                   const showColorDot = !!item.status && !done && !!item.tariff && !!item.createdAt
-                  const colorStage = showColorDot ? colorStageFor(item.tariff, item.createdAt!) : null
+                  const colorStage = showColorDot ? colorStageFor(item.tariff, item.createdAt!, tariffs) : null
                   const statusInfo = item.status ? STATUS_CONFIG[item.status] : null
                   const tariffInfo = item.tariff ? TARIFF_CONFIG[item.tariff] : null
                   return (

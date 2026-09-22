@@ -32,17 +32,16 @@ export const SERVICE_PIPELINE: Record<string, string[]> = {
   onsite: ['new', 'team_assigned', 'in_progress', 'done'],
 }
 
-const TARIFF_COLOR_THRESHOLDS: Record<string, { green: number; yellow: number }> = {
-  express: { green: 2, yellow: 3 },
-  comfort: { green: 3, yellow: 5 },
-  premium: { green: 2, yellow: 3 },
-  standart: { green: 4, yellow: 8 },
-}
+import type { TariffConfig } from './tariffs'
 
 export type ColorStage = 'green' | 'yellow' | 'red'
 
-export function colorStageFor(tariff: string | null, addedAt: Date): ColorStage {
-  const t = TARIFF_COLOR_THRESHOLDS[tariff ?? 'standart'] ?? TARIFF_COLOR_THRESHOLDS.standart
+/**
+ * Rang bosqichi. Chegaralar ATAYLAB tashqaridan beriladi — ular admin
+ * panel orqali o'zgaradigan sozlama (lib/tariffs.ts).
+ */
+export function colorStageFor(tariff: string | null, addedAt: Date, config: TariffConfig): ColorStage {
+  const t = config[tariff ?? 'standart'] ?? config.standart
   const elapsedDays = Math.floor((Date.now() - addedAt.getTime()) / 86_400_000)
   if (elapsedDays < t.green) return 'green'
   if (elapsedDays < t.yellow) return 'yellow'

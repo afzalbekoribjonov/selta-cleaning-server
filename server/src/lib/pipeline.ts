@@ -36,13 +36,6 @@ export const SERVICE_PIPELINE: Record<ServiceType, string[]> = {
  */
 export const ITEM_PIPELINE = ["pending", "washing", "packing", "ready", "done"];
 
-export const TARIFF_DAYS: Record<string, number> = {
-  express: 4,
-  comfort: 7,
-  standart: 12,
-  premium: 4,
-};
-
 /** Berilgan xizmat turi bo'yicha `from` holatdan `to` holatga o'tish ruxsat etilganmi. */
 export function isValidTransition(serviceType: ServiceType, from: string, to: string): boolean {
   // Talab: dastavchik mijozdan buyurtmani olgach, alohida "Qabul
@@ -75,36 +68,15 @@ export function isValidItemTransition(from: string, to: string): boolean {
   return toIdx === fromIdx + 1;
 }
 
-export function computeDueDate(createdAt: Date, tariff: string): Date {
-  const days = TARIFF_DAYS[tariff] ?? TARIFF_DAYS.standart;
+/**
+ * Muddat sanasi. Kun soni ATAYLAB tashqaridan beriladi: u endi admin
+ * panel orqali o'zgaradigan sozlama (lib/tariffs.ts), shuning uchun bu
+ * yerda qattiq yozilgan jadval yo'q — ikki manba bo'lsa ular albatta
+ * bir-biridan uzoqlashardi.
+ */
+export function computeDueDate(createdAt: Date, days: number): Date {
   const due = new Date(createdAt);
   due.setDate(due.getDate() + days);
   return due;
 }
 
-/**
- * Rang bosqichi (yashil/sariq/qizil) — item qo'shilgan kundan boshlab
- * o'tgan kun soniga qarab, shu itemning o'ziga xos tarifi bo'yicha.
- * Talab: har bir tarif uchun aniq kun bo'linishi (yashil/sariq/qizil).
- * `elapsedDays` — item qo'shilgan kundan boshlab to'liq o'tgan kunlar
- * soni (0 = bugun qo'shilgan).
- */
-export const TARIFF_COLOR_THRESHOLDS: Record<string, { green: number; yellow: number }> = {
-  // Express: 4 kun (2 yashil / 1 sariq / 1 qizil)
-  express: { green: 2, yellow: 3 },
-  // Comfort: 7 kun (3 yashil / 2 sariq / 2 qizil)
-  comfort: { green: 3, yellow: 5 },
-  // Premium: 4 kun (Express bilan bir xil)
-  premium: { green: 2, yellow: 3 },
-  // Standart: 12 kun (4 yashil / 4 sariq / 4 qizil)
-  standart: { green: 4, yellow: 8 },
-};
-
-export type ColorStage = "green" | "yellow" | "red";
-
-export function colorStageFor(tariff: string, elapsedDays: number): ColorStage {
-  const t = TARIFF_COLOR_THRESHOLDS[tariff] ?? TARIFF_COLOR_THRESHOLDS.standart;
-  if (elapsedDays < t.green) return "green";
-  if (elapsedDays < t.yellow) return "yellow";
-  return "red";
-}

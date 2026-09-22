@@ -50,49 +50,40 @@ const heroGradient = LinearGradient(
 ///  - Comfort  -> ko'k
 ///  - Express  -> sariq
 ///  - Premium  -> qizil
+/// Tarifning KO'RINISHI — nomi va rangi. Muddat bu yerda ataylab yo'q:
+/// u admin panel orqali o'zgaradigan sozlama
+/// (core/services/tariff_settings.dart), qattiq yozilgan nusxasi esa
+/// sozlamadan jimgina uzoqlashib ketardi.
 class TariffInfo {
   final String label;
-  final String daysLabel;
   final Color color;
   final Color background;
 
   const TariffInfo({
     required this.label,
-    required this.daysLabel,
     required this.color,
     required this.background,
   });
 }
 
-const Map<String, int> kTariffDays = {
-  'express': 4,
-  'comfort': 7,
-  'standart': 12,
-  'premium': 4,
-};
-
 const Map<String, TariffInfo> kTariffConfig = {
   'express': TariffInfo(
     label: 'Express',
-    daysLabel: '4 kunlik',
     color: Color(0xFFCA8A04),
     background: Color(0xFFFEF3C7),
   ),
   'comfort': TariffInfo(
     label: 'Comfort',
-    daysLabel: '7 kunlik',
     color: AppColors.info,
     background: Color(0xFFE8F1FC),
   ),
   'standart': TariffInfo(
     label: 'Standart',
-    daysLabel: '12 kunlik',
     color: AppColors.secondary,
     background: Color(0xFFF1E9F8),
   ),
   'premium': TariffInfo(
     label: 'Premium',
-    daysLabel: '4 kunlik',
     color: AppColors.danger,
     background: Color(0xFFFCEAEA),
   ),

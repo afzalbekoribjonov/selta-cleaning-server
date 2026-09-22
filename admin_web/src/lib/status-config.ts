@@ -1,3 +1,5 @@
+import type { TariffConfig } from './tariffs'
+
 /**
  * mobile/lib/core/constants.dart dagi kStatusConfig/kTariffConfig bilan
  * 1:1 mos — ikkala tomon ham bir xil kalitlar/ranglar ishlatadi.
@@ -19,28 +21,26 @@ export const STATUS_CONFIG: Record<string, { label: string; color: string; bg: s
 
 // Tarif rangi — mobil ilova (app/theme.dart) bilan bir xil sxema:
 // Standart=binafsha, Comfort=ko'k, Express=sariq, Premium=qizil.
-export const TARIFF_CONFIG: Record<string, { label: string; days: string; color: string; bg: string }> = {
-  express: { label: 'Express', days: '4 kunlik', color: '#CA8A04', bg: '#FEF3C7' },
-  comfort: { label: 'Comfort', days: '7 kunlik', color: '#2F80D6', bg: '#E8F1FC' },
-  standart: { label: 'Standart', days: '12 kunlik', color: '#8C5AC3', bg: '#F1E9F8' },
-  premium: { label: 'Premium', days: '4 kunlik', color: '#DC2626', bg: '#FCEAEA' },
-}
-
-/**
- * server/src/lib/pipeline.ts dagi TARIFF_COLOR_THRESHOLDS/colorStageFor
- * bilan bir xil — har bir tarif uchun aniq kun bo'linishi (talab #8).
- */
-const TARIFF_COLOR_THRESHOLDS: Record<string, { green: number; yellow: number }> = {
-  express: { green: 2, yellow: 3 },
-  comfort: { green: 3, yellow: 5 },
-  premium: { green: 2, yellow: 3 },
-  standart: { green: 4, yellow: 8 },
+// Muddat bu yerda YO'Q: u admin panel orqali o'zgaradigan sozlama
+// (lib/tariffs.ts). Bu jadval faqat nom va rangni belgilaydi.
+export const TARIFF_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  express: { label: 'Express', color: '#CA8A04', bg: '#FEF3C7' },
+  comfort: { label: 'Comfort', color: '#2F80D6', bg: '#E8F1FC' },
+  standart: { label: 'Standart', color: '#8C5AC3', bg: '#F1E9F8' },
+  premium: { label: 'Premium', color: '#DC2626', bg: '#FCEAEA' },
 }
 
 export type ColorStage = 'green' | 'yellow' | 'red'
 
-export function colorStageFor(tariff: string | null, addedAt: Date): ColorStage {
-  const t = TARIFF_COLOR_THRESHOLDS[tariff ?? 'standart'] ?? TARIFF_COLOR_THRESHOLDS.standart
+/**
+ * Rang bosqichi — mahsulot qo'shilganidan beri o'tgan kunlarga qarab.
+ *
+ * Chegaralar ATAYLAB tashqaridan beriladi: ular admin panel orqali
+ * o'zgaradigan sozlama (lib/tariffs.ts). Ilovadagi `colorStageFor`
+ * ham aynan shu qoidani bajaradi.
+ */
+export function colorStageFor(tariff: string | null, addedAt: Date, config: TariffConfig): ColorStage {
+  const t = config[tariff ?? 'standart'] ?? config.standart
   const elapsedDays = Math.floor((Date.now() - addedAt.getTime()) / 86_400_000)
   if (elapsedDays < t.green) return 'green'
   if (elapsedDays < t.yellow) return 'yellow'

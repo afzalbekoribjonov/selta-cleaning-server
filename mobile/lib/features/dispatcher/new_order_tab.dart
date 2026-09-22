@@ -6,6 +6,7 @@ import '../../app/theme.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show describeApiError, employeeClaimsProvider;
 import '../../core/services/catalog_repository.dart';
+import '../../core/services/tariff_settings.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../shared/catalog_item_sheet.dart';
@@ -485,7 +486,7 @@ class _ChoiceCard extends StatelessWidget {
   }
 }
 
-class _TariffCard extends StatelessWidget {
+class _TariffCard extends ConsumerWidget {
   final String tariffKey;
   final bool selected;
   final VoidCallback onTap;
@@ -493,8 +494,11 @@ class _TariffCard extends StatelessWidget {
   const _TariffCard({required this.tariffKey, required this.selected, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final info = kTariffConfig[tariffKey]!;
+    // Muddat sozlamadan o'qiladi: sotuv menejeri tarif tanlayotganda
+    // aynan server hisoblaydigan kunni ko'rishi kerak.
+    final days = (ref.tariffs[tariffKey] ?? kDefaultTariffs[tariffKey]!).days;
     return Material(
       color: selected ? info.color : info.background,
       borderRadius: BorderRadius.circular(14),
@@ -521,7 +525,7 @@ class _TariffCard extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                info.daysLabel,
+                '$days kunlik',
                 style: TextStyle(
                   fontSize: 11.5,
                   color: selected ? Colors.white.withValues(alpha: 0.85) : info.color.withValues(alpha: 0.8),

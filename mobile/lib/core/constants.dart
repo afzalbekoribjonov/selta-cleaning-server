@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
+import 'services/tariff_settings.dart';
 
 /// Xodim bo'limlari — mobil bosh ekranning 3 ta katta bo'limi. "Sifat
 /// nazorati" bo'limi olib tashlangan (talab #5) — uning ishi (item
@@ -157,20 +158,13 @@ const List<String> kItemPipeline = ['pending', 'washing', 'packing', 'ready', 'd
 
 /// server/src/lib/pipeline.ts'dagi TARIFF_COLOR_THRESHOLDS bilan bir xil —
 /// har bir tarif uchun aniq kun bo'linishi (yashil/sariq/qizil).
-const Map<String, ({int green, int yellow})> kTariffColorThresholds = {
-  'express': (green: 2, yellow: 3),
-  'comfort': (green: 3, yellow: 5),
-  'premium': (green: 2, yellow: 3),
-  'standart': (green: 4, yellow: 8),
-};
-
 enum ColorStage { green, yellow, red }
 
 /// `dueDate` yoki item qo'shilgan sanadan kelib chiqib rang bosqichini
 /// hisoblaydi. `addedAt` — item qo'shilgan vaqt (elapsedDays shundan
 /// hisoblanadi).
-ColorStage colorStageFor(String? tariff, DateTime addedAt) {
-  final t = kTariffColorThresholds[tariff] ?? kTariffColorThresholds['standart']!;
+ColorStage colorStageFor(String? tariff, DateTime addedAt, TariffConfig config) {
+  final t = config[tariff] ?? config['standart'] ?? kDefaultTariffs['standart']!;
   final elapsedDays = DateTime.now().difference(addedAt).inDays;
   if (elapsedDays < t.green) return ColorStage.green;
   if (elapsedDays < t.yellow) return ColorStage.yellow;

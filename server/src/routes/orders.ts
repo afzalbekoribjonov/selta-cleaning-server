@@ -2,6 +2,7 @@ import { Router } from "express";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { computeDueDate, isValidTransition, isValidItemTransition, type ServiceType } from "../lib/pipeline";
+import { loadTariffs, tariffDays } from "../lib/tariffs";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { notifyDepartment, notifyEmployee } from "../lib/notifications";
 import { computeItems, type ItemInput } from "../lib/pricing";
@@ -125,6 +126,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
 
     const counterRef = db.collection("counters").doc("orders");
     const orderRef = db.collection("orders").doc();
+    const tariffs = await loadTariffs();
 
     const orderNumber = await db.runTransaction(async (tx) => {
       const counterSnap = await tx.get(counterRef);
@@ -150,7 +152,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         createdBy: employeeId,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-        dueDate: isOnsite ? computeDueDate(now, tariff) : null,
+        dueDate: isOnsite ? computeDueDate(now, tariffDays(tariffs, tariff)) : null,
         notedItems: cleanNotedItems,
         estimatedPrice: cleanEstimatedPrice,
         source: cleanSource,
@@ -178,7 +180,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       let itemNumber = 1;
       const summaryItems: SummaryItemInput[] = [];
       for (const item of computedItems) {
-        const dueDate = item.tariff ? computeDueDate(now, item.tariff) : null;
+        const dueDate = item.tariff ? computeDueDate(now, tariffDays(tariffs, item.tariff)) : null;
         tx.set(orderRef.collection("items").doc(), {
           itemNumber: itemNumber++,
           ...item,
@@ -248,6 +250,7 @@ ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
 
     const orderRef = db.collection("orders").doc(orderId);
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    const tariffs = await loadTariffs();
 
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(orderRef);
@@ -268,7 +271,7 @@ ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
       if (order.serviceType === "onsite" && tariff && tariff !== order.tariff) {
         update.tariff = tariff;
         const createdAt = order.createdAt?.toDate?.() ?? new Date();
-        update.dueDate = computeDueDate(createdAt, tariff);
+        update.dueDate = computeDueDate(createdAt, tariffDays(tariffs, tariff));
       }
 
       tx.update(orderRef, update);
@@ -727,6 +730,7 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
     }
 
     const computed = await computeItems(items as ItemInput[], orderDataPre.tariff as string | undefined);
+    const tariffs = await loadTariffs();
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, existingItemsSnap] = await Promise.all([tx.get(orderRef), tx.get(itemsRef)]);
@@ -743,7 +747,7 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
       const summaryItems: SummaryItemInput[] = existingItemsSnap.docs.map((d) => d.data() as SummaryItemInput);
 
       for (const item of computed) {
-        const dueDate = isPickup && item.tariff ? computeDueDate(now, item.tariff) : null;
+        const dueDate = isPickup && item.tariff ? computeDueDate(now, tariffDays(tariffs, item.tariff)) : null;
         const status = isPickup ? "pending" : null;
         tx.set(itemsRef.doc(), {
           itemNumber: nextNumber,
@@ -810,6 +814,7 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
     }
 
     const [computed] = await computeItems([item as ItemInput], orderDataPre.tariff as string | undefined);
+    const tariffs = await loadTariffs();
 
     await db.runTransaction(async (tx) => {
       // Barcha mahsulotlar ham o'qiladi — buyurtmadagi hosila ma'lumotni
@@ -834,7 +839,7 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
       const prevPrice = Number(itemSnap.data()!.price) || 0;
       const prevArea = Number(itemSnap.data()!.area) || 0;
       const now = new Date();
-      const dueDate = isPickup && computed.tariff ? computeDueDate(now, computed.tariff) : null;
+      const dueDate = isPickup && computed.tariff ? computeDueDate(now, tariffDays(tariffs, computed.tariff)) : null;
 
       tx.update(itemRef, {
         ...computed,
