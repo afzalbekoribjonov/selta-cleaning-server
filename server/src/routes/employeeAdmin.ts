@@ -111,6 +111,7 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           canSeeWorkshopQueue: data.canSeeWorkshopQueue ?? true,
           canViewStats: data.canViewStats ?? false,
           canViewFinance: data.canViewFinance ?? false,
+          canAccessWarehouse: data.canAccessWarehouse ?? false,
           attendanceEnabled: data.attendanceEnabled ?? false,
           attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -429,6 +430,34 @@ employeeAdminRouter.post("/adminSetEmployeeFinancePermission", withAuth, require
     }
 
     await employeeRef.update({ canViewFinance });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Omborxona vakolati — xodim ilovadagi ⋮ menyuda "Omborxona"ni ko'radi
+ * va ombordagi buyurtmani mijozga topshira oladi (dastavchik bo'lmasa
+ * ham, masalan mijoz o'zi kelganda sotuv menejeri). Standart `false`.
+ */
+employeeAdminRouter.post("/adminSetEmployeeWarehousePermission", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, canAccessWarehouse } = req.body ?? {};
+    if (!employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (typeof canAccessWarehouse !== "boolean") {
+      throw new ApiError(400, "invalid-argument", "canAccessWarehouse noto'g'ri");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+
+    await employeeRef.update({ canAccessWarehouse });
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);

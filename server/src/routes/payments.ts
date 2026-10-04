@@ -7,6 +7,7 @@ import { logDailyActivity } from "../lib/dailyActivity";
 import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
 import { loadEmployeeNames } from "../lib/employeeNames";
 import { isPaymentKind, normalizePaymentSplit, splitPaidAmount, type PaymentKind } from "../lib/payments";
+import { phoneVariants } from "../lib/phone";
 
 export const paymentsRouter = Router();
 
@@ -27,8 +28,13 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
   try {
     const role = req.auth!.role!;
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    // Dastavchikdan tashqari "Omborxona" vakolati berilgan xodim ham
+    // topshira oladi — ombordagi buyurtmani mijoz o'zi kelib oladi.
     if (role !== "delivery" && role !== "admin") {
-      throw new ApiError(403, "permission-denied", "Faqat dastavchik buyurtmani yetkaza oladi");
+      const empSnap = await db.collection("employees").doc(employeeId).get();
+      if (empSnap.data()?.canAccessWarehouse !== true) {
+        throw new ApiError(403, "permission-denied", "Faqat dastavchik yoki omborxona xodimi buyurtmani topshira oladi");
+      }
     }
 
     const { orderId, itemIds, paidAmount, cashAmount, cardAmount, kind, note, actorName } = req.body ?? {};
@@ -342,6 +348,48 @@ function toRow(
     note: (p.note as string | null) ?? null,
   };
 }
+
+/**
+ * Bitta mijozning qarzi, qisman to'lovlari va chegirmalari — umumiy
+ * qidiruvdagi mijoz kartasi uchun.
+ *
+ * Buyurtmalarni ilova o'zi Firestore'dan o'qiydi (internetsiz ham
+ * ishlaydi); to'lov yozuvlari esa ilovaga yopiq (firestore.rules), shuning
+ * uchun faqat shu yerdan va faqat moliyaga ruxsati borlarga beriladi.
+ */
+paymentsRouter.post("/customerFinance", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    await assertCanViewFinance(req);
+    const phone = typeof req.body?.phone === "string" ? req.body.phone : "";
+    if (phone.replace(/\D/g, "").length < 9) {
+      throw new ApiError(400, "invalid-argument", "To'liq telefon raqamini kiriting");
+    }
+
+    const [snap, names] = await Promise.all([
+      db.collection("payments").where("phone", "in", phoneVariants(phone)).limit(MAX_PAYMENTS).get(),
+      loadEmployeeNames(),
+    ]);
+    const rows = snap.docs.map((d) => toRow(d, names)).sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
+
+    const totals = { debtCount: 0, debtAmount: 0, partialCount: 0, partialAmount: 0, discountCount: 0, discountAmount: 0 };
+    for (const r of rows) {
+      if (r.kind === "debt" && !r.settled) {
+        totals.debtCount += 1;
+        totals.debtAmount += r.shortfall;
+      } else if (r.kind === "partial" && !r.settled) {
+        totals.partialCount += 1;
+        totals.partialAmount += r.shortfall;
+      } else if (r.kind === "discount") {
+        totals.discountCount += 1;
+        totals.discountAmount += r.shortfall;
+      }
+    }
+
+    res.json({ rows, totals });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
 
 /** Xodim moliyaviy yozuvlarni ko'ra oladimi (admin yoki alohida vakolat). */
 async function assertCanViewFinance(req: AuthedRequest): Promise<void> {

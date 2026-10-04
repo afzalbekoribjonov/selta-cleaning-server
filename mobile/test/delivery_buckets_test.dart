@@ -118,4 +118,34 @@ void main() {
       expect(sortDeliveryOrders(list, DeliverySort.distance).length, 3);
     });
   });
+
+
+  group('omborxona', () {
+    final now = DateTime(2026, 10, 20, 15);
+    Order late(int days, {Map<String, int> counts = const {'ready': 2}}) =>
+        order('w', counts: counts, due: DateTime(2026, 10, 20 - days, 9));
+
+    test('kartadagi "N kun kechikdi" bilan bir xil hisob', () {
+      expect(daysLate(late(11), now), 11);
+      expect(daysLate(late(0), now), 0);
+    });
+
+    test('chegara: 10 kun kechikkan hali omborda emas, 11 kun omborda', () {
+      expect(isInWarehouse(late(10), 10, now), isFalse);
+      expect(isInWarehouse(late(11), 10, now), isTrue);
+    });
+
+    test('hammasi tayyor bo\'lmasa omborga tushmaydi', () {
+      expect(isInWarehouse(late(30, counts: const {'ready': 1, 'washing': 1}), 10, now), isFalse);
+    });
+
+    test('muddati yo\'q buyurtma omborga tushmaydi', () {
+      expect(isInWarehouse(order('x', counts: const {'ready': 1}), 10, now), isFalse);
+    });
+
+    test('chegara admin sozlamasiga bo\'ysunadi', () {
+      expect(isInWarehouse(late(6), 5, now), isTrue);
+      expect(isInWarehouse(late(6), 30, now), isFalse);
+    });
+  });
 }

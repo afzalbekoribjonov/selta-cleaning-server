@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
@@ -7,26 +6,10 @@ import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show describeApiError, employeeClaimsProvider;
 import '../../core/services/catalog_repository.dart';
 import '../../core/services/tariff_settings.dart';
+import '../../core/utils/phone_format.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../shared/catalog_item_sheet.dart';
-
-/// "XX XXX XX XX" ko'rinishida guruhlaydi (talab #3: telefon raqami
-/// avtomatik formatlanishi) — 9 raqamdan ortig'ini qabul qilmaydi.
-class _UzPhoneFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    final rawDigits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final digits = rawDigits.length > 9 ? rawDigits.substring(0, 9) : rawDigits;
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      buffer.write(digits[i]);
-      if ((i == 1 || i == 4 || i == 6) && i != digits.length - 1) buffer.write(' ');
-    }
-    final formatted = buffer.toString();
-    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
-  }
-}
 
 /// Sotuv menejerining "Yangi buyurtma" formasi (talab #3): Ism familiya,
 /// telefon (avtomat formatlangan), Manzil, Xizmat turi. Olib kelish
@@ -198,7 +181,7 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
               controller: _phoneController,
               focusNode: _phoneFocus,
               keyboardType: TextInputType.phone,
-              inputFormatters: [_UzPhoneFormatter()],
+              inputFormatters: [UzPhoneFormatter()],
               decoration: const InputDecoration(prefixText: '+998 '),
               onChanged: (v) {
                 if (v.replaceAll(RegExp(r'\D'), '').length == 9) _phoneFocus.unfocus();

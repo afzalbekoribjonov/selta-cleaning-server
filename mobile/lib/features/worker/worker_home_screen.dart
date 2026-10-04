@@ -88,7 +88,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
             child: TextField(
               onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
               decoration: InputDecoration(
-                hintText: 'Ism, telefon yoki # bo\'yicha qidirish',
+                hintText: "Shu bo'limdan: ism, telefon yoki #",
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 isDense: true,
                 filled: true,
@@ -118,34 +118,9 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
                   }).toList();
                 }
 
+                // Qidiruv faqat JORIY bosqichdan (talab). Butun bazadan
+                // qidirish — yuqori o'ngdagi umumiy qidiruvda.
                 filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-                // Talab #11: buyurtma raqami bo'yicha qidiruv joriy
-                // bosqich (tab)ga cheklanmasin — boshqa bosqichdagi
-                // buyurtma ham topilishi va ochilishi kerak.
-                final searchNumber = RegExp(r'^\d+$').hasMatch(_search) ? int.tryParse(_search) : null;
-                if (filtered.isEmpty && searchNumber != null) {
-                  final elsewhere = orders.where((o) => o.orderNumber == searchNumber && o.serviceType == 'pickup').toList();
-                  if (elsewhere.isNotEmpty) {
-                    return ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 8),
-                          child: Text('Boshqa bosqichda topildi', style: TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 12.5)),
-                        ),
-                        for (final order in elsewhere) ...[
-                          OrderCard(
-                            order: order,
-                            onTap: () => openWorkerOrderDetailSheet(context, order),
-                            facts: [CardFact.stages(order)],
-                          ),
-                          const SizedBox(height: 10),
-                        ],
-                      ],
-                    );
-                  }
-                }
 
                 if (filtered.isEmpty) {
                   return Center(

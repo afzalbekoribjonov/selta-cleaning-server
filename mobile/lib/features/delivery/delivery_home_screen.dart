@@ -8,6 +8,7 @@ import '../../core/models/order.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/my_activity_repository.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/services/warehouse_settings.dart';
 import '../../core/sync/action_queue.dart';
 import '../../core/sync/pending_action.dart';
 import '../../core/utils/date_utils.dart';
@@ -123,11 +124,14 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
     final fullName = ref.watch(currentEmployeeProvider).valueOrNull?['fullName'] as String? ?? '...';
     final ordersAsync = ref.watch(ordersProvider);
     final orders = ordersAsync.valueOrNull ?? const <Order>[];
+    final warehouseDays = ref.warehouseThreshold;
+    final now = DateTime.now();
 
     final buckets = {
       _Tab.fresh: orders.where(isToPickUp).toList(),
       _Tab.almost: orders.where(isAlmostReady).toList(),
-      _Tab.ready: orders.where(isFullyReady).toList(),
+      // Muddatidan uzoq o'tganlari Omborxonaga o'tadi (⋮ menyu).
+      _Tab.ready: orders.where((o) => isFullyReady(o) && !isInWarehouse(o, warehouseDays, now)).toList(),
     };
 
     return Scaffold(

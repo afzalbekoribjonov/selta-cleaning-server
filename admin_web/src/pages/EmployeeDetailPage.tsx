@@ -43,6 +43,7 @@ import { OrderPermissionSection } from '@/components/employees/OrderPermissionSe
 import { OnsiteWashingPermissionSection } from '@/components/employees/OnsiteWashingPermissionSection'
 import { StatsPermissionSection } from '@/components/employees/StatsPermissionSection'
 import { FinancePermissionSection } from '@/components/employees/FinancePermissionSection'
+import { WarehousePermissionSection } from '@/components/employees/WarehousePermissionSection'
 import { WorkshopVisibilitySection } from '@/components/employees/WorkshopVisibilitySection'
 import { DeliverySelfAddedSection } from '@/components/employees/DeliverySelfAddedSection'
 
@@ -280,6 +281,7 @@ export default function EmployeeDetailPage() {
           berilishi mumkin (server ham bo'limni tekshirmaydi). */}
       <StatsPermissionSection employee={employee} />
       <FinancePermissionSection employee={employee} />
+      <WarehousePermissionSection employee={employee} />
       {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 [&>*]:min-w-0">

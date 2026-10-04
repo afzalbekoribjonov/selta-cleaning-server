@@ -5,15 +5,19 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/sync/sync_status_button.dart';
+import '../search/global_search_screen.dart';
 import 'create_order_screen.dart';
 
-/// 4 ta bo'lim panelining bir xil AppBar'i — bo'lim nomi va xodim ismi
-/// ko'rsatiladi, ism bosilsa profil/sozlamalar sahifasi ochiladi (talab #6:
-/// yuqori o'ngdagi alohida "chiqish" tugmasi olib tashlandi, chiqish endi
-/// shu sahifa ichida, tasdiqlashdan so'ng amalga oshadi). Talab: admin
-/// panelda "Buyurtma yaratish huquqi" berilgan (sotuv menejeri bo'lmagan)
-/// xodimlar uchun o'ng burchakda "+" tugmasi — bosilsa Yangi buyurtma
-/// sahifasi ochiladi ("O'zi keldi" bilan).
+/// Barcha bo'lim panellarining bir xil AppBar'i — bo'lim nomi va xodim
+/// ismi (bosilsa profil sahifasi). O'ng tomonda:
+///  - sinxronlash belgisi (faqat kerak bo'lganda ko'rinadi);
+///  - umumiy qidiruv — butun bazadan, telefon yoki buyurtma ID'si bo'yicha;
+///  - ⋮ menyu — vakolatga bog'liq va kam ishlatiladigan amallar.
+///
+/// Avval vakolatli tugmalar ("Yangi buyurtma", "Kunlik ko'rsatkichlar")
+/// to'g'ridan-to'g'ri yuqorida turardi — har yangi vakolat bilan ular
+/// ko'payib, sarlavhani siqib qo'yardi. Endi hammasi bitta menyuda,
+/// xodimga faqat o'ziga ruxsat berilganlari ko'rinadi.
 class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final String departmentLabel;
   final String employeeName;
@@ -25,38 +29,16 @@ class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final employee = ref.watch(currentEmployeeProvider).valueOrNull;
-    final department = employee?['department'] as String?;
-    final canCreateOrders = employee?['canCreateOrders'] as bool? ?? false;
-    final showCreateOrderButton = canCreateOrders && department != 'dispatcher';
-    // Talab: vakolat berilgan xodim uchun o'ng yuqori burchakda kunlik
-    // ko'rsatkichlar tugmasi.
-    final canViewStats = employee?['canViewStats'] as bool? ?? false;
-
     return AppBar(
       actions: [
         const SyncStatusButton(),
-        if (canViewStats)
-          IconButton(
-            onPressed: () => context.push('/stats'),
-            tooltip: "Kunlik ko'rsatkichlar",
-            style: IconButton.styleFrom(backgroundColor: AppColors.primary.withValues(alpha: 0.1)),
-            icon: const Icon(Icons.insights_rounded, color: AppColors.primary, size: 20),
-          ),
-        if (showCreateOrderButton)
-          IconButton(
-            onPressed: () => openCreateOrderScreen(context),
-            tooltip: 'Yangi buyurtma yaratish',
-            style: IconButton.styleFrom(backgroundColor: AppColors.primary.withValues(alpha: 0.1)),
-            icon: Container(
-              width: 30,
-              height: 30,
-              decoration: const BoxDecoration(gradient: heroGradient, shape: BoxShape.circle),
-              alignment: Alignment.center,
-              child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-            ),
-          ),
-        const SizedBox(width: 8),
+        IconButton(
+          onPressed: () => openGlobalSearch(context),
+          tooltip: 'Qidiruv',
+          icon: const Icon(Icons.search_rounded, color: AppColors.ink),
+        ),
+        const EmployeeMenuButton(),
+        const SizedBox(width: 4),
       ],
       title: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -74,30 +56,100 @@ class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
                 child: Image.asset('assets/brand/icon_white.png', fit: BoxFit.contain),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(departmentLabel),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          employeeName,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.grayDark),
+              // Flexible: o'ngdagi qidiruv/menyu belgilari joy egallagach,
+              // uzun bo'lim nomi (admin yaratgan maxsus bo'limlar) yoki katta
+              // shrift sozlamasida sarlavha ekrandan chiqib ketmasin.
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(departmentLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            employeeName,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.grayDark),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.chevron_right_rounded, size: 15, color: AppColors.grayDark),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 2),
+                        const Icon(Icons.chevron_right_rounded, size: 15, color: AppColors.grayDark),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+enum _MenuAction { createOrder, stats, warehouse, profile, sync }
+
+/// ⋮ menyu — xodimga FAQAT o'ziga ruxsat berilgan amallar ko'rinadi.
+///
+/// Vakolatlar admin panelda xodim sahifasida beriladi; ruxsat o'zgarsa
+/// menyu qayta kirishsiz yangilanadi (xodim profili jonli oqim).
+class EmployeeMenuButton extends ConsumerWidget {
+  const EmployeeMenuButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final employee = ref.watch(currentEmployeeProvider).valueOrNull;
+    final department = employee?['department'] as String?;
+    // Sotuv menejeri uchun buyurtma yaratish asosiy bo'limning o'zida.
+    final canCreateOrders = (employee?['canCreateOrders'] as bool? ?? false) && department != 'dispatcher';
+    final canViewStats = employee?['canViewStats'] as bool? ?? false;
+    final canAccessWarehouse = employee?['canAccessWarehouse'] as bool? ?? false;
+
+    return PopupMenuButton<_MenuAction>(
+      tooltip: 'Boshqa amallar',
+      icon: const Icon(Icons.more_vert_rounded, color: AppColors.ink),
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      onSelected: (action) {
+        switch (action) {
+          case _MenuAction.createOrder:
+            openCreateOrderScreen(context);
+          case _MenuAction.stats:
+            context.push('/stats');
+          case _MenuAction.warehouse:
+            context.push('/warehouse');
+          case _MenuAction.profile:
+            context.push('/profile');
+          case _MenuAction.sync:
+            showSyncSheet(context);
+        }
+      },
+      itemBuilder: (context) => [
+        if (canCreateOrders) _item(_MenuAction.createOrder, Icons.add_circle_rounded, 'Yangi buyurtma'),
+        if (canViewStats) _item(_MenuAction.stats, Icons.insights_rounded, "Kunlik ko'rsatkichlar"),
+        if (canAccessWarehouse) _item(_MenuAction.warehouse, Icons.warehouse_rounded, 'Omborxona'),
+        if (canCreateOrders || canViewStats || canAccessWarehouse) const PopupMenuDivider(),
+        _item(_MenuAction.profile, Icons.person_rounded, 'Bugungi ishim'),
+        _item(_MenuAction.sync, Icons.sync_rounded, 'Sinxronlash holati'),
+      ],
+    );
+  }
+
+  PopupMenuItem<_MenuAction> _item(_MenuAction value, IconData icon, String label) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.primary),
+          const SizedBox(width: 12),
+          // Katta shrift sozlamasida ham menyu kengligidan chiqmasin.
+          Flexible(
+            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
       ),
     );
   }

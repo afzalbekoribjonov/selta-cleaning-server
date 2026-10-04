@@ -24,11 +24,18 @@ Order longOrder({String service = 'pickup', String status = 'brought_in', Map<St
       pendingSync: true,
     );
 
-Future<void> pumpAt(WidgetTester tester, double width, Widget child) async {
+Future<void> pumpAt(WidgetTester tester, double width, Widget child, {double textScale = 1}) async {
   tester.view.physicalSize = Size(width * 3, 2400);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: [child]))));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(size: Size(width, 800), textScaler: TextScaler.linear(textScale)),
+        child: Scaffold(body: ListView(children: [child])),
+      ),
+    ),
+  );
   await tester.pump();
 }
 
@@ -51,6 +58,25 @@ void main() {
       // Toshib ketish bo'lsa Flutter testni o'zi xato bilan tugatadi.
       expect(tester.takeException(), isNull);
       expect(find.textContaining('#123456'), findsOneWidget);
+    });
+  }
+
+  // Ko'p xodimlar telefonda shriftni kattalashtiradi — 1.3x da ham
+  // hech narsa ekrandan chiqmasligi kerak.
+  for (final width in [360.0, 412.0]) {
+    testWidgets('katta shrift (1.3x) ${width.toInt()}px da toshib ketmaydi', (tester) async {
+      await pumpAt(
+        tester,
+        width,
+        OrderCard(
+          order: longOrder(),
+          onTap: () {},
+          facts: [CardFact.stages(longOrder())],
+          trailing: '~4.2 km',
+        ),
+        textScale: 1.3,
+      );
+      expect(tester.takeException(), isNull);
     });
   }
 

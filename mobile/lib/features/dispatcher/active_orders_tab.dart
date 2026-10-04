@@ -69,7 +69,7 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
           child: TextField(
             onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
             decoration: InputDecoration(
-              hintText: "Ism, telefon yoki # bo'yicha qidirish",
+              hintText: "Faol buyurtmalardan: ism, telefon yoki #",
               prefixIcon: const Icon(Icons.search_rounded, size: 20),
               isDense: true,
               filled: true,
@@ -91,10 +91,11 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
             loading: () => const SeltaLoadingView(),
             error: (err, _) => Center(child: Text('Xatolik: $err')),
             data: (allOrders) {
-              // Talab: "yetgazilgan (yakunlangan) buyurtmalar ham qidiruv
-              // orqali qidirilganda ko'rinsin" — qidiruv paytida
-              // yakunlanganlar ham qamrab olinadi, aks holda faqat faollar.
-              final base = _search.isEmpty ? allOrders.where((o) => !o.isDone).toList() : allOrders;
+              // Bo'lim qidiruvi faqat shu bo'limdan — faol buyurtmalar.
+              // Yakunlanganlarni topish endi yuqoridagi umumiy qidiruvda:
+              // u butun bazadan izlaydi (avval bu yerda faqat oxirgi 60 ta
+              // buyurtma ichidan topilardi, eskisi topilmasdi).
+              final base = allOrders.where((o) => !o.isDone).toList();
 
               final searched = _search.isEmpty
                   ? base

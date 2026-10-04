@@ -117,3 +117,22 @@ List<Order> sortDeliveryOrders(List<Order> orders, DeliverySort sort, {LatLng? f
   }
   return list;
 }
+
+/// Muddatdan necha kalendar kun o'tgani (o'tmagan bo'lsa 0 yoki manfiy).
+/// Kartadagi "N kun kechikdi" yozuvi bilan bir xil hisob.
+int daysLate(Order o, DateTime now) {
+  final due = effectiveDueDate(o);
+  if (due == null) return 0;
+  final today = DateTime(now.year, now.month, now.day);
+  return today.difference(DateTime(due.year, due.month, due.day)).inDays;
+}
+
+/// "Omborxona" — qolgan mahsulotlarning hammasi tayyor VA muddatidan
+/// [thresholdDays] kundan KO'P o'tgan (kartada "11 kun kechikdi" bo'lsa
+/// 10 kunlik chegarada omborga tushadi).
+///
+/// Hech qanday yozuv yoki rejalashtirilgan vazifasiz — buyurtma
+/// xulosasidan hisoblanadi, shuning uchun mijoz olib ketgani zahoti
+/// ombordan ham o'z-o'zidan chiqadi.
+bool isInWarehouse(Order o, int thresholdDays, DateTime now) =>
+    isFullyReady(o) && daysLate(o, now) > thresholdDays;

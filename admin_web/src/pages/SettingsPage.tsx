@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Mail, ShieldCheck, Info, Clock3, KeyRound, Check, RotateCcw } from 'lucide-react'
+import { Mail, ShieldCheck, Info, Clock3, KeyRound, Check, RotateCcw, Warehouse } from 'lucide-react'
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth'
 import { useAuth } from '@/lib/auth-context'
 import { ApiError } from '@/lib/api'
@@ -16,6 +16,7 @@ import {
   type TariffSetting,
 } from '@/lib/tariffs'
 import { Spinner } from '@/components/ui/Spinner'
+import { DEFAULT_WAREHOUSE_DAYS, subscribeWarehouseDays, updateWarehouseDays } from '@/lib/warehouse'
 
 const TARIFF_NOTES: Record<string, string> = {
   express: 'Eng tezkor xizmat — muddat ustuvor.',
@@ -53,6 +54,8 @@ export default function SettingsPage() {
       <ChangePasswordCard />
 
       <TariffSettingsCard />
+
+      <WarehouseSettingsCard />
 
       <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
@@ -425,5 +428,90 @@ function StagePreview({ setting }: { setting: TariffSetting }) {
         {stages.map((s) => `${s.days} kun ${s.label}`).join(' · ')}
       </p>
     </div>
+  )
+}
+
+/**
+ * Omborxona chegarasi. Qoida ilovada buyurtma xulosasidan hisoblanadi —
+ * shu son o'zgarishi bilan ombor ro'yxati hamma xodimda darhol yangilanadi
+ * (hech qanday buyurtma "ko'chirilmaydi", shuning uchun qaytarib
+ * o'zgartirish ham xavfsiz).
+ */
+function WarehouseSettingsCard() {
+  const [current, setCurrent] = useState<number | null>(null)
+  const [draft, setDraft] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(
+    () =>
+      subscribeWarehouseDays((days) => {
+        setCurrent(days)
+        setDraft((d) => (d === '' ? String(days) : d))
+      }),
+    [],
+  )
+
+  const parsed = Number(draft)
+  const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= 365
+  const dirty = current !== null && valid && parsed !== current
+
+  const mutation = useMutation({
+    mutationFn: () => updateWarehouseDays(parsed),
+    onSuccess: () => {
+      setSaved(true)
+      setError(null)
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Saqlab bo'lmadi"),
+  })
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+      <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">
+        <Warehouse size={18} className="text-brand-primary" />
+        Omborxona
+      </h2>
+      <p className="mb-4 text-xs text-gray-dark">
+        Barcha mahsulotlari tayyor buyurtma muddatidan shuncha kundan ko'p o'tsa (mijoz olib ketmasa), u
+        dastavchikning "Tayyor" ro'yxatidan Omborxonaga o'tadi. Omborxonani vakolat berilgan xodimlar
+        ko'radi — vakolat Xodimlar sahifasida beriladi.
+      </p>
+
+      {current === null ? (
+        <Spinner className="py-6" />
+      ) : (
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-dark">Kechikish chegarasi (kun)</span>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value)
+                setSaved(false)
+                setError(null)
+              }}
+              className="mt-1 block h-11 w-32 rounded-xl border border-border bg-bg px-3 text-center text-sm font-bold text-ink outline-none focus:border-brand-primary"
+            />
+          </label>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={!dirty || mutation.isPending}
+            className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-brand-primary px-4 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            <Check size={15} />
+            {mutation.isPending ? 'Saqlanmoqda...' : 'Saqlash'}
+          </button>
+          {!valid && <span className="text-xs font-bold text-danger">1 dan 365 gacha butun son</span>}
+          {saved && !dirty && <span className="text-xs font-bold text-success">Saqlandi</span>}
+          {error && <span className="text-xs font-bold text-danger">{error}</span>}
+          {current === DEFAULT_WAREHOUSE_DAYS && !dirty && !saved && (
+            <span className="text-xs text-gray-dark">Standart qiymat</span>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
