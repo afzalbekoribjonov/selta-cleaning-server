@@ -51,6 +51,7 @@ dependencies:
   # Admin panelni (admin.seltacleaning.uz) ilova ichida ochish uchun —
   # faqat ADMIN_PANEL build bayrog'i yoqilgan buildlarda ishlatiladi.
   webview_flutter: ^4.10.0
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:

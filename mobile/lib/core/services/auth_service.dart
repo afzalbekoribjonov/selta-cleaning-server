@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/employee_summary.dart';
 import 'api_client.dart';
+import 'local_store.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
@@ -13,20 +14,29 @@ final authStateProvider = StreamProvider<User?>((ref) {
 /// Joriy tizimga kirgan xodimning custom-claims'lari (role, employeeId,
 /// department) — loginWithPin orqali mint qilingan token ichida keladi.
 /// Auth holati o'zgarganda qayta o'qiladi.
+///
+/// Token MAJBURAN yangilanmaydi: claim'lar kirish paytidagi tokenga
+/// yozilgan va yangilash ularga hech narsa qo'shmaydi. Avval
+/// `getIdTokenResult(true)` edi — bu har startda Google serverlariga
+/// so'rov yuborardi (ekran shuni kutib qolardi), internetsiz esa
+/// butunlay xato berib, xodimning roli ham, ID'si ham aniqlanmay qolardi.
+///
+/// Token muddati o'tgan va internet yo'q bo'lsa ham ilova ishlashi uchun
+/// claim'lar qurilmada saqlanadi va shu holatda o'sha nusxadan olinadi.
 final employeeClaimsProvider = FutureProvider<EmployeeClaims?>((ref) async {
-  final authState = ref.watch(authStateProvider);
-  final user = authState.value;
+  final user = ref.watch(authStateProvider).value;
   if (user == null) return null;
 
-  final tokenResult = await user.getIdTokenResult(true);
-  final claims = tokenResult.claims;
-  if (claims == null || claims['employeeId'] == null) return null;
-
-  return EmployeeClaims(
-    employeeId: claims['employeeId'] as String,
-    role: claims['role'] as String,
-    department: claims['department'] as String,
-  );
+  final store = ref.read(localStoreProvider);
+  final cacheKey = 'claims.${user.uid}';
+  try {
+    final parsed = EmployeeClaims.fromClaims((await user.getIdTokenResult()).claims);
+    if (parsed != null) await store.setJson(cacheKey, parsed.toJson());
+    return parsed;
+  } catch (_) {
+    // Internetsiz va token muddati o'tgan — oxirgi ma'lum nusxa.
+    return EmployeeClaims.fromJson(store.getJson(cacheKey));
+  }
 });
 
 class AuthService {

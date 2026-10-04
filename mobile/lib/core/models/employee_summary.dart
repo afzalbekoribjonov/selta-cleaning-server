@@ -38,4 +38,19 @@ class EmployeeClaims {
   final String department;
 
   const EmployeeClaims({required this.employeeId, required this.role, required this.department});
+
+  /// Token claim'laridan — xodim tokeni bo'lmasa (masalan admin) `null`.
+  static EmployeeClaims? fromClaims(Map<String, dynamic>? claims) {
+    final employeeId = claims?['employeeId'];
+    if (employeeId is! String) return null;
+    return EmployeeClaims(
+      employeeId: employeeId,
+      role: claims!['role']?.toString() ?? '',
+      department: claims['department']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'employeeId': employeeId, 'role': role, 'department': department};
+
+  static EmployeeClaims? fromJson(Map<String, dynamic>? json) => fromClaims(json);
 }

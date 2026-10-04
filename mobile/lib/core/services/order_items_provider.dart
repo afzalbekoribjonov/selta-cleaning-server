@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/order.dart';
@@ -16,6 +18,17 @@ import 'orders_repository.dart';
 /// listener to'planib qolardi.
 final orderItemsProvider = StreamProvider.autoDispose.family<List<OrderItem>, String>((ref, orderId) {
   ref.watch(authStateProvider);
+
+  // Buyurtma yopilgandan keyin obuna yana bir necha daqiqa yashaydi: xodim
+  // ko'pincha bitta buyurtmani qayta-qayta ochadi va har safar Firestore'ga
+  // yangidan ulanish kechikish hamda qo'shimcha trafik berardi. Shu oraliqda
+  // qayta ochilsa — ro'yxat darhol, yangi ulanishsiz chiqadi.
+  final link = ref.keepAlive();
+  Timer? release;
+  ref.onCancel(() => release = Timer(const Duration(minutes: 3), link.close));
+  ref.onResume(() => release?.cancel());
+  ref.onDispose(() => release?.cancel());
+
   return ref.watch(ordersRepositoryProvider).watchItems(orderId);
 });
 
