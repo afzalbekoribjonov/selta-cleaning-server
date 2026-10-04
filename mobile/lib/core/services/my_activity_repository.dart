@@ -25,6 +25,7 @@ class StageEntry {
   final String id;
   final DateTime? at;
   final String orderId;
+  final String? itemId;
   final int orderNumber;
   final String customerName;
   final String itemName;
@@ -37,6 +38,7 @@ class StageEntry {
     required this.id,
     required this.at,
     required this.orderId,
+    this.itemId,
     required this.orderNumber,
     required this.customerName,
     required this.itemName,
@@ -50,6 +52,7 @@ class StageEntry {
         id: m['id']?.toString() ?? '',
         at: DateTime.tryParse(m['at']?.toString() ?? '')?.toLocal(),
         orderId: m['orderId']?.toString() ?? '',
+        itemId: m['itemId']?.toString(),
         orderNumber: (m['orderNumber'] as num?)?.toInt() ?? 0,
         customerName: m['customerName']?.toString() ?? '',
         itemName: m['itemName']?.toString() ?? 'Mahsulot',

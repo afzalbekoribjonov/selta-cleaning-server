@@ -186,6 +186,7 @@ employeeActivityRouter.post("/myDailyActivity", withAuth, async (req: AuthedRequ
         id: doc.id,
         at: toIso(e.at),
         orderId: (e.orderId as string) ?? "",
+        itemId: (e.itemId as string | null) ?? null,
         orderNumber: (e.orderNumber as number) ?? 0,
         customerName: (e.customerName as string) ?? "",
         itemName: (e.itemName as string) ?? "Mahsulot",
@@ -280,6 +281,8 @@ interface StageRow {
   id: string;
   at: string | null;
   orderId: string;
+  /** Mahsulot — ilova oflayn topshirganlari bilan solishtirish uchun. */
+  itemId: string | null;
   orderNumber: number;
   customerName: string;
   itemName: string;

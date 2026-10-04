@@ -135,7 +135,11 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
                           child: Text('Boshqa bosqichda topildi', style: TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 12.5)),
                         ),
                         for (final order in elsewhere) ...[
-                          OrderCard(order: order, onTap: () => openWorkerOrderDetailSheet(context, order)),
+                          OrderCard(
+                            order: order,
+                            onTap: () => openWorkerOrderDetailSheet(context, order),
+                            facts: [CardFact.stages(order)],
+                          ),
                           const SizedBox(height: 10),
                         ],
                       ],
@@ -158,7 +162,11 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
                     final order = filtered[i];
-                    return OrderCard(order: order, onTap: () => openWorkerOrderDetailSheet(context, order));
+                    return OrderCard(
+                      order: order,
+                      onTap: () => openWorkerOrderDetailSheet(context, order),
+                      facts: [CardFact.stages(order)],
+                    );
                   },
                 );
               },

@@ -1,38 +1,52 @@
+import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/employee_repository.dart';
+import '../../core/services/my_activity_repository.dart';
 import '../../core/services/orders_repository.dart';
-import '../../core/utils/launch_utils.dart';
+import '../../core/sync/action_queue.dart';
+import '../../core/sync/pending_action.dart';
+import '../../core/utils/date_utils.dart';
+import '../../core/utils/money_utils.dart';
 import '../../core/widgets/selta_loader.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/employee_app_bar.dart';
 import '../shared/team_jobs_section.dart';
+import 'delivery_buckets.dart';
 import 'delivery_order_detail_sheet.dart';
 
-// Talab: dastavchik mijozdan olgach, alohida "Qabul qilindi" bosqichisiz
-// to'g'ridan-to'g'ri ishchilar navbatiga o'tadi — bu oraliq bosqich
-// qo'shimcha ish talab qilgani uchun tab sifatida olib tashlandi.
-const _stages = [
-  ('new', 'Yangi', Icons.move_to_inbox_rounded),
-  ('ready', 'Yetkazishga tayyor', Icons.done_all_rounded),
+enum _Tab { fresh, almost, ready, delivered }
+
+const _tabs = [
+  (_Tab.fresh, 'Yangi', Icons.move_to_inbox_rounded),
+  (_Tab.almost, 'Deyarli tayyor', Icons.hourglass_bottom_rounded),
+  (_Tab.ready, 'Tayyor', Icons.done_all_rounded),
+  (_Tab.delivered, 'Yetgazildi', Icons.local_shipping_rounded),
 ];
 
-/// "Yetkazishga tayyor" endi order-level status emas — har bir item
-/// mustaqil ravishda "ready"ga yetadi (talab #9). Shu bosqichdagi
-/// buyurtmalar — "brought_in"da turgan VA kamida bitta "ready" itemga
-/// ega bo'lganlar.
-/// Buyurtmada yetkazishga tayyor mahsulot bormi — buyurtmadagi HOSILA
-/// maydondan (server: lib/orderSummary.ts). Avval bu har bir buyurtma
-/// uchun alohida `items` obunasini talab qilardi.
-bool _hasReadyItem(Order order) => (order.itemStatusCounts['ready'] ?? 0) > 0;
+/// Har bir bo'limga MAZMUNAN tegishli tartiblar. "Yangi"da narx va
+/// muddat hali ahamiyatsiz (mahsulotlar o'lchanmagan), "Yetgazildi"da esa
+/// masofa ma'nosiz — pul allaqachon olingan.
+const _sortsFor = {
+  _Tab.fresh: [DeliverySort.all, DeliverySort.date, DeliverySort.distance],
+  _Tab.almost: DeliverySort.values,
+  _Tab.ready: DeliverySort.values,
+  _Tab.delivered: [DeliverySort.all, DeliverySort.priceHigh, DeliverySort.priceLow],
+};
 
-/// Dastavchik paneli — olib ketish (new -> brought_in, bitta bosqichda,
-/// GPS bilan) jarayonini boshqaradi; yetkazib berish endi ITEM-darajasida (talab
-/// #9: qisman yetkazish) — "Yetkazishga tayyor" tabida kamida bitta
-/// "ready" itemga ega buyurtmalar ko'rsatiladi.
+/// Dastavchik paneli — to'rt bo'lim:
+///  - Yangi          — mijozdan olib kelinishi kerak;
+///  - Deyarli tayyor — mahsulotlarning bir qismi tayyor (masalan 4 tadan 2);
+///  - Tayyor         — qolgan mahsulotlarning hammasi tayyor, olib borish mumkin;
+///  - Yetgazildi     — aynan BUGUN shu dastavchik topshirganlari.
+///
+/// Birinchi uchtasi buyurtma xulosasidan (`itemStatusCounts`) hisoblanadi
+/// — mahsulotlarni o'qimaydi. Qidiruv faqat JORIY bo'lim ichida; butun
+/// bazadan qidirish — yuqoridagi umumiy qidiruvda.
 class DeliveryHomeScreen extends ConsumerStatefulWidget {
   const DeliveryHomeScreen({super.key});
 
@@ -41,172 +55,516 @@ class DeliveryHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
-  int _stageIndex = 0;
+  _Tab _tab = _Tab.fresh;
   String _search = '';
+  final Map<_Tab, DeliverySort> _sort = {for (final t in _Tab.values) t: DeliverySort.all};
 
-  /// Firestore'dan topilgan, ilova keshida yo'q buyurtmalar.
-  ///
-  /// Qidiruv AVVAL keshdan (faol va oxirgi yuklangan buyurtmalar) izlaydi
-  /// — odatdagi holat shu va u bitta ham qo'shimcha o'qishga sabab
-  /// bo'lmaydi. Faqat keshda hech narsa topilmaganda serverga murojaat
-  /// qilinadi: raqam bo'yicha aniq moslik, telefon esa faqat TO'LIQ
-  /// kiritilganda.
-  List<Order> _remote = const [];
-  bool _searching = false;
-  String _remoteFor = '';
+  /// Dastavchikning joylashuvi — faqat "Masofa" tanlanganda so'raladi va
+  /// bir necha daqiqa eslab qolinadi (har safar GPS'ni yoqmaslik uchun).
+  LatLng? _position;
+  DateTime? _positionAt;
+  bool _locating = false;
+  String? _locationError;
 
-  /// `build` ichidan chaqiriladi, shuning uchun holat qurish tugagandan
-  /// KEYIN o'zgartiriladi — aks holda "setState() called during build"
-  /// istisnosi tushardi.
-  void _scheduleRemoteSearch(String term) {
-    if (term.isEmpty || _remoteFor == term || _searching) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _searchRemote(term));
-  }
+  bool get _positionFresh =>
+      _position != null && _positionAt != null && DateTime.now().difference(_positionAt!) < const Duration(minutes: 3);
 
-  Future<void> _searchRemote(String term) async {
-    if (!mounted || term.isEmpty || _remoteFor == term) return;
+  Future<void> _ensurePosition() async {
+    if (_positionFresh || _locating) return;
     setState(() {
-      _searching = true;
-      _remoteFor = term;
+      _locating = true;
+      _locationError = null;
     });
     try {
-      final found = await ref.read(ordersRepositoryProvider).searchOrders(term);
-      if (mounted && _remoteFor == term) {
-        setState(() {
-          _remote = found.where((o) => o.serviceType == 'pickup').toList();
-          _searching = false;
-        });
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw "Telefonda joylashuv (GPS) o'chiq";
       }
-    } catch (_) {
-      if (mounted) setState(() => _searching = false);
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        throw 'Joylashuv ruxsati berilmadi — sozlamalardan yoqing';
+      }
+      // Avval oxirgi ma'lum joylashuv — darhol natija; aniqrog'i keyin.
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        setState(() => _position = (lat: last.latitude, lng: last.longitude));
+      }
+      final current = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 15)),
+      );
+      if (!mounted) return;
+      setState(() {
+        _position = (lat: current.latitude, lng: current.longitude);
+        _positionAt = DateTime.now();
+      });
+    } catch (e) {
+      if (mounted && _position == null) {
+        setState(() => _locationError = e is String ? e : "Joylashuvni aniqlab bo'lmadi");
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
+  }
+
+  void _selectSort(DeliverySort sort) {
+    setState(() => _sort[_tab] = sort);
+    if (sort == DeliverySort.distance) _ensurePosition();
+  }
+
+  bool _matches(Order o) {
+    if (_search.isEmpty) return true;
+    return o.customerName.toLowerCase().contains(_search) ||
+        o.phone.contains(_search) ||
+        o.orderNumber.toString().contains(_search);
   }
 
   @override
   Widget build(BuildContext context) {
-    final employeeAsync = ref.watch(currentEmployeeProvider);
-    final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
+    final fullName = ref.watch(currentEmployeeProvider).valueOrNull?['fullName'] as String? ?? '...';
     final ordersAsync = ref.watch(ordersProvider);
-    final stage = _stages[_stageIndex].$1;
+    final orders = ordersAsync.valueOrNull ?? const <Order>[];
+
+    final buckets = {
+      _Tab.fresh: orders.where(isToPickUp).toList(),
+      _Tab.almost: orders.where(isAlmostReady).toList(),
+      _Tab.ready: orders.where(isFullyReady).toList(),
+    };
 
     return Scaffold(
       appBar: EmployeeAppBar(departmentLabel: 'Dastavchik', employeeName: fullName),
       body: Column(
         children: [
           const TeamJobsSection(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              onChanged: (v) => setState(() {
-                _search = v.trim().toLowerCase();
-                _remote = const [];
-                _remoteFor = '';
-                _searching = false;
-              }),
-              decoration: InputDecoration(
-                hintText: 'Ism, telefon yoki # bo\'yicha qidirish',
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                isDense: true,
-                filled: true,
-                fillColor: AppColors.surface,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
-              ),
-            ),
+          _SearchField(
+            onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
+          ),
+          _SortChips(
+            options: _sortsFor[_tab]!,
+            selected: _sort[_tab]!,
+            locating: _locating,
+            onSelected: _selectSort,
           ),
           Expanded(
-            child: ordersAsync.when(
-              loading: () => const SeltaLoadingView(),
-              error: (err, _) => Center(child: Text('Xatolik: $err')),
-              data: (orders) {
-                var filtered = stage == 'ready'
-                    ? orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in' && _hasReadyItem(o)).toList()
-                    : orders.where((o) => o.serviceType == 'pickup' && o.status == stage).toList();
-
-                if (_search.isNotEmpty) {
-                  filtered = filtered.where((o) {
-                    return o.customerName.toLowerCase().contains(_search) ||
-                        o.phone.toLowerCase().contains(_search) ||
-                        o.orderNumber.toString().contains(_search);
-                  }).toList();
-                }
-                filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-                // Qidiruv joriy tabga cheklanmaydi: avval butun keshdan
-                // (boshqa bosqichlardan ham) izlanadi.
-                if (filtered.isEmpty && _search.isNotEmpty) {
-                  final elsewhere = orders
-                      .where((o) =>
-                          o.serviceType == 'pickup' &&
-                          (o.orderNumber.toString().contains(_search) ||
-                              o.phone.toLowerCase().contains(_search) ||
-                              o.customerName.toLowerCase().contains(_search)))
-                      .toList();
-                  if (elsewhere.isNotEmpty) {
-                    return _SearchResults(title: 'Boshqa bosqichda topildi', orders: elsewhere);
-                  }
-
-                  // Keshda yo'q — endi Firestore'dan.
-                  _scheduleRemoteSearch(_search);
-                  // So'rov hali yakunlanmagan bo'lsa yuklanish ko'rsatiladi:
-                  // aks holda natija kelgunga qadar bir lahza "topilmadi"
-                  // yonib ketardi.
-                  final done = _remoteFor == _search && !_searching;
-                  if (!done) return const SeltaLoadingView();
-                  if (_remote.isNotEmpty) {
-                    return _SearchResults(title: 'Bazadan topildi', orders: _remote);
-                  }
-                  return const Center(
-                    child: Text('Buyurtma topilmadi', style: TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600)),
-                  );
-                }
-
-                if (filtered.isEmpty) {
-                  return const Center(
-                    child: Text('Bu bo\'limda buyurtma yo\'q', style: TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600)),
-                  );
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) {
-                    final order = filtered[i];
-                    return OrderCard(
-                      order: order,
-                      onTap: () => openDeliveryOrderDetailSheet(context, order),
-                      emphasizePrice: stage == 'ready',
-                      actions: [
-                        CardActionButton(icon: Icons.call_rounded, label: "Qo'ng'iroq", onTap: () => callPhone(order.phone)),
-                        if (stage == 'ready' && order.gpsCoords != null && order.gpsCoords!.isNotEmpty)
-                          CardActionButton(icon: Icons.navigation_rounded, label: "Yo'lga chiqish", filled: true, onTap: () => navigateToGps(order.gpsCoords!)),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
+            child: _tab == _Tab.delivered
+                ? _DeliveredTab(sort: _sort[_tab]!, matches: _search)
+                : ordersAsync.isLoading && orders.isEmpty
+                    ? const SeltaLoadingView()
+                    : _OrdersList(
+                        tab: _tab,
+                        orders: buckets[_tab]!.where(_matches).toList(),
+                        sort: _sort[_tab]!,
+                        position: _position,
+                        locationError: _sort[_tab] == DeliverySort.distance ? _locationError : null,
+                        locating: _locating,
+                      ),
           ),
         ],
       ),
-      bottomNavigationBar: ordersAsync.when(
-        loading: () => null,
-        error: (_, __) => null,
-        data: (orders) {
-          final pickupOrders = orders.where((o) => o.serviceType == 'pickup').toList();
-          final broughtIn = pickupOrders.where((o) => o.status == 'brought_in').toList();
-          int countFor(String s) =>
-              s == 'ready' ? broughtIn.where((o) => _hasReadyItem(o)).length : pickupOrders.where((o) => o.status == s).length;
-          return NavigationBar(
-            selectedIndex: _stageIndex,
-            onDestinationSelected: (i) => setState(() => _stageIndex = i),
-            destinations: [
-              for (final (s, label, icon) in _stages) NavigationDestination(icon: _BadgedIcon(icon: icon, count: countFor(s)), label: label),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tabs.indexWhere((t) => t.$1 == _tab),
+        onDestinationSelected: (i) => setState(() => _tab = _tabs[i].$1),
+        destinations: [
+          for (final (tab, label, icon) in _tabs)
+            NavigationDestination(
+              // "Yetgazildi" — tarix, bajariladigan ish emas: unga son
+              // qo'yilmaydi (aks holda u doim "e'tibor kerak" kabi ko'rinardi).
+              icon: _BadgedIcon(icon: icon, count: buckets[tab]?.length ?? 0),
+              label: label,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  final ValueChanged<String> onChanged;
+  const _SearchField({required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      child: TextField(
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          hintText: "Shu bo'limdan: ism, telefon yoki #",
+          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          isDense: true,
+          filled: true,
+          fillColor: AppColors.surface,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+        ),
+      ),
+    );
+  }
+}
+
+class _SortChips extends StatelessWidget {
+  final List<DeliverySort> options;
+  final DeliverySort selected;
+  final bool locating;
+  final ValueChanged<DeliverySort> onSelected;
+
+  const _SortChips({required this.options, required this.selected, required this.locating, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+        itemCount: options.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final sort = options[i];
+          final active = sort == selected;
+          return ChoiceChip(
+            label: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (sort == DeliverySort.distance && active && locating) ...[
+                  const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                  const SizedBox(width: 6),
+                ],
+                Text(deliverySortLabels[sort]!),
+              ],
+            ),
+            selected: active,
+            showCheckmark: false,
+            onSelected: (_) => onSelected(sort),
+            visualDensity: VisualDensity.compact,
+            selectedColor: AppColors.primary,
+            backgroundColor: AppColors.surface,
+            side: BorderSide(color: active ? AppColors.primary : AppColors.border),
+            labelStyle: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: active ? Colors.white : AppColors.ink,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OrdersList extends StatelessWidget {
+  final _Tab tab;
+  final List<Order> orders;
+  final DeliverySort sort;
+  final LatLng? position;
+  final String? locationError;
+  final bool locating;
+
+  const _OrdersList({
+    required this.tab,
+    required this.orders,
+    required this.sort,
+    required this.position,
+    required this.locationError,
+    required this.locating,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (sort == DeliverySort.distance && position == null) {
+      return _Message(
+        icon: locationError != null ? Icons.location_off_rounded : Icons.my_location_rounded,
+        text: locationError ?? (locating ? 'Joylashuv aniqlanmoqda…' : "Masofa uchun joylashuv kerak"),
+      );
+    }
+
+    final sorted = sortDeliveryOrders(orders, sort, from: position);
+    final hiddenWithoutGps = sort == DeliverySort.distance ? orders.length - sorted.length : 0;
+
+    if (sorted.isEmpty) {
+      return _Message(
+        icon: Icons.inbox_rounded,
+        text: hiddenWithoutGps > 0 ? "GPS manzili saqlangan buyurtma yo'q" : "Bu bo'limda buyurtma yo'q",
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      itemCount: sorted.length + (hiddenWithoutGps > 0 ? 1 : 0),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, i) {
+        if (i == sorted.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(
+              "GPS manzili yo'q $hiddenWithoutGps ta buyurtma ko'rsatilmadi",
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: AppColors.gray, fontWeight: FontWeight.w600),
+            ),
+          );
+        }
+        final order = sorted[i];
+        final gps = parseGps(order.gpsCoords);
+        return OrderCard(
+          order: order,
+          onTap: () => openDeliveryOrderDetailSheet(context, order),
+          facts: _factsFor(tab, order),
+          trailing: position != null && gps != null ? formatDistance(distanceKm(position!, gps)) : null,
+        );
+      },
+    );
+  }
+
+  static List<CardFact> _factsFor(_Tab tab, Order o) {
+    switch (tab) {
+      case _Tab.fresh:
+        final items = o.itemStatusCounts.values.fold<int>(0, (s, v) => s + v);
+        return [
+          CardFact(
+            Icons.schedule_rounded,
+            'Qabul: ${formatDateUz(o.createdAt)}, ${formatTimeHm(o.createdAt)}${items > 0 ? ' · $items mahsulot' : ''}',
+          ),
+        ];
+      case _Tab.almost:
+        final ready = readyItems(o);
+        final remaining = remainingItems(o);
+        final c = o.itemStatusCounts;
+        final rest = <String>[
+          if ((c['pending'] ?? 0) > 0) '${c['pending']} navbatda',
+          if ((c['washing'] ?? 0) > 0) '${c['washing']} yuvilmoqda',
+          if ((c['returned'] ?? 0) > 0) '${c['returned']} qaytarilgan',
+          if ((c['packing'] ?? 0) > 0) '${c['packing']} upakovkada',
+        ];
+        return [
+          CardFact(Icons.check_circle_rounded, '$ready/$remaining tayyor', color: AppColors.success, strong: true),
+          if (rest.isNotEmpty) CardFact(Icons.pending_rounded, rest.join(' · ')),
+        ];
+      case _Tab.ready:
+        return [
+          CardFact(Icons.payments_rounded, "Yig'ish: ${formatMoneyUz(o.totalPrice)}", color: AppColors.success, strong: true),
+        ];
+      case _Tab.delivered:
+        return const [];
+    }
+  }
+}
+
+/// Bugun topshirilgan buyurtmalar.
+///
+/// Manba — serverdagi kunlik jurnal (aniq va faqat shu dastavchikniki),
+/// ustiga hali serverga yetmagan (oflayn) topshirishlar qo'shiladi.
+/// Avvalgi hisob barcha faol buyurtmalarning mahsulotlariga ALOHIDA va
+/// abadiy obuna ochardi — yuzlab ulanish; bu esa bitta so'rov.
+class _DeliveredTab extends ConsumerWidget {
+  final DeliverySort sort;
+  final String matches;
+
+  const _DeliveredTab({required this.sort, required this.matches});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activityAsync = ref.watch(myDailyActivityProvider);
+    final queue = ref.watch(actionQueueProvider);
+
+    // Oflayn topshirilgan buyurtma serverga yetgach jurnal qayta olinadi —
+    // aks holda u navbatdan chiqib, ro'yxatdan ham yo'qolib qolardi.
+    ref.listen<List<PendingAction>>(actionQueueProvider, (prev, next) {
+      bool justAcked(PendingAction a) =>
+          a.path == '/deliverOrderItems' && a.acked && !(prev ?? const []).any((p) => p.id == a.id && p.acked);
+      if (next.any(justAcked)) ref.invalidate(myDailyActivityProvider);
+    });
+
+    if (activityAsync.isLoading && !activityAsync.hasValue) return const SeltaLoadingView();
+
+    final rows = groupDelivered(
+      activityAsync.valueOrNull?.delivered ?? const [],
+      queue,
+      today: DateTime.now(),
+    ).where((r) => matches.isEmpty || r.customerName.toLowerCase().contains(matches) || '${r.orderNumber}'.contains(matches)).toList();
+
+    switch (sort) {
+      case DeliverySort.priceHigh:
+        rows.sort((a, b) => b.amount.compareTo(a.amount));
+      case DeliverySort.priceLow:
+        rows.sort((a, b) => a.amount.compareTo(b.amount));
+      default:
+        rows.sort((a, b) => (b.at ?? DateTime(0)).compareTo(a.at ?? DateTime(0)));
+    }
+
+    if (rows.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () => ref.refresh(myDailyActivityProvider.future),
+        child: ListView(
+          children: [
+            const SizedBox(height: 120),
+            _Message(
+              icon: activityAsync.hasError ? Icons.cloud_off_rounded : Icons.inbox_rounded,
+              text: activityAsync.hasError ? "Ro'yxatni yuklab bo'lmadi — tortib yangilang" : "Bugun hali topshirilgan buyurtma yo'q",
+            ),
+          ],
+        ),
+      );
+    }
+
+    final total = rows.fold<num>(0, (s, r) => s + r.amount);
+    return RefreshIndicator(
+      onRefresh: () => ref.refresh(myDailyActivityProvider.future),
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        itemCount: rows.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, i) {
+          if (i == 0) {
+            return Text(
+              '${rows.length} ta buyurtma · ${formatMoneyUz(total)}',
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.grayDark),
+            );
+          }
+          final row = rows[i - 1];
+          final order = _orderFor(ref, row);
+          return OrderCard(
+            order: order,
+            onTap: () => _open(context, ref, row.orderId, order),
+            facts: [
+              CardFact(
+                Icons.check_circle_rounded,
+                '${row.itemCount} ta mahsulot · ${formatMoneyUz(row.amount)}'
+                '${row.at != null ? ' · ${formatTimeHm(row.at!)}' : ''}',
+                color: AppColors.success,
+                strong: true,
+              ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// Keshdagi to'liq buyurtma; yo'q bo'lsa (ancha eski, yakunlangan)
+  /// jurnaldagi ma'lumotdan qisqa nusxa — kartani chizish uchun yetarli.
+  static Order _orderFor(WidgetRef ref, DeliveredRow row) {
+    for (final o in ref.read(ordersProvider).valueOrNull ?? const <Order>[]) {
+      if (o.id == row.orderId) return row.pending ? o.copyWith(pendingSync: true) : o;
+    }
+    return Order(
+      id: row.orderId,
+      orderNumber: row.orderNumber,
+      customerName: row.customerName,
+      phone: '',
+      location: '',
+      serviceType: 'pickup',
+      status: 'done',
+      createdBy: '',
+      createdAt: row.at ?? DateTime.now(),
+      pendingSync: row.pending,
+    );
+  }
+
+  /// To'liq ma'lumot bilan ochadi — qisqa nusxa bo'lsa hujjat o'qiladi
+  /// (avval qurilma keshidan, bo'lmasa serverdan).
+  static Future<void> _open(BuildContext context, WidgetRef ref, String orderId, Order fallback) async {
+    var order = fallback;
+    if (fallback.phone.isEmpty) {
+      try {
+        final doc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
+        if (doc.exists) order = Order.fromFirestore(doc);
+      } catch (_) {
+        // Internetsiz va keshda yo'q — qisqa nusxa bilan ochiladi.
+      }
+    }
+    if (context.mounted) openDeliveryOrderDetailSheet(context, order);
+  }
+}
+
+/// Bitta topshirilgan buyurtma (bugungi).
+class DeliveredRow {
+  final String orderId;
+  final int orderNumber;
+  final String customerName;
+  int itemCount;
+  num amount;
+  DateTime? at;
+
+  /// Hali serverga yetmagan (oflayn) topshirish.
+  bool pending;
+
+  DeliveredRow({
+    required this.orderId,
+    required this.orderNumber,
+    required this.customerName,
+    this.itemCount = 0,
+    this.amount = 0,
+    this.at,
+    this.pending = false,
+  });
+}
+
+/// Jurnal yozuvlari (mahsulot bo'yicha) + navbatdagi topshirishlar ->
+/// buyurtma bo'yicha guruhlangan ro'yxat.
+///
+/// Navbatdagi amal serverga yetib, jurnalda paydo bo'lgach ham u bir
+/// necha soniya navbatda turadi — shu oraliqda ikki marta sanalmasligi
+/// uchun jurnalda bor mahsulotlar navbatdan olinmaydi.
+List<DeliveredRow> groupDelivered(List<StageEntry> logged, List<PendingAction> queue, {required DateTime today}) {
+  final byOrder = <String, DeliveredRow>{};
+  final loggedItems = <String>{};
+
+  for (final e in logged) {
+    if (e.itemId != null) loggedItems.add(e.itemId!);
+    final row = byOrder.putIfAbsent(
+      e.orderId,
+      () => DeliveredRow(orderId: e.orderId, orderNumber: e.orderNumber, customerName: e.customerName),
+    );
+    row.itemCount++;
+    row.amount += e.price;
+    if (e.at != null && (row.at == null || e.at!.isAfter(row.at!))) row.at = e.at;
+  }
+
+  for (final a in queue) {
+    if (a.path != '/deliverOrderItems' || a.failed || a.orderId == null) continue;
+    final sameDay = a.createdAt.year == today.year && a.createdAt.month == today.month && a.createdAt.day == today.day;
+    if (!sameDay) continue;
+    final itemIds = (a.body['itemIds'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+    final fresh = itemIds.where((id) => !loggedItems.contains(id)).length;
+    if (fresh == 0) continue;
+
+    // Raqam va ism bu yerda yo'q: oflayn topshirilgan buyurtma doim
+    // qurilma keshida (xodim uni ochib topshirgan), karta ularni o'sha
+    // yerdan oladi.
+    final row = byOrder.putIfAbsent(
+      a.orderId!,
+      () => DeliveredRow(orderId: a.orderId!, orderNumber: 0, customerName: ''),
+    );
+    row.itemCount += fresh;
+    row.amount += (a.body['paidAmount'] as num?) ?? 0;
+    row.pending = true;
+    if (row.at == null || a.createdAt.isAfter(row.at!)) row.at = a.createdAt;
+  }
+  return byOrder.values.toList();
+}
+
+class _Message extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _Message({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 36, color: AppColors.gray),
+            const SizedBox(height: 10),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -224,35 +582,6 @@ class _BadgedIcon extends StatelessWidget {
       label: Text(count > 99 ? '99+' : '$count'),
       backgroundColor: AppColors.danger,
       child: Icon(icon),
-    );
-  }
-}
-
-
-/// Qidiruv natijalari — joriy bosqichdan tashqarida topilganlar.
-class _SearchResults extends StatelessWidget {
-  final String title;
-  final List<Order> orders;
-
-  const _SearchResults({required this.title, required this.orders});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            title,
-            style: const TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 12.5),
-          ),
-        ),
-        for (final order in orders) ...[
-          OrderCard(order: order, onTap: () => openDeliveryOrderDetailSheet(context, order)),
-          const SizedBox(height: 10),
-        ],
-      ],
     );
   }
 }

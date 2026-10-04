@@ -7,222 +7,309 @@ import '../../../core/services/order_items_provider.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/money_utils.dart';
 
-/// Buyurtma kartasi — status bo'yicha chap chiziq, tarif rangli belgi,
-/// muddati o'tgan buyurtmalar qizil bilan ajratiladi (talab: "kechikayotgan
-/// buyurtmalar qizil bo'lib... ko'rinib turishi shart"). Buyurtma summasi
-/// har doim ko'rinadi; `emphasizePrice` bilan (masalan Dastavchik "tayyor"
-/// bosqichida — mijozdan pul yig'ish kerak bo'lganda) katta va yorqinroq
-/// ko'rsatiladi.
+/// Ro'yxatdagi buyurtma kartasi — barcha bo'limlarda bir xil "ixcham"
+/// ramka; o'rtadagi qatorlar ([facts]) bo'limga qarab o'zgaradi.
+///
+/// Tuzilish:
+///   #1245 · Aziz Karimov ................ [Tayyor]
+///   90 123 45 67 · Yunusobod 4-kv.
+///   (bo'limga xos qatorlar)                 ~4 km
+///   12-okt · 2 kun qoldi
+///
+/// Tugmalar ATAYLAB yo'q: karta bosilganda ichki kartada barcha amallar
+/// bor. Holat chap tomondagi rangli chiziq bilan, muddati o'tgani qizil
+/// chegara bilan ajraladi.
+///
+/// Avvalgi karta `IntrinsicHeight` ishlatardi — u har bir kartani ikki
+/// marta o'lchaydi va uzun ro'yxatda aylantirish sezilarli sekinlashardi.
+/// Sarlavha qatori esa `Spacer` bilan qurilgan edi: uzun ism yoki holat
+/// matni ekrandan chiqib ketardi. Endi har bir matn o'z joyida qisqaradi.
 class OrderCard extends StatelessWidget {
   final Order order;
   final VoidCallback onTap;
-  final List<Widget>? actions;
-  final bool emphasizePrice;
 
-  const OrderCard({
-    super.key,
-    required this.order,
-    required this.onTap,
-    this.actions,
-    this.emphasizePrice = false,
-  });
+  /// Bo'limga xos qatorlar. Berilmasa — buyurtma summasi.
+  final List<CardFact>? facts;
+
+  /// Birinchi qatorning o'ng tomonida (masalan masofa "~4 km").
+  final String? trailing;
+
+  const OrderCard({super.key, required this.order, required this.onTap, this.facts, this.trailing});
 
   @override
   Widget build(BuildContext context) {
-    final status = statusOf(order.status);
-    // Pickup buyurtmalarda tarif endi item-darajasida — order.tariff faqat
-    // onsite uchun mavjud, shuning uchun pill faqat shunda ko'rsatiladi.
-    final tariff = order.tariff != null ? tariffOf(order.tariff) : null;
-
-    // Talab: kartada mahsulotning eng yaqin topshirish sanasi va necha kun
-    // qolgani ko'rinsin. Qiymat buyurtmaning o'zidan o'qiladi — karta
-    // endi mahsulotlarga obuna BO'LMAYDI (o'qishlarni tejash uchun).
+    final stage = orderStage(order);
     final dueDate = effectiveDueDate(order);
     final overdue = dueDate != null && !order.isDone && DateTime.now().isAfter(dueDate);
-
-    // Talab: jamoa biriktirilmagan joyida-yuvish buyurtmasi e'tiborni
-    // tortib turishi kerak.
+    // Jamoa biriktirilmagan joyida-yuvish buyurtmasi e'tiborni tortib
+    // turishi kerak (talab).
     final needsTeam = order.serviceType == 'onsite' && order.status == 'new' && order.assignedTeam.isEmpty;
+    final lines = facts ?? [CardFact(Icons.payments_rounded, formatMoneyUz(order.totalPrice))];
 
     return Material(
       color: AppColors.surface,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: needsTeam
-                  ? AppColors.danger
-                  : overdue
-                      ? AppColors.danger.withValues(alpha: 0.4)
-                      : AppColors.border,
-              width: needsTeam ? 1.5 : 1,
+              color: needsTeam || overdue ? AppColors.danger.withValues(alpha: needsTeam ? 0.9 : 0.4) : AppColors.border,
+              width: needsTeam ? 1.4 : 1,
             ),
-            boxShadow: [
-              BoxShadow(color: AppColors.ink.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 3)),
-            ],
           ),
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 6,
-                  decoration: BoxDecoration(
-                    color: status.color,
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
-                  ),
+          child: Stack(
+            children: [
+              // Holat chizig'i — kartaning balandligini o'zi belgilamaydi,
+              // shuning uchun o'lchash ikki marta kerak emas.
+              Positioned(left: 0, top: 0, bottom: 0, width: 4, child: ColoredBox(color: stage.color)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Header(order: order, stage: stage),
+                    const SizedBox(height: 3),
+                    _Contact(order: order),
+                    if (needsTeam) ...[
+                      const SizedBox(height: 7),
+                      const _TeamAlertBanner(),
+                    ],
+                    if (lines.isNotEmpty) const SizedBox(height: 7),
+                    for (var i = 0; i < lines.length; i++)
+                      Padding(
+                        padding: EdgeInsets.only(top: i == 0 ? 0 : 3),
+                        child: _FactRow(fact: lines[i], trailing: i == 0 ? trailing : null),
+                      ),
+                    if (dueDate != null && !order.isDone) ...[
+                      const SizedBox(height: 4),
+                      _DueRow(due: dueDate, overdue: overdue, tariff: order.tariff),
+                    ],
+                  ],
                 ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              order.displayNumber,
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.ink),
-                            ),
-                            if (tariff != null) ...[
-                              const SizedBox(width: 8),
-                              _Pill(label: tariff.label, color: tariff.color, background: tariff.background),
-                            ],
-                            const Spacer(),
-                            _Pill(label: status.label, color: status.color, background: status.background, icon: status.icon),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          order.customerName.isEmpty ? "Noma'lum mijoz" : order.customerName,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.phone_rounded, size: 14, color: AppColors.gray),
-                            const SizedBox(width: 5),
-                            Text(order.phone, style: const TextStyle(color: AppColors.grayDark, fontSize: 13)),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on_rounded, size: 14, color: AppColors.gray),
-                            const SizedBox(width: 5),
-                            Expanded(
-                              child: Text(
-                                order.location,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: AppColors.grayDark, fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (needsTeam) ...[
-                          const SizedBox(height: 8),
-                          _TeamAlertBanner(),
-                        ],
-                        if (dueDate != null) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Icon(
-                                overdue ? Icons.warning_rounded : Icons.event_rounded,
-                                size: 14,
-                                color: overdue ? AppColors.danger : AppColors.gray,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                formatDateUz(dueDate),
-                                style: TextStyle(
-                                  color: overdue ? AppColors.danger : AppColors.gray,
-                                  fontSize: 12,
-                                  fontWeight: overdue ? FontWeight.w800 : FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: overdue
-                                      ? AppColors.danger.withValues(alpha: 0.12)
-                                      : daysUntil(dueDate) <= 1
-                                          ? AppColors.warning.withValues(alpha: 0.15)
-                                          : AppColors.success.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  dueLabelUz(dueDate),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: overdue
-                                        ? AppColors.danger
-                                        : daysUntil(dueDate) <= 1
-                                            ? AppColors.warning
-                                            : AppColors.success,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (emphasizePrice) ...[
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                            decoration: BoxDecoration(
-                              color: AppColors.success.withValues(alpha: 0.09),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.payments_rounded, size: 17, color: AppColors.success),
-                                const SizedBox(width: 7),
-                                const Text(
-                                  "Yig'ish kerak",
-                                  style: TextStyle(fontSize: 12, color: AppColors.grayDark, fontWeight: FontWeight.w600),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  formatMoneyUz(order.totalPrice),
-                                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.success),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ] else ...[
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              const Icon(Icons.payments_rounded, size: 14, color: AppColors.gray),
-                              const SizedBox(width: 5),
-                              Text(
-                                formatMoneyUz(order.totalPrice),
-                                style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w800),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (actions != null && actions!.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Row(children: [for (final a in actions!) ...[a, const SizedBox(width: 8)]]),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Kartadagi bitta qator: belgi + matn.
+class CardFact {
+  final IconData icon;
+  final String text;
+  final Color? color;
+
+  /// Asosiy raqam (masalan yig'ilishi kerak summa) — kattaroq va qalin.
+  final bool strong;
+
+  const CardFact(this.icon, this.text, {this.color, this.strong = false});
+
+  /// "4 mahsulot · 2 yuvilmoqda · 1 upakovkada" — buyurtma xulosasidan,
+  /// mahsulotlarni o'qimasdan.
+  static CardFact stages(Order order) {
+    final c = order.itemStatusCounts;
+    final total = c.values.fold<int>(0, (s, v) => s + v);
+    final parts = <String>[
+      '$total mahsulot',
+      if ((c['pending'] ?? 0) > 0) '${c['pending']} navbatda',
+      if ((c['washing'] ?? 0) > 0) '${c['washing']} yuvilmoqda',
+      if ((c['returned'] ?? 0) > 0) '${c['returned']} qaytarilgan',
+      if ((c['packing'] ?? 0) > 0) '${c['packing']} upakovkada',
+      if ((c['ready'] ?? 0) > 0) '${c['ready']} tayyor',
+    ];
+    return CardFact(Icons.layers_rounded, parts.join(' · '));
+  }
+}
+
+/// Ro'yxat kartasidagi holat — buyurtma holatidan ko'ra aniqroq.
+///
+/// Olib kelish buyurtmasi sexga kelgach butun ishlov davomida "Sexga
+/// keldi" holatida turadi — kartada bu hech narsa demaydi. Shuning uchun
+/// mahsulotlar sanog'idan haqiqiy bosqich chiqariladi: "Tayyor",
+/// "2/4 tayyor", "Upakovka"...
+({String label, Color color, Color background}) orderStage(Order order) {
+  if (order.serviceType == 'pickup' && order.status == 'brought_in') {
+    final c = order.itemStatusCounts;
+    final remaining = c.entries.where((e) => e.key != 'done').fold<int>(0, (s, e) => s + e.value);
+    final ready = c['ready'] ?? 0;
+    String key;
+    String? label;
+    if (remaining == 0 && (c['done'] ?? 0) > 0) {
+      key = 'done';
+    } else if (ready > 0 && ready == remaining) {
+      key = 'ready';
+    } else if (ready > 0) {
+      key = 'ready';
+      label = '$ready/$remaining tayyor';
+    } else if ((c['packing'] ?? 0) > 0) {
+      key = 'packing';
+    } else if ((c['washing'] ?? 0) > 0 || (c['returned'] ?? 0) > 0) {
+      key = 'washing';
+    } else {
+      key = 'brought_in';
+    }
+    final s = statusOf(key);
+    return (label: label ?? s.label, color: s.color, background: s.background);
+  }
+  final s = statusOf(order.status);
+  return (label: s.label, color: s.color, background: s.background);
+}
+
+class _Header extends StatelessWidget {
+  final Order order;
+  final ({String label, Color color, Color background}) stage;
+
+  const _Header({required this.order, required this.stage});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          order.displayNumber,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14.5, color: AppColors.ink),
+        ),
+        if (order.pendingSync) ...[
+          const SizedBox(width: 4),
+          const Tooltip(
+            message: 'Serverga hali yuborilmagan',
+            child: Icon(Icons.cloud_upload_outlined, size: 14, color: AppColors.gray),
+          ),
+        ],
+        const SizedBox(width: 6),
+        const Text('·', style: TextStyle(color: AppColors.gray, fontWeight: FontWeight.w900)),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            order.customerName.isEmpty ? "Noma'lum mijoz" : order.customerName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: AppColors.ink),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Holat belgisi cheklangan kenglikda: eng tor ekranda ham ism
+        // uchun joy qoladi (sarlavha toshib ketmaydi).
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 112),
+          child: _Pill(label: stage.label, color: stage.color, background: stage.background),
+        ),
+      ],
+    );
+  }
+}
+
+class _Contact extends StatelessWidget {
+  final Order order;
+  const _Contact({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(order.phone.replaceFirst('+998', ''), style: const TextStyle(color: AppColors.grayDark, fontSize: 12.5)),
+        if (order.location.isNotEmpty) ...[
+          const Text('  ·  ', style: TextStyle(color: AppColors.gray, fontSize: 12.5)),
+          Expanded(
+            child: Text(
+              order.location,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.grayDark, fontSize: 12.5),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FactRow extends StatelessWidget {
+  final CardFact fact;
+  final String? trailing;
+
+  const _FactRow({required this.fact, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = fact.color ?? (fact.strong ? AppColors.ink : AppColors.grayDark);
+    return Row(
+      children: [
+        Icon(fact.icon, size: fact.strong ? 15 : 13.5, color: fact.color ?? AppColors.gray),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            fact.text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: fact.strong ? 14 : 12.5,
+              fontWeight: fact.strong ? FontWeight.w900 : FontWeight.w600,
+            ),
+          ),
+        ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              trailing!,
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.primary),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DueRow extends StatelessWidget {
+  final DateTime due;
+  final bool overdue;
+
+  /// Joyida yuvishda buyurtmaning tarifi — muddatni aynan u belgilaydi,
+  /// shuning uchun yonma-yon turadi. (Olib kelishda tarif har bir
+  /// mahsulotda alohida — ichki kartada ko'rinadi.)
+  final String? tariff;
+
+  const _DueRow({required this.due, required this.overdue, this.tariff});
+
+  @override
+  Widget build(BuildContext context) {
+    final soon = !overdue && daysUntil(due) <= 1;
+    final color = overdue
+        ? AppColors.danger
+        : soon
+            ? AppColors.warning
+            : AppColors.grayDark;
+    final info = tariff != null ? tariffOf(tariff) : null;
+    return Row(
+      children: [
+        Icon(overdue ? Icons.warning_rounded : Icons.event_rounded, size: 13.5, color: overdue ? AppColors.danger : AppColors.gray),
+        const SizedBox(width: 6),
+        if (info != null) ...[
+          _Pill(label: info.label, color: info.color, background: info.background),
+          const SizedBox(width: 6),
+        ],
+        Flexible(
+          child: Text(
+            '${formatDateUz(due)} · ${dueLabelUz(due)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color, fontSize: 12.5, fontWeight: overdue || soon ? FontWeight.w800 : FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -232,6 +319,8 @@ class OrderCard extends StatelessWidget {
 /// Nafas olayotgandek silliq o'zgaradi (keskin miltillash emas) — uzoq
 /// tikilib turadigan ro'yxatda charchatmasligi uchun.
 class _TeamAlertBanner extends StatefulWidget {
+  const _TeamAlertBanner();
+
   @override
   State<_TeamAlertBanner> createState() => _TeamAlertBannerState();
 }
@@ -255,17 +344,16 @@ class _TeamAlertBannerState extends State<_TeamAlertBanner> with SingleTickerPro
         CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
       ),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
           color: AppColors.danger.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.groups_rounded, size: 14, color: AppColors.danger),
-            SizedBox(width: 6),
+            Icon(Icons.groups_rounded, size: 13, color: AppColors.danger),
+            SizedBox(width: 5),
             Text(
               'Jamoa biriktirilmagan',
               style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.danger),
@@ -277,8 +365,8 @@ class _TeamAlertBannerState extends State<_TeamAlertBanner> with SingleTickerPro
   }
 }
 
-/// Buyurtma kartasidagi harakat tugmasi — "Qo'ng'iroq"/"Yo'lga chiqish"
-/// kabi (talab: Selta brend ranglariga mos, professional ko'rinish).
+/// Ichki kartadagi harakat tugmasi — "Qo'ng'iroq"/"Yo'lga chiqish" kabi
+/// (talab: Selta brend ranglariga mos, professional ko'rinish).
 class CardActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -303,9 +391,13 @@ class CardActionButton extends StatelessWidget {
               children: [
                 Icon(icon, size: 15, color: filled ? Colors.white : AppColors.primary),
                 const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: filled ? Colors.white : AppColors.primary),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: filled ? Colors.white : AppColors.primary),
+                  ),
                 ),
               ],
             ),
@@ -320,21 +412,19 @@ class _Pill extends StatelessWidget {
   final String label;
   final Color color;
   final Color background;
-  final IconData? icon;
 
-  const _Pill({required this.label, required this.color, required this.background, this.icon});
+  const _Pill({required this.label, required this.color, required this.background});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 11, color: color), const SizedBox(width: 3)],
-          Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800)),
-        ],
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w800),
       ),
     );
   }

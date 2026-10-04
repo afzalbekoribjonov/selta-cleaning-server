@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/utils/money_utils.dart';
 import '../../core/widgets/selta_loader.dart';
 import 'order_detail_sheet.dart';
 import 'widgets/order_card.dart';
@@ -163,6 +164,10 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
                               return OrderCard(
                                 order: order,
                                 onTap: () => openOrderDetailSheet(context, order),
+                                facts: [
+                                  CardFact(Icons.payments_rounded, formatMoneyUz(order.totalPrice)),
+                                  if (order.serviceType == 'pickup' && order.status == 'brought_in') CardFact.stages(order),
+                                ],
                               );
                             },
                           ),
