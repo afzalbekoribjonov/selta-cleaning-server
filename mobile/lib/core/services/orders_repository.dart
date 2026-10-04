@@ -361,6 +361,9 @@ class OrdersRepository {
     return (orderId: orderId, orderNumber: (result?['orderNumber'] as num?)?.toInt() ?? 0);
   }
 
+  /// [newOrderFields] — faqat "Yangi" holatdagi buyurtmada ma'noli (server
+  /// boshqa holatda e'tiborsiz qoldiradi). Berilsa manba `null` bo'lsa ham
+  /// yuboriladi: bu manbani olib tashlash degani.
   Future<void> updateOrder({
     required String orderId,
     required String customerName,
@@ -368,7 +371,9 @@ class OrdersRepository {
     required String location,
     String? tariff,
     String? gpsCoords,
+    ({String? source, List<String>? notedItems, num? estimatedPrice})? newOrderFields,
   }) async {
+    final extra = newOrderFields;
     _enqueue(
       path: '/updateOrder',
       orderId: orderId,
@@ -380,6 +385,9 @@ class OrdersRepository {
         'location': location,
         if (tariff != null) 'tariff': tariff,
         if (gpsCoords != null) 'gpsCoords': gpsCoords,
+        if (extra != null) 'source': extra.source,
+        if (extra?.notedItems != null) 'notedItems': extra!.notedItems,
+        if (extra != null && extra.notedItems != null) 'estimatedPrice': extra.estimatedPrice,
       },
       effect: {
         'kind': EffectKind.orderUpdate,
@@ -389,6 +397,9 @@ class OrdersRepository {
           'location': location,
           if (tariff != null) 'tariff': tariff,
           if (gpsCoords != null) 'gpsCoords': gpsCoords,
+          if (extra?.source != null) 'source': extra!.source,
+          if (extra?.notedItems != null) 'notedItems': extra!.notedItems,
+          if (extra?.estimatedPrice != null) 'estimatedPrice': extra!.estimatedPrice,
         },
       },
     );

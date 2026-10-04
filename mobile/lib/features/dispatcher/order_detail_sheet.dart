@@ -9,7 +9,11 @@ import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/order_items_provider.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/services/catalog_repository.dart' show orderSourcesProvider;
 import '../../core/utils/date_utils.dart';
+import '../../core/utils/money_utils.dart';
+import '../../core/utils/phone_format.dart';
+import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_detail_row.dart';
 import '../shared/sales_manager_notes_card.dart';
@@ -210,12 +214,18 @@ class _InfoCard extends StatelessWidget {
       );
 }
 
-/// Dispetcher mahsulotlarni o'zi qo'shmaydi/tahrirlamaydi, lekin nazorat
-/// uchun nima qo'shilgani — o'lchovi, holati, narxi — ko'rinishi kerak.
+/// Buyurtma mahsulotlari — o'lchovi, holati, narxi.
+///
+/// Olib kelish buyurtmasi hali "Yangi" bo'lsa (dastavchik olib ketmagan)
+/// sotuv menejeri mahsulot qo'sha, tahrirlay va o'chira oladi — mijoz
+/// telefonda nimanidir o'zgartirsa. Olib ketilgandan keyin mahsulotlar
+/// sexda va faqat ko'rish uchun.
 class _ItemsSummaryCard extends StatelessWidget {
   final Order order;
   final List<OrderItem> items;
   const _ItemsSummaryCard({required this.order, required this.items});
+
+  bool get editable => order.serviceType == 'pickup' && order.status == 'new';
 
   @override
   Widget build(BuildContext context) {
@@ -227,9 +237,17 @@ class _ItemsSummaryCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-              const Spacer(),
-              if (items.isNotEmpty) Text('${order.totalPrice.toStringAsFixed(0)} so\'m', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary)),
+              const Expanded(child: Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14))),
+              if (items.isNotEmpty)
+                Text(formatMoneyUz(order.totalPrice), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary)),
+              if (editable) ...[
+                const SizedBox(width: 4),
+                TextButton.icon(
+                  onPressed: () => openCatalogItemSheet(context, order),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text("Qo'shish"),
+                ),
+              ],
             ],
           ),
           if (items.isEmpty)
@@ -238,7 +256,12 @@ class _ItemsSummaryCard extends StatelessWidget {
               child: Text('Hali mahsulot belgilanmagan', style: TextStyle(color: AppColors.gray, fontSize: 13)),
             )
           else
-            for (final item in items) ItemDetailRow(item: item, subId: item.subId(order.orderNumber)),
+            for (final item in items)
+              ItemDetailRow(
+                item: item,
+                subId: item.subId(order.orderNumber),
+                onTap: editable ? () => openCatalogItemSheet(context, order, existingItem: item) : null,
+              ),
         ],
       ),
     );
@@ -329,23 +352,43 @@ class _EditOrderDialog extends ConsumerStatefulWidget {
   ConsumerState<_EditOrderDialog> createState() => _EditOrderDialogState();
 }
 
+/// Buyurtmani tahrirlash.
+///
+/// "Yangi" holatda (hali olib ketilmagan / jamoa biriktirilmagan) hammasi
+/// tahrirlanadi: mijoz, manba, joyida yuvishda mijoz aytgan mahsulotlar va
+/// taxminiy summa (mahsulotlarning o'zi — oynadagi "Mahsulotlar" qismida).
+/// Ishga kirishilgach faqat aloqa ma'lumotlari: qolganlari endi tarixiy
+/// ma'lumot va hisob-kitoblarga kirgan.
 class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _locationController;
+  late final TextEditingController _notedItemsController;
+  late final TextEditingController _estimateController;
   String? _tariff;
+  String? _source;
   bool _saving = false;
   String? _error;
 
   bool get _isOnsite => widget.order.serviceType == 'onsite';
+  bool get _isNew => widget.order.status == 'new';
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.order.customerName);
-    _phoneController = TextEditingController(text: widget.order.phone.replaceFirst('+998', ''));
-    _locationController = TextEditingController(text: widget.order.location);
-    _tariff = widget.order.tariff;
+    final o = widget.order;
+    _nameController = TextEditingController(text: o.customerName);
+    final digits = o.phone.replaceAll(RegExp(r'\D'), '');
+    _phoneController = TextEditingController(
+      text: UzPhoneFormatter()
+          .formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: digits.length > 9 ? digits.substring(digits.length - 9) : digits))
+          .text,
+    );
+    _locationController = TextEditingController(text: o.location);
+    _notedItemsController = TextEditingController(text: o.notedItems.join(', '));
+    _estimateController = TextEditingController(text: o.estimatedPrice?.round().toString() ?? '');
+    _tariff = o.tariff;
+    _source = o.source;
   }
 
   @override
@@ -353,22 +396,37 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
     _nameController.dispose();
     _phoneController.dispose();
     _locationController.dispose();
+    _notedItemsController.dispose();
+    _estimateController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
+    final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (_nameController.text.trim().isEmpty || _locationController.text.trim().isEmpty || digits.length != 9) {
+      setState(() => _error = "Ism, 9 xonali telefon va manzil majburiy");
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
       await ref.read(ordersRepositoryProvider).updateOrder(
             orderId: widget.order.id,
             customerName: _nameController.text.trim(),
             phone: '+998$digits',
             location: _locationController.text.trim(),
             tariff: _isOnsite ? _tariff : null,
+            newOrderFields: _isNew
+                ? (
+                    source: _source,
+                    notedItems: _isOnsite
+                        ? _notedItemsController.text.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).toList()
+                        : null,
+                    estimatedPrice: _isOnsite ? num.tryParse(_estimateController.text.replaceAll(' ', '')) : null,
+                  )
+                : null,
           );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -383,50 +441,119 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Buyurtmani tahrirlash'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Ism familiya')),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(9)],
-              decoration: const InputDecoration(labelText: 'Telefon', prefixText: '+998 '),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!_isNew) ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(10)),
+              child: const Text(
+                "Buyurtma ishga olingan — faqat mijoz aloqa ma'lumotlari tahrirlanadi.",
+                style: TextStyle(fontSize: 12.5, color: AppColors.grayDark, height: 1.35),
+              ),
             ),
             const SizedBox(height: 12),
-            TextField(controller: _locationController, maxLines: 2, decoration: const InputDecoration(labelText: "Manzil")),
-            if (_isOnsite) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final entry in kTariffConfig.entries)
-                    ChoiceChip(
-                      label: Text(entry.value.label),
-                      selected: _tariff == entry.key,
-                      onSelected: (_) => setState(() => _tariff = entry.key),
-                      selectedColor: entry.value.color,
-                      labelStyle: TextStyle(color: _tariff == entry.key ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700),
-                    ),
-                ],
+          ],
+          TextField(
+            controller: _nameController,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Ism familiya'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            inputFormatters: [UzPhoneFormatter()],
+            decoration: const InputDecoration(labelText: 'Telefon', prefixText: '+998 '),
+          ),
+          const SizedBox(height: 12),
+          TextField(controller: _locationController, maxLines: 2, decoration: const InputDecoration(labelText: 'Manzil')),
+          if (_isNew)
+            ref.watch(orderSourcesProvider).maybeWhen(
+                  data: (sources) => sources.isEmpty
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Manba', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.grayDark)),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final src in sources)
+                                    ChoiceChip(
+                                      label: Text(src.name),
+                                      selected: _source == src.id,
+                                      onSelected: (v) => setState(() => _source = v ? src.id : null),
+                                      selectedColor: colorFromHex(src.color),
+                                      labelStyle: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12.5,
+                                        color: _source == src.id ? Colors.white : AppColors.ink,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                  orElse: () => const SizedBox.shrink(),
+                ),
+          if (_isOnsite) ...[
+            const SizedBox(height: 16),
+            const Text('Tarif', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.grayDark)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in kTariffConfig.entries)
+                  ChoiceChip(
+                    label: Text(entry.value.label),
+                    selected: _tariff == entry.key,
+                    onSelected: (_) => setState(() => _tariff = entry.key),
+                    selectedColor: entry.value.color,
+                    labelStyle: TextStyle(color: _tariff == entry.key ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700),
+                  ),
+              ],
+            ),
+            if (_isNew) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _notedItemsController,
+                decoration: const InputDecoration(
+                  labelText: 'Mijoz aytgan mahsulotlar',
+                  helperText: 'Vergul bilan: gilam, parda, divan',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _estimateController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'Taxminiy summa', suffixText: "so'm"),
               ),
             ],
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Text(_error!, style: const TextStyle(color: AppColors.danger)),
-            ],
           ],
-        ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(_error!, style: const TextStyle(color: AppColors.danger)),
+          ],
+        ],
       ),
       actions: [
         TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(), child: const Text('Bekor qilish')),
         FilledButton(
           onPressed: _saving ? null : _save,
-          child: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Saqlash'),
+          child: _saving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Saqlash'),
         ),
       ],
     );

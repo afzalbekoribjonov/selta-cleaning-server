@@ -30,7 +30,11 @@ function assertItemsEditable(
   }
   const isTeamMember =
     order.serviceType === "onsite" && Array.isArray(order.assignedTeam) && (order.assignedTeam as string[]).includes(employeeId);
-  if (!["worker", "delivery", "admin"].includes(role) && !isTeamMember) {
+  // Sotuv menejeri buyurtmani olib ketilgunga qadar (holati "Yangi") to'liq
+  // tahrirlay oladi — mijoz telefonda mahsulotni qo'shsa yoki o'zgartirsa.
+  // Olib ketilgandan keyin mahsulotlar sexda, ular endi ishchilarniki.
+  const isDispatcherOnNew = role === "dispatcher" && order.status === "new";
+  if (!["worker", "delivery", "admin"].includes(role) && !isTeamMember && !isDispatcherOnNew) {
     throw new ApiError(403, "permission-denied", "Bu amal uchun ruxsatingiz yo'q");
   }
   if (item && order.serviceType === "pickup" && !ITEM_STILL_EDITABLE_STATUSES.has(item.status as string)) {
@@ -265,7 +269,7 @@ ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
       throw new ApiError(403, "permission-denied", "Faqat dispetcher buyurtmani tahrirlay oladi");
     }
 
-    const { orderId, customerName, phone, location, tariff, gpsCoords } = req.body ?? {};
+    const { orderId, customerName, phone, location, tariff, gpsCoords, source, notedItems, estimatedPrice } = req.body ?? {};
     if (!orderId) throw new ApiError(400, "invalid-argument", "orderId talab qilinadi");
     if (!customerName?.trim() || !phone?.trim() || !location?.trim()) {
       throw new ApiError(400, "invalid-argument", "Ism, telefon va mo'ljal majburiy");
@@ -288,6 +292,22 @@ ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: employeeId,
       };
+
+      // "Yangi" holatda (olib ketilmagan / jamoa biriktirilmagan) qolgan
+      // maydonlar ham tahrirlanadi: manba va joyida yuvish uchun mijoz
+      // aytgan mahsulotlar hamda taxminiy summa. Ishga kirishilgach ular
+      // tarixiy ma'lumot — o'zgartirilmaydi.
+      if (order.status === "new") {
+        if (source !== undefined) {
+          update.source = typeof source === "string" && source.trim() && source.length <= 100 ? source.trim() : null;
+        }
+        if (order.serviceType === "onsite" && Array.isArray(notedItems)) {
+          update.notedItems = notedItems.map((s: unknown) => String(s).trim()).filter((s: string) => s.length > 0);
+        }
+        if (order.serviceType === "onsite" && estimatedPrice !== undefined) {
+          update.estimatedPrice = typeof estimatedPrice === "number" && estimatedPrice > 0 ? estimatedPrice : null;
+        }
+      }
 
       // Pickup buyurtmalarda tarif endi item-darajasida — order-level
       // tarifni bu yerdan o'zgartirish faqat onsite uchun ma'noli.
