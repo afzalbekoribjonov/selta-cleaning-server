@@ -4,8 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
-import '../../core/services/auth_service.dart' show authStateProvider;
-import '../../core/services/orders_repository.dart';
+import '../../core/services/order_items_provider.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_action_row.dart';
@@ -30,7 +29,7 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final itemsAsync = ref.watch(_itemsProvider(order.id));
+    final itemsAsync = ref.watch(orderItemsProvider(order.id));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.9,
@@ -51,7 +50,7 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
                   // yopilib qolmasligi kerak.
                   padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.of(context).viewInsets.bottom),
                   children: [
-                    Text('Buyurtma #${order.orderNumber}', style: Theme.of(context).textTheme.headlineSmall),
+                    Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
                     const SizedBox(height: 4),
                     Text(order.customerName, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.grayDark)),
                     const SizedBox(height: 20),
@@ -73,10 +72,6 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
   }
 }
 
-final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
-  ref.watch(authStateProvider);
-  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
-});
 
 class _ItemsCard extends StatelessWidget {
   final Order order;

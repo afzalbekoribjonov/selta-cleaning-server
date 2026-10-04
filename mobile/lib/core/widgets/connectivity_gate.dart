@@ -3,11 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../services/auth_service.dart' show authStateProvider;
 import '../services/connectivity_service.dart';
 
 /// Butun ilovani o'rab turadi (`MaterialApp.router`ning `builder`i orqali).
-/// Talab #1: faqat haqiqiy "internet yo'q" holatida to'liq "Qayta urinish"
-/// ekrani chiqadi, aks holda ilova har doim faol ishlab turadi. Pastdagi
+///
+/// "Internet yo'q" ekrani FAQAT tizimga kirilmagan holatda ko'rsatiladi:
+/// PIN serverda tekshiriladi va internetsiz kirib bo'lmaydi. Kirgandan
+/// keyin ilova oflayn ham to'liq ishlaydi — ma'lumot qurilma keshidan
+/// o'qiladi, o'zgarishlar navbatga yoziladi (core/sync) va ulanish
+/// tiklanganda yuboriladi. Holat xodim paneli tepasidagi kichik belgida.
+///
+/// Pastdagi
 /// ekran (`child`) HECH QACHON qayta qurilmaydi/almashtirilmaydi — ustiga
 /// shunchaki qatlam (overlay) sifatida qo'yiladi, shuning uchun aloqa
 /// tiklanganda ilova aynan o'sha holatidan (navigatsiya, forma holati va
@@ -50,7 +57,8 @@ class _ConnectivityGateState extends ConsumerState<ConnectivityGate> with Widget
     // Boshlang'ich holat aniqlanmaguncha (juda qisqa lahza) offline deb
     // hisoblamaymiz — aks holda ilova ochilishida bir lahza "Qayta urinish"
     // ko'rinib ketishi mumkin.
-    final offline = connectivityAsync.valueOrNull == false;
+    final signedIn = ref.watch(authStateProvider).valueOrNull != null;
+    final offline = connectivityAsync.valueOrNull == false && !signedIn;
 
     return Stack(
       children: [
@@ -113,7 +121,7 @@ class _NoConnectionScreenState extends State<_NoConnectionScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Ilovadan foydalanish uchun tarmoqqa ulaning',
+                      'Tizimga kirish uchun tarmoqqa ulaning. Kirgandan keyin ilova internetsiz ham ishlaydi.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14, height: 1.4),
                     ),

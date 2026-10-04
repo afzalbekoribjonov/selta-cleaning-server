@@ -6,8 +6,9 @@ import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
-import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
+import '../../core/services/auth_service.dart' show describeApiError;
 import '../../core/services/employee_repository.dart';
+import '../../core/services/order_items_provider.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/launch_utils.dart';
@@ -38,10 +39,6 @@ void openDeliveryOrderDetailSheet(BuildContext context, Order order) {
 const _nextStage = {'new': 'brought_in'};
 const _actionLabel = {'new': 'Qabul qilindi'};
 
-final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
-  ref.watch(authStateProvider);
-  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
-});
 
 class _DeliveryOrderDetailSheet extends ConsumerStatefulWidget {
   final Order order;
@@ -92,7 +89,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
       // Talab: narxi 0 so'm bo'lib qolgan mahsulot bo'lsa, buyurtma
       // ishchilar navbatiga o'tmasligi kerak — avval e'tibor oynasi
       // ko'rsatiladi, tuzatilgach xodim "QABUL QILINDI"ni qayta bosadi.
-      final items = ref.read(_itemsProvider(widget.order.id)).valueOrNull ?? const [];
+      final items = ref.read(orderItemsProvider(widget.order.id)).valueOrNull ?? const [];
       final hasZeroPriced = items.any((i) => i.price <= 0);
       if (hasZeroPriced) {
         await openZeroPriceAttentionSheet(context, widget.order);
@@ -136,7 +133,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
     final order = widget.order;
     final status = statusOf(order.status);
     final actionLabel = _actionLabel[order.status];
-    final itemsAsync = ref.watch(_itemsProvider(order.id));
+    final itemsAsync = ref.watch(orderItemsProvider(order.id));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.8,
@@ -159,7 +156,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text('Buyurtma #${order.orderNumber}', style: Theme.of(context).textTheme.headlineSmall)),
+                        Expanded(child: Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall)),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(color: status.background, borderRadius: BorderRadius.circular(20)),

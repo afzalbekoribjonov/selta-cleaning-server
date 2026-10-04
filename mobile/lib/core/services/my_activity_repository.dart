@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../sync/cached_fetch.dart';
 import 'api_client.dart';
-import 'auth_service.dart' show apiClientProvider, authStateProvider;
+import 'auth_service.dart' show apiClientProvider, authStateProvider, employeeClaimsProvider;
+import 'local_store.dart';
 
 /// Birlik bo'yicha hajm — "145.6 m²" kabi, har biri alohida ko'rsatiladi.
 class UnitAmount {
@@ -251,15 +253,14 @@ class MyActivityRepository {
   final ApiClient _api;
   MyActivityRepository(this._api);
 
-  Future<MyDailyActivity> fetch({String? date}) async {
+  Future<Map<String, dynamic>> fetchRaw({String? date}) async {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     if (token == null) throw StateError('Tizimga kirilmagan');
-    final result = await _api.post(
+    return _api.post(
       '/myDailyActivity',
       idToken: token,
       body: {if (date != null) 'date': date},
     );
-    return MyDailyActivity.fromJson(result);
   }
 }
 
@@ -270,7 +271,16 @@ final myActivityRepositoryProvider =
 /// olinadi. Real-vaqtli oqim ATAYLAB emas: bu server hisobi, har bir
 /// o'zgarishda qayta so'rashning ma'nosi yo'q. Sahifadan chiqilganda
 /// bekor qilinadi, "Yangilash" bilan qayta so'raladi.
-final myDailyActivityProvider = FutureProvider.autoDispose<MyDailyActivity>((ref) {
+///
+/// Internetsiz — shu kuni oxirgi olingan nusxa ko'rsatiladi.
+final myDailyActivityProvider = FutureProvider.autoDispose<MyDailyActivity>((ref) async {
   ref.watch(authStateProvider);
-  return ref.watch(myActivityRepositoryProvider).fetch();
+  final employeeId = (await ref.watch(employeeClaimsProvider.future))?.employeeId ?? '';
+  final raw = await fetchWithCache(
+    ref.read(localStoreProvider),
+    'cache.myActivity.$employeeId',
+    () => ref.read(myActivityRepositoryProvider).fetchRaw(),
+    usable: savedToday,
+  );
+  return MyDailyActivity.fromJson(raw);
 });

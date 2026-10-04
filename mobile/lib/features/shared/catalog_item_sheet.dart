@@ -192,6 +192,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
         calcType: 'fixed',
         tariff: _tariff,
         price: num.tryParse(_customPriceController.text.replaceAll(',', '.')) ?? 0,
+        estimatedPrice: _estimatedPrice,
       );
     }
     return CatalogItemDraft(
@@ -204,6 +205,8 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
       qty: _product!.calcType == 'size' ? null : _measuredQty,
       sizeVariant: _product!.calcType == 'size' ? _sizeVariant : null,
       condition: _condition,
+      estimatedPrice: _estimatedPrice,
+      category: _product!.category,
     );
   }
 

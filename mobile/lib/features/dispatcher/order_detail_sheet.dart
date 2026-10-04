@@ -7,6 +7,7 @@ import '../../core/constants.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/order_items_provider.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../shared/comments_section.dart';
@@ -23,10 +24,6 @@ void openOrderDetailSheet(BuildContext context, Order order) {
   );
 }
 
-final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
-  ref.watch(authStateProvider);
-  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
-});
 
 class _OrderDetailSheet extends ConsumerWidget {
   final Order order;
@@ -51,7 +48,7 @@ class _OrderDetailSheet extends ConsumerWidget {
       }
     }
     final liveOrder = matched ?? order;
-    final itemsAsync = ref.watch(_itemsProvider(liveOrder.id));
+    final itemsAsync = ref.watch(orderItemsProvider(liveOrder.id));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.88,
@@ -135,7 +132,7 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Buyurtma #${order.orderNumber}', style: Theme.of(context).textTheme.headlineSmall),
+              Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 6),
               Row(
                 children: [

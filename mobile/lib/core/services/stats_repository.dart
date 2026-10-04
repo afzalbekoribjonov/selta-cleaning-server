@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'auth_service.dart' show apiClientProvider, authStateProvider;
+import '../sync/cached_fetch.dart';
+import 'auth_service.dart' show apiClientProvider, authStateProvider, employeeClaimsProvider;
 import 'api_client.dart';
+import 'local_store.dart';
 
 /// Bitta ko'rsatkich ostidagi qator (buyurtma yoki mahsulot) — "Ko'rish"
 /// tugmasi bosilganda shu ro'yxat ko'rsatiladi.
@@ -143,11 +145,10 @@ class StatsRepository {
   final ApiClient _api;
   StatsRepository(this._api);
 
-  Future<DailyStats> fetchDailyStats() async {
+  Future<Map<String, dynamic>> fetchDailyStatsRaw() async {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     if (token == null) throw StateError('Tizimga kirilmagan');
-    final result = await _api.post('/employeeDailyStats', idToken: token, body: const {});
-    return DailyStats.fromJson(result);
+    return _api.post('/employeeDailyStats', idToken: token, body: const {});
   }
 }
 
@@ -156,7 +157,15 @@ final statsRepositoryProvider = Provider<StatsRepository>((ref) => StatsReposito
 /// Kunlik ko'rsatkichlar — ekran ochilganda bir marta olinadi, "Yangilash"
 /// tugmasi bilan qayta so'raladi (real-vaqtli oqim emas: bu og'ir
 /// hisoblash, har bir o'zgarishda qayta chaqirish shart emas).
-final dailyStatsProvider = FutureProvider.autoDispose<DailyStats>((ref) {
+/// Internetsiz — shu kuni oxirgi olingan nusxa ko'rsatiladi.
+final dailyStatsProvider = FutureProvider.autoDispose<DailyStats>((ref) async {
   ref.watch(authStateProvider);
-  return ref.watch(statsRepositoryProvider).fetchDailyStats();
+  final employeeId = (await ref.watch(employeeClaimsProvider.future))?.employeeId ?? '';
+  final raw = await fetchWithCache(
+    ref.read(localStoreProvider),
+    'cache.dailyStats.$employeeId',
+    () => ref.read(statsRepositoryProvider).fetchDailyStatsRaw(),
+    usable: savedToday,
+  );
+  return DailyStats.fromJson(raw);
 });

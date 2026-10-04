@@ -39,6 +39,20 @@ async function sendToTokens(tokens: string[], title: string, body: string, data?
   }
 }
 
+/**
+ * Bildirishnomani so'rov javobini KUTDIRMASDAN yuboradi.
+ *
+ * Avval route'lar `await notifyDepartment(...)` qilardi: javob FCM
+ * tokenlarini o'qish va yuborish tugaguncha (yuzlab ms) kechikardi.
+ * Bundan battari — bildirishnoma xatosi route'ning catch'iga tushib,
+ * amal ALLAQACHON SAQLANGAN bo'lsa ham mijozga 500 xatosi qaytardi.
+ * Ilova uni "bajarilmadi" deb qayta yuborardi va ikkinchi urinish
+ * "bu holatda emas" bilan rad etilardi.
+ */
+export function notifyLater(task: Promise<unknown>): void {
+  task.catch((err) => console.error("notification", err));
+}
+
 export async function notifyDepartment(
   department: Department,
   title: string,

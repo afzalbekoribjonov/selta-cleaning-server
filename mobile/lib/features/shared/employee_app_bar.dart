@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/services/employee_repository.dart';
+import '../../core/sync/sync_status_button.dart';
 import 'create_order_screen.dart';
 
 /// 4 ta bo'lim panelining bir xil AppBar'i — bo'lim nomi va xodim ismi
@@ -34,6 +35,7 @@ class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
 
     return AppBar(
       actions: [
+        const SyncStatusButton(),
         if (canViewStats)
           IconButton(
             onPressed: () => context.push('/stats'),

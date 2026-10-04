@@ -98,7 +98,7 @@ class _TeamOrderCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '#${order.orderNumber} — ${order.customerName}',
+                      '${order.displayNumber} — ${order.customerName}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13.5),

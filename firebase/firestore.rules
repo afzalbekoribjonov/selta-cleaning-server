@@ -195,5 +195,13 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow read, write: if false;
     }
+
+    // Takroriy so'rovdan himoya belgilari (server/src/lib/idempotency.ts).
+    // FAQAT server ishlatadi — ichida boshqa so'rovlarning javoblari
+    // saqlanadi, shuning uchun ilovaga butunlay yopiq. expireAt maydoni
+    // bo'yicha Firestore TTL siyosati eski belgilarni o'zi o'chiradi.
+    match /processedActions/{actionId} {
+      allow read, write: if false;
+    }
   }
 }

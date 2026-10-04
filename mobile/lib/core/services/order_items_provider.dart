@@ -4,19 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/order.dart';
 import '../models/order_item.dart';
+import '../sync/action_queue.dart';
+import '../sync/overlay.dart';
 import 'auth_service.dart' show authStateProvider;
 import 'orders_repository.dart';
 
-/// Bitta buyurtmaning mahsulotlari — ro'yxat kartalarida ham, tafsilot
-/// varaqlarida ham baham ko'riladigan YAGONA provider. Riverpod bir xil
-/// `orderId` uchun oqimni qayta ishlatadi, shuning uchun bir nechta joyda
-/// kuzatilsa ham Firestore'ga bitta obuna ketadi.
+/// SERVERDAGI mahsulotlar — Firestore obunasi. Ekranlar buni to'g'ridan-
+/// to'g'ri emas, navbat qo'llangan [orderItemsProvider] orqali o'qiydi.
 ///
 /// `autoDispose` MAJBURIY: ro'yxatda yuzlab karta bo'lishi mumkin va har
 /// biri o'z obunasini ochadi. Usiz karta ekrandan chiqib ketgach ham
 /// obuna abadiy ochiq qolib, sekin-asta yuzlab keraksiz Firestore
 /// listener to'planib qolardi.
-final orderItemsProvider = StreamProvider.autoDispose.family<List<OrderItem>, String>((ref, orderId) {
+final _baseOrderItemsProvider = StreamProvider.autoDispose.family<List<OrderItem>, String>((ref, orderId) {
   ref.watch(authStateProvider);
 
   // Buyurtma yopilgandan keyin obuna yana bir necha daqiqa yashaydi: xodim
@@ -30,6 +30,21 @@ final orderItemsProvider = StreamProvider.autoDispose.family<List<OrderItem>, St
   ref.onDispose(() => release?.cancel());
 
   return ref.watch(ordersRepositoryProvider).watchItems(orderId);
+});
+
+/// Bitta buyurtmaning mahsulotlari — barcha tafsilot oynalari shu YAGONA
+/// providerdan oladi: bir xil buyurtma uchun Firestore'ga bitta obuna,
+/// ustiga navbatdagi (hali serverga yetmagan) o'zgarishlar qo'yilgan.
+///
+/// Avval har bir oyna o'z `StreamProvider.family`ini e'lon qilardi —
+/// `autoDispose`SIZ. Natijada xodim ochgan HAR BIR buyurtmaning obunasi
+/// ilova yopilguncha ochiq qolardi (kun oxiriga kelib o'nlab doimiy
+/// ulanish va ortiqcha trafik), bir xil buyurtma esa turli oynalardan
+/// ochilganda ikki-uch marta alohida obuna bo'lardi.
+final orderItemsProvider = Provider.autoDispose.family<AsyncValue<List<OrderItem>>, String>((ref, orderId) {
+  final base = ref.watch(_baseOrderItemsProvider(orderId));
+  final actions = ref.watch(actionQueueProvider);
+  return base.whenData((items) => applyToItems(orderId, items, actions));
 });
 
 /// Buyurtmaning AMALDAGI muddati.

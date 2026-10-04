@@ -4,7 +4,8 @@ import { db } from "../lib/admin";
 import { computeDueDate, isValidTransition, isValidItemTransition, type ServiceType } from "../lib/pipeline";
 import { loadTariffs, tariffDays } from "../lib/tariffs";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
-import { notifyDepartment, notifyEmployee } from "../lib/notifications";
+import { notifyDepartment, notifyEmployee, notifyLater } from "../lib/notifications";
+import { isValidActionId } from "../lib/idempotency";
 import { computeItems, type ItemInput } from "../lib/pricing";
 import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
 import { logDailyActivity, itemActivityRefs } from "../lib/dailyActivity";
@@ -67,8 +68,15 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       throw new ApiError(403, "permission-denied", "Yangi buyurtma yaratish huquqingiz yo'q");
     }
 
-    const { customerName, phone, location, serviceType, tariff, gpsCoords, items, notedItems, estimatedPrice, source, walkIn, actorName } =
+    const { customerName, phone, location, serviceType, tariff, gpsCoords, items, notedItems, estimatedPrice, source, walkIn, actorName, orderId: proposedId } =
       req.body ?? {};
+    // Ilova oflayn yaratgan buyurtmaga O'ZI ID beradi va shu ID bilan
+    // yuboradi: ekrandagi vaqtinchalik buyurtma serverdagisi bilan bir xil
+    // hujjat bo'ladi (keyingi oflayn amallar ham shu ID'ga murojaat qiladi),
+    // takroriy yuborish esa ikkinchi buyurtma yaratmaydi.
+    if (proposedId !== undefined && !isValidActionId(proposedId)) {
+      throw new ApiError(400, "invalid-argument", "Buyurtma ID'si noto'g'ri");
+    }
     if (!customerName?.trim() || !phone?.trim() || !location?.trim()) {
       throw new ApiError(400, "invalid-argument", "Ism, telefon va mo'ljal majburiy");
     }
@@ -125,11 +133,23 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
     }
 
     const counterRef = db.collection("counters").doc("orders");
-    const orderRef = db.collection("orders").doc();
+    const orderRef = proposedId ? db.collection("orders").doc(proposedId) : db.collection("orders").doc();
     const tariffs = await loadTariffs();
 
+    let alreadyCreated = false;
     const orderNumber = await db.runTransaction(async (tx) => {
-      const counterSnap = await tx.get(counterRef);
+      const [counterSnap, existingSnap] = await Promise.all([tx.get(counterRef), tx.get(orderRef)]);
+      // Shu ID bilan buyurtma allaqachon bor — oldingi urinish yozilgan,
+      // javobi esa yo'lda yo'qolgan. Ikkinchi marta yaratilmaydi.
+      if (existingSnap.exists) {
+        // Faqat O'Z buyurtmasining takrori — begona hujjat ID'si bilan
+        // kelgan so'rov rad etiladi.
+        if (existingSnap.data()!.createdBy !== employeeId) {
+          throw new ApiError(409, "aborted", "Buyurtma ID'si band");
+        }
+        alreadyCreated = true;
+        return (existingSnap.data()!.orderNumber as number) ?? 0;
+      }
       const next = (counterSnap.data()?.value ?? 0) + 1;
       tx.set(counterRef, { value: next }, { merge: true });
 
@@ -179,9 +199,12 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
 
       let itemNumber = 1;
       const summaryItems: SummaryItemInput[] = [];
-      for (const item of computedItems) {
+      for (const [index, item] of computedItems.entries()) {
         const dueDate = item.tariff ? computeDueDate(now, tariffDays(tariffs, item.tariff)) : null;
-        tx.set(orderRef.collection("items").doc(), {
+        // Ilova oflayn ko'rsatgan mahsulotlar aynan shu ID'larda — server
+        // nusxasi kelganda ekranda dublikat paydo bo'lmaydi.
+        const itemRef = proposedId ? orderRef.collection("items").doc(`${proposedId}-${index}`) : orderRef.collection("items").doc();
+        tx.set(itemRef, {
           itemNumber: itemNumber++,
           ...item,
           status: "pending",
@@ -211,13 +234,13 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
       return next;
     });
 
-    if (serviceType === "pickup") {
+    if (serviceType === "pickup" && !alreadyCreated) {
       if (isWalkIn) {
-        await notifyDepartment("worker", "Yangi ish", `#${orderNumber} — aniqlashtirish/yuvish kerak`, { orderId: orderRef.id });
+        notifyLater(notifyDepartment("worker", "Yangi ish", `#${orderNumber} — aniqlashtirish/yuvish kerak`, { orderId: orderRef.id }));
       } else {
-        await notifyDepartment("delivery", "Yangi buyurtma", `#${orderNumber} — olib ketish kerak`, {
-          orderId: orderRef.id,
-        });
+        notifyLater(
+          notifyDepartment("delivery", "Yangi buyurtma", `#${orderNumber} — olib ketish kerak`, { orderId: orderRef.id }),
+        );
       }
     }
     // Onsite uchun alohida bildirishnoma shart emas — jamoa biriktirish
@@ -410,7 +433,7 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
     });
 
     if (toStatus === "brought_in") {
-      await notifyDepartment("worker", "Yangi ish", `#${orderNumber} — aniqlashtirish/yuvish kerak`, { orderId });
+      notifyLater(notifyDepartment("worker", "Yangi ish", `#${orderNumber} — aniqlashtirish/yuvish kerak`, { orderId }));
     }
 
     res.json({ ok: true });
@@ -649,10 +672,12 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
     });
 
     if (toStatus === "ready") {
-      await notifyDepartment("delivery", "Yetkazishga tayyor", `#${orderNumber} — ${itemName} mijozga qaytarish kerak`, { orderId });
+      notifyLater(
+        notifyDepartment("delivery", "Yetkazishga tayyor", `#${orderNumber} — ${itemName} mijozga qaytarish kerak`, { orderId }),
+      );
     } else if (toStatus === "returned") {
       const body = `#${orderNumber} — ${itemName} sifat nazoratidan o'tmadi${qcNote ? `: ${qcNote}` : ""}`;
-      await notifyDepartment("worker", "Qayta ishlov kerak", body, { orderId });
+      notifyLater(notifyDepartment("worker", "Qayta ishlov kerak", body, { orderId }));
     }
 
     res.json({ ok: true });
@@ -711,10 +736,16 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
   try {
     const role = req.auth!.role!;
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
-    const { orderId, items } = req.body ?? {};
+    const { orderId, items, actionId } = req.body ?? {};
     if (!orderId || !Array.isArray(items) || items.length === 0) {
       throw new ApiError(400, "invalid-argument", "Kamida bitta mahsulot kerak");
     }
+    // Navbatdan kelgan qo'shishda mahsulot ID'lari amal ID'sidan
+    // quriladi: takroriy yuborishda xuddi shu hujjatlar topiladi va
+    // mahsulotlar ikki marta qo'shilmaydi. Ilova ekranda ko'rsatgan
+    // vaqtinchalik mahsulotlar ham aynan shu ID'lar bilan qo'shiladi.
+    const itemIdFor = (index: number) =>
+      isValidActionId(actionId) ? itemsRef.doc(`${actionId}-${index}`) : itemsRef.doc();
 
     const orderRef = db.collection("orders").doc(orderId);
     const itemsRef = orderRef.collection("items");
@@ -735,6 +766,9 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
     await db.runTransaction(async (tx) => {
       const [orderSnap, existingItemsSnap] = await Promise.all([tx.get(orderRef), tx.get(itemsRef)]);
       if (!orderSnap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+      if (isValidActionId(actionId) && existingItemsSnap.docs.some((d) => d.id.startsWith(`${actionId}-`))) {
+        return; // oldingi urinishda allaqachon qo'shilgan
+      }
       assertItemsEditable(orderSnap.data()!, role, employeeId);
 
       let nextNumber = existingItemsSnap.size + 1;
@@ -746,10 +780,10 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
       // (tarif/muddat/holat) qayta hisoblash uchun.
       const summaryItems: SummaryItemInput[] = existingItemsSnap.docs.map((d) => d.data() as SummaryItemInput);
 
-      for (const item of computed) {
+      for (const [index, item] of computed.entries()) {
         const dueDate = isPickup && item.tariff ? computeDueDate(now, tariffDays(tariffs, item.tariff)) : null;
         const status = isPickup ? "pending" : null;
-        tx.set(itemsRef.doc(), {
+        tx.set(itemIdFor(index), {
           itemNumber: nextNumber,
           ...item,
           status,
@@ -998,11 +1032,15 @@ ordersRouter.post("/assignTeam", withAuth, async (req: AuthedRequest, res) => {
       });
     });
 
-    for (const empId of employeeIds as string[]) {
-      await notifyEmployee(empId, "Joyida yuvishga biriktirildingiz", `#${orderNumber} — yangi buyurtma jamoasi`, {
-        orderId,
-      });
-    }
+    // Har bir xodimga PARALLEL va javobni kutdirmasdan — avval ketma-ket
+    // await edi: besh kishilik jamoada javob besh marta kechikardi.
+    notifyLater(
+      Promise.all(
+        (employeeIds as string[]).map((empId) =>
+          notifyEmployee(empId, "Joyida yuvishga biriktirildingiz", `#${orderNumber} — yangi buyurtma jamoasi`, { orderId }),
+        ),
+      ),
+    );
 
     res.json({ ok: true });
   } catch (err) {

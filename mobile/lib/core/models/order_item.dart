@@ -40,6 +40,10 @@ class OrderItem {
   final String? deliveredByName;
   final num? collectedAmount;
 
+  /// Serverga hali yetmagan o'zgarish bor (oflayn navbat) — Firestore'da
+  /// yo'q, faqat ilova ichida.
+  final bool pendingSync;
+
   const OrderItem({
     required this.id,
     required this.itemNumber,
@@ -69,7 +73,63 @@ class OrderItem {
     this.deliveredAt,
     this.deliveredByName,
     this.collectedAmount,
+    this.pendingSync = false,
   });
+
+  OrderItem copyWith({
+    int? itemNumber,
+    String? name,
+    num? area,
+    num? price,
+    String? qcStatus,
+    String? qcNote,
+    String? productId,
+    String? calcType,
+    String? category,
+    num? width,
+    num? height,
+    num? qty,
+    String? sizeVariant,
+    String? condition,
+    String? tariff,
+    String? status,
+    String? deliveredBy,
+    DateTime? deliveredAt,
+    num? collectedAmount,
+    bool? pendingSync,
+  }) {
+    return OrderItem(
+      id: id,
+      itemNumber: itemNumber ?? this.itemNumber,
+      name: name ?? this.name,
+      area: area ?? this.area,
+      price: price ?? this.price,
+      qcStatus: qcStatus ?? this.qcStatus,
+      qcNote: qcNote ?? this.qcNote,
+      productId: productId ?? this.productId,
+      calcType: calcType ?? this.calcType,
+      category: category ?? this.category,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      qty: qty ?? this.qty,
+      sizeVariant: sizeVariant ?? this.sizeVariant,
+      unitPrice: unitPrice,
+      condition: condition ?? this.condition,
+      conditionSurchargePercent: conditionSurchargePercent,
+      tariff: tariff ?? this.tariff,
+      dueDate: dueDate,
+      createdAt: createdAt,
+      status: status ?? this.status,
+      addedByDepartment: addedByDepartment,
+      washedBy: washedBy,
+      washedAt: washedAt,
+      deliveredBy: deliveredBy ?? this.deliveredBy,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      deliveredByName: deliveredByName,
+      collectedAmount: collectedAmount ?? this.collectedAmount,
+      pendingSync: pendingSync ?? this.pendingSync,
+    );
+  }
 
   factory OrderItem.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;
@@ -132,6 +192,11 @@ class CatalogItemDraft {
   final String? condition;
   final num? price;
 
+  /// Faqat ilova ichida: oflayn qo'shilgan mahsulot ekranda shu narx bilan
+  /// ko'rinadi, server keyin aniq narxni hisoblaydi.
+  final num? estimatedPrice;
+  final String? category;
+
   const CatalogItemDraft({
     required this.name,
     this.productId,
@@ -143,6 +208,8 @@ class CatalogItemDraft {
     this.sizeVariant,
     this.condition,
     this.price,
+    this.estimatedPrice,
+    this.category,
   });
 
   Map<String, dynamic> toJson() => {

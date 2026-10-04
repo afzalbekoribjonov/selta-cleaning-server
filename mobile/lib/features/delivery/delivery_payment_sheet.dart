@@ -172,7 +172,7 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Buyurtma #${widget.order.orderNumber}',
+                'Buyurtma ${widget.order.displayNumber}',
                 style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink),
               ),
               Text(

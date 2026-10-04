@@ -58,6 +58,11 @@ class Order {
   // yaratilgan bo'lsa 'walk_in', aks holda null (odatiy olib kelish).
   final String? intakeMethod;
 
+  /// Bu buyurtmada serverga hali yetib bormagan (navbatdagi) o'zgarish bor.
+  /// Firestore'da YO'Q maydon — faqat ilova ichida, oflayn navbat
+  /// (core/sync) ekranga qo'yadi. Kartada kichik belgi bilan ko'rsatiladi.
+  final bool pendingSync;
+
   const Order({
     required this.id,
     required this.orderNumber,
@@ -94,7 +99,82 @@ class Order {
     this.estimatedPrice,
     this.source,
     this.intakeMethod,
+    this.pendingSync = false,
   });
+
+  /// Oflayn yaratilgan buyurtma hali serverga yetmagan — raqami yo'q.
+  bool get awaitingNumber => orderNumber <= 0;
+
+  /// "#1245" — raqam hali berilmagan bo'lsa "#…" ("#0" ko'rinmasligi uchun).
+  String get displayNumber => awaitingNumber ? '#…' : '#$orderNumber';
+
+  Order copyWith({
+    int? orderNumber,
+    String? customerName,
+    String? phone,
+    String? location,
+    String? gpsCoords,
+    String? tariff,
+    String? status,
+    List<String>? assignedTeam,
+    num? totalArea,
+    num? totalPrice,
+    String? pickedUpBy,
+    DateTime? pickedUpAt,
+    String? pickedUpByName,
+    List<String>? deliveredByEmployees,
+    DateTime? dueDate,
+    int? qcRating,
+    List<String>? itemTariffs,
+    DateTime? earliestPendingDueDate,
+    int? zeroPriceItemCount,
+    Map<String, int>? itemStatusCounts,
+    Map<String, List<String>>? itemStageCategories,
+    List<String>? notedItems,
+    num? estimatedPrice,
+    String? source,
+    String? intakeMethod,
+    bool? pendingSync,
+  }) {
+    return Order(
+      id: id,
+      orderNumber: orderNumber ?? this.orderNumber,
+      customerName: customerName ?? this.customerName,
+      phone: phone ?? this.phone,
+      location: location ?? this.location,
+      gpsCoords: gpsCoords ?? this.gpsCoords,
+      serviceType: serviceType,
+      tariff: tariff ?? this.tariff,
+      status: status ?? this.status,
+      assignedTeam: assignedTeam ?? this.assignedTeam,
+      totalArea: totalArea ?? this.totalArea,
+      totalPrice: totalPrice ?? this.totalPrice,
+      createdBy: createdBy,
+      pickedUpBy: pickedUpBy ?? this.pickedUpBy,
+      pickedUpAt: pickedUpAt ?? this.pickedUpAt,
+      pickedUpByName: pickedUpByName ?? this.pickedUpByName,
+      washedBy: washedBy,
+      deliveredBy: deliveredBy,
+      qcRatedBy: qcRatedBy,
+      washedByEmployees: washedByEmployees,
+      deliveredByEmployees: deliveredByEmployees ?? this.deliveredByEmployees,
+      deliveryAddedByEmployees: deliveryAddedByEmployees,
+      createdAt: createdAt,
+      dueDate: dueDate ?? this.dueDate,
+      qcRating: qcRating ?? this.qcRating,
+      qcRatingNote: qcRatingNote,
+      itemTariffs: itemTariffs ?? this.itemTariffs,
+      earliestPendingDueDate: earliestPendingDueDate ?? this.earliestPendingDueDate,
+      zeroPriceItemCount: zeroPriceItemCount ?? this.zeroPriceItemCount,
+      itemStatusCounts: itemStatusCounts ?? this.itemStatusCounts,
+      itemStageCategories: itemStageCategories ?? this.itemStageCategories,
+      notedItems: notedItems ?? this.notedItems,
+      estimatedPrice: estimatedPrice ?? this.estimatedPrice,
+      source: source ?? this.source,
+      intakeMethod: intakeMethod ?? this.intakeMethod,
+      pendingSync: pendingSync ?? this.pendingSync,
+    );
+  }
 
   factory Order.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data()!;

@@ -146,7 +146,13 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ Buyurtma #${result.orderNumber} yaratildi')),
+        SnackBar(
+          content: Text(
+            result.orderNumber > 0
+                ? '✅ Buyurtma #${result.orderNumber} yaratildi'
+                : '✅ Buyurtma saqlandi — raqami internet tiklanganda beriladi',
+          ),
+        ),
       );
       _nameController.clear();
       _phoneController.clear();

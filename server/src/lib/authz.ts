@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { auth } from "./admin";
+import { isValidActionId, runIdempotent } from "./idempotency";
 
 export interface AuthedRequest extends Request {
   auth?: {
@@ -34,9 +35,23 @@ export async function withAuth(req: AuthedRequest, res: Response, next: NextFunc
       employeeId: decoded.employeeId as string | undefined,
       department: decoded.department as string | undefined,
     };
-    next();
   } catch {
     return res.status(401).json({ error: "unauthenticated", message: "Token yaroqsiz" });
+  }
+
+  // Ilova navbatidan kelgan amal — takror yuborilsa qayta bajarilmaydi
+  // (lib/idempotency.ts). Token tekshiruvidan TASHQARIDA: bu yerdagi xato
+  // "token yaroqsiz" deb noto'g'ri ko'rsatilmasligi kerak.
+  const actionId = req.body?.actionId;
+  if (actionId === undefined || actionId === null) return next();
+  if (!isValidActionId(actionId)) {
+    return res.status(400).json({ error: "invalid-argument", message: "actionId noto'g'ri" });
+  }
+  try {
+    await runIdempotent(req, res, next, actionId);
+  } catch (err) {
+    console.error("idempotency", err);
+    if (!res.headersSent) res.status(500).json({ error: "internal", message: "Server xatoligi yuz berdi" });
   }
 }
 

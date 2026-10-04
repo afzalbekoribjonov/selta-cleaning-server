@@ -5,7 +5,8 @@ import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
-import '../../core/services/auth_service.dart' show authStateProvider, describeApiError;
+import '../../core/services/auth_service.dart' show describeApiError;
+import '../../core/services/order_items_provider.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import 'catalog_item_sheet.dart';
@@ -25,10 +26,6 @@ void openTeamJobDetailSheet(BuildContext context, Order order) {
 const _nextStage = {'team_assigned': 'in_progress', 'in_progress': 'done'};
 const _actionLabel = {'team_assigned': 'Ishni boshlash', 'in_progress': 'Yakunlash'};
 
-final _itemsProvider = StreamProvider.family<List<OrderItem>, String>((ref, orderId) {
-  ref.watch(authStateProvider);
-  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
-});
 
 class _TeamJobDetailSheet extends ConsumerStatefulWidget {
   final Order order;
@@ -65,7 +62,7 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
     final order = widget.order;
     final status = statusOf(order.status);
     final actionLabel = _actionLabel[order.status];
-    final itemsAsync = ref.watch(_itemsProvider(order.id));
+    final itemsAsync = ref.watch(orderItemsProvider(order.id));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.9,
@@ -88,7 +85,7 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text('Joyida yuvish #${order.orderNumber}', style: Theme.of(context).textTheme.headlineSmall)),
+                        Expanded(child: Text('Joyida yuvish ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall)),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(color: status.background, borderRadius: BorderRadius.circular(20)),

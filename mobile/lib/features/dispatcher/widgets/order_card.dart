@@ -85,7 +85,7 @@ class OrderCard extends StatelessWidget {
                         Row(
                           children: [
                             Text(
-                              '#${order.orderNumber}',
+                              order.displayNumber,
                               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.ink),
                             ),
                             if (tariff != null) ...[
