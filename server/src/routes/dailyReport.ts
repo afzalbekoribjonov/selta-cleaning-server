@@ -2,7 +2,7 @@ import { Router } from "express";
 import { FieldPath, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
-import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
+import { businessDateString, businessDayRangeUtc, parseDateKey } from "../lib/businessTime";
 import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
 import { loadEmployeeNames } from "../lib/employeeNames";
 import {
@@ -69,11 +69,8 @@ function cardOf(r: { cardAmount: number | null }): number {
 
 /** Kun kalitini tekshiradi; berilmasa bugungi biznes kuni qaytariladi. */
 function resolveDateKey(raw: unknown): string {
-  if (raw === undefined || raw === null || raw === "") return businessDateString(new Date());
-  const dateKey = String(raw);
-  if (!businessDayRangeUtc(dateKey)) {
-    throw new ApiError(400, "invalid-argument", "Sana YYYY-MM-DD ko'rinishida bo'lishi kerak");
-  }
+  const dateKey = parseDateKey(raw);
+  if (!dateKey) throw new ApiError(400, "invalid-argument", "Sana YYYY-MM-DD ko'rinishida bo'lishi kerak");
   return dateKey;
 }
 

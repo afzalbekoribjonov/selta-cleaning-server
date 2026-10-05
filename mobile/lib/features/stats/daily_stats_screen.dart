@@ -4,31 +4,56 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart' show describeApiError;
 import '../../core/services/stats_repository.dart';
+import '../../core/utils/date_utils.dart';
 import '../../core/utils/money_utils.dart';
 import '../../core/widgets/selta_loader.dart';
 
-/// Talab: vakolat berilgan xodim bugungi ko'rsatkichlarni ko'ra oladi —
+/// Talab: vakolat berilgan xodim kunlik ko'rsatkichlarni ko'ra oladi —
 /// har biri o'z kartasida, yonida "Ko'rish" tugmasi bilan (bosilganda
-/// aynan o'sha buyurtmalar/mahsulotlar ro'yxati ochiladi).
-class DailyStatsScreen extends ConsumerWidget {
+/// aynan o'sha buyurtmalar/mahsulotlar ro'yxati ochiladi). Yuqoridagi
+/// kalendar bilan istalgan kunni tanlash mumkin.
+class DailyStatsScreen extends ConsumerStatefulWidget {
   const DailyStatsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final statsAsync = ref.watch(dailyStatsProvider);
+  ConsumerState<DailyStatsScreen> createState() => _DailyStatsScreenState();
+}
+
+class _DailyStatsScreenState extends ConsumerState<DailyStatsScreen> {
+  DateTime _day = DateUtils.dateOnly(DateTime.now());
+
+  void _setDay(DateTime day) => setState(() => _day = DateUtils.dateOnly(day));
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = dailyStatsProvider(dateKeyOf(_day));
+    final statsAsync = ref.watch(provider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kunlik ko\'rsatkichlar'),
         actions: [
           IconButton(
-            onPressed: () => ref.invalidate(dailyStatsProvider),
+            onPressed: () => ref.invalidate(provider),
             tooltip: 'Yangilash',
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
-      body: statsAsync.when(
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: DayPickerBar(day: _day, onChanged: _setDay),
+          ),
+          Expanded(child: _body(statsAsync, provider)),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(AsyncValue<DailyStats> statsAsync, ProviderBase<Object?> provider) {
+    return statsAsync.when(
         loading: () => const SeltaLoadingView(),
         error: (e, _) => Center(
           child: Padding(
@@ -45,7 +70,7 @@ class DailyStatsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 OutlinedButton(
-                  onPressed: () => ref.invalidate(dailyStatsProvider),
+                  onPressed: () => ref.invalidate(provider),
                   child: const Text('Qayta urinish'),
                 ),
               ],
@@ -53,12 +78,10 @@ class DailyStatsScreen extends ConsumerWidget {
           ),
         ),
         data: (stats) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(dailyStatsProvider),
+          onRefresh: () async => ref.invalidate(provider),
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             children: [
-              _TodayHeader(date: stats.date),
-              const SizedBox(height: 16),
 
               // Eng muhim ko'rsatkich — pul, shuning uchun birinchi va
               // alohida (kattaroq) kartada.
@@ -68,18 +91,18 @@ class DailyStatsScreen extends ConsumerWidget {
               _StatCard(
                 icon: Icons.warehouse_rounded,
                 color: AppColors.primary,
-                label: 'Bugun sexga keldi',
+                label: stats.isToday ? 'Bugun sexga keldi' : 'Sexga keldi',
                 value: '${stats.broughtInCount} ta buyurtma',
                 entries: stats.broughtIn,
-                emptyText: 'Bugun hali sexga buyurtma kelmadi',
-                detailTitle: 'Bugun sexga kelgan buyurtmalar',
+                emptyText: stats.isToday ? 'Bugun hali sexga buyurtma kelmadi' : 'Bu kuni sexga buyurtma kelmagan',
+                detailTitle: stats.isToday ? 'Bugun sexga kelgan buyurtmalar' : 'Sexga kelgan buyurtmalar',
               ),
               const SizedBox(height: 12),
 
               _StatCard(
                 icon: Icons.local_laundry_service_rounded,
                 color: AppColors.info,
-                label: 'Bugun yuvildi',
+                label: stats.isToday ? 'Bugun yuvildi' : 'Yuvildi',
                 value: stats.washedTotals.isEmpty
                     ? '0'
                     : stats.washedTotals
@@ -87,20 +110,22 @@ class DailyStatsScreen extends ConsumerWidget {
                         .join(' · '),
                 subValue: '${stats.washedCount} ta mahsulot',
                 entries: stats.washed,
-                emptyText: 'Bugun hali mahsulot yuvilmadi',
-                detailTitle: 'Bugun yuvilgan mahsulotlar',
+                emptyText: stats.isToday ? 'Bugun hali mahsulot yuvilmadi' : 'Bu kuni mahsulot yuvilmagan',
+                detailTitle: stats.isToday ? 'Bugun yuvilgan mahsulotlar' : 'Yuvilgan mahsulotlar',
               ),
               const SizedBox(height: 12),
 
               _StatCard(
                 icon: Icons.local_shipping_rounded,
                 color: AppColors.success,
-                label: 'Bugun yetgazildi',
+                label: stats.isToday ? 'Bugun yetgazildi' : 'Yetgazildi',
                 value: '${stats.deliveredCount} ta buyurtma',
                 entries: stats.delivered,
-                emptyText: 'Bugun hali buyurtma yetkazilmadi',
-                detailTitle: 'Bugun yetkazilgan buyurtmalar',
+                emptyText: stats.isToday ? 'Bugun hali buyurtma yetkazilmadi' : 'Bu kuni buyurtma yetkazilmagan',
+                detailTitle: stats.isToday ? 'Bugun yetkazilgan buyurtmalar' : 'Yetkazilgan buyurtmalar',
               ),
+              // "Joriy holat" faqat bugun uchun: o'tgan kunda u saqlanmaydi.
+              if (stats.isToday) ...[
               const SizedBox(height: 20),
 
               const _SectionLabel('Joriy holat'),
@@ -141,9 +166,98 @@ class DailyStatsScreen extends ConsumerWidget {
                 detailTitle: "O'lchanmagan mahsulotli buyurtmalar",
                 highlight: stats.unmeasuredCount > 0,
               ),
+              ],
             ],
           ),
         ),
+    );
+  }
+}
+
+/// "Bugun" / "Kecha" / "4-oktabr, 2025".
+String dayLabelUz(DateTime day) {
+  final today = DateUtils.dateOnly(DateTime.now());
+  final diff = today.difference(DateUtils.dateOnly(day)).inDays;
+  if (diff == 0) return 'Bugun';
+  if (diff == 1) return 'Kecha';
+  return day.year == today.year ? formatDateUz(day) : '${formatDateUz(day)}, ${day.year}';
+}
+
+/// Kun tanlagich: ← oldingi kun, o'rtada kalendar, → keyingi kun
+/// (kelajakka o'tib bo'lmaydi).
+class DayPickerBar extends StatelessWidget {
+  final DateTime day;
+  final ValueChanged<DateTime> onChanged;
+
+  const DayPickerBar({super.key, required this.day, required this.onChanged});
+
+  Future<void> _pick(BuildContext context) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: day,
+      firstDate: DateTime(2025),
+      lastDate: today,
+      helpText: 'Kunni tanlang',
+    );
+    if (picked != null) onChanged(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final isToday = DateUtils.isSameDay(day, today);
+    final weekday = const ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'][day.weekday - 1];
+
+    return Container(
+      decoration: BoxDecoration(gradient: heroGradient, borderRadius: BorderRadius.circular(18)),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => onChanged(day.subtract(const Duration(days: 1))),
+            tooltip: 'Oldingi kun',
+            icon: const Icon(Icons.chevron_left_rounded, color: Colors.white),
+          ),
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _pick(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            dayLabelUz(day),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      isToday ? '${formatDateUz(day)} · $weekday' : weekday,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: isToday ? null : () => onChanged(day.add(const Duration(days: 1))),
+            tooltip: 'Keyingi kun',
+            icon: Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: isToday ? 0.3 : 1)),
+          ),
+        ],
       ),
     );
   }
@@ -152,35 +266,6 @@ class DailyStatsScreen extends ConsumerWidget {
 String _trimNum(num v) {
   if (v == v.roundToDouble()) return v.toStringAsFixed(0);
   return v.toStringAsFixed(1);
-}
-
-class _TodayHeader extends StatelessWidget {
-  final String date;
-  const _TodayHeader({required this.date});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(gradient: heroGradient, borderRadius: BorderRadius.circular(18)),
-      child: Row(
-        children: [
-          const Icon(Icons.today_rounded, color: Colors.white, size: 20),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Bugungi holat',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
-            ),
-          ),
-          Text(
-            date,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12.5, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -219,13 +304,13 @@ class _CashCard extends StatelessWidget {
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
-                  'Dastavchiklar topshirishi kerak',
+                  'Xodimlar topshirishi kerak',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: AppColors.ink),
                 ),
               ),
               if (stats.cashEntries.isNotEmpty)
                 _ViewButton(
-                  title: 'Bugun yig\'ilgan summa',
+                  title: "Yig'ilgan summa",
                   entries: stats.cashEntries,
                   emptyText: '',
                   color: AppColors.success,
@@ -233,14 +318,20 @@ class _CashCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            formatMoneyUz(stats.cashTotal),
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 26, color: AppColors.success),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              formatMoneyUz(stats.cashTotal),
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 26, color: AppColors.success),
+            ),
           ),
           const SizedBox(height: 2),
-          const Text(
-            "Bugun yig'ilgan naqd, xodimlarning naqddan chiqimlari ayirilgan",
-            style: TextStyle(fontSize: 11.5, color: AppColors.grayDark, fontWeight: FontWeight.w500),
+          Text(
+            stats.isToday
+                ? "Bugun yig'ilgan naqd, xodimlarning naqddan chiqimlari ayirilgan"
+                : "Shu kuni yig'ilgan naqd, xodimlarning naqddan chiqimlari ayirilgan",
+            style: const TextStyle(fontSize: 11.5, color: AppColors.grayDark, fontWeight: FontWeight.w500),
           ),
         ],
       ),

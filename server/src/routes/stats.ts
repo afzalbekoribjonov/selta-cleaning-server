@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz";
-import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
+import { businessDateString, businessDayRangeUtc, parseDateKey } from "../lib/businessTime";
 import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
 import { cashPartOf } from "../lib/dailyActivity";
 import { loadEmployeeExpenses } from "../lib/expenses";
@@ -76,12 +76,19 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
       }
     }
 
-    const now = new Date();
-    const dateKey = businessDateString(now);
+    // Istalgan kun (talab): yuqoridagi kalendar orqali. Berilmasa — bugun.
+    const dateKey = parseDateKey(req.body?.date);
+    if (!dateKey) throw new ApiError(400, "invalid-argument", "Sana YYYY-MM-DD ko'rinishida bo'lishi kerak");
+    const isToday = dateKey === businessDateString(new Date());
     const range = businessDayRangeUtc(dateKey)!;
 
     const [activeSnap, intakeSnap, eventsSnap, expenses] = await Promise.all([
-      db.collection("orders").where("status", "in", ACTIVE_ORDER_STATUSES).limit(MAX_ORDERS_SCANNED).get(),
+      // "Joriy holat" (hozir yuvilmoqda, tayyor, o'lchanmagan) faqat BUGUN
+      // uchun ma'noli — o'tgan kunda u holat saqlanmagan. Boshqa kunda bu
+      // og'ir so'rov umuman bajarilmaydi.
+      isToday
+        ? db.collection("orders").where("status", "in", ACTIVE_ORDER_STATUSES).limit(MAX_ORDERS_SCANNED).get()
+        : Promise.resolve(null),
       db
         .collection("orders")
         .where("pickedUpAt", ">=", Timestamp.fromDate(range.start))
@@ -206,7 +213,7 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
     let washingItemCount = 0;
     let readyItemCount = 0;
 
-    for (const doc of activeSnap.docs) {
+    for (const doc of activeSnap?.docs ?? []) {
       const order = doc.data();
       const counts = (order.itemStatusCounts as Record<string, number> | undefined) ?? {};
       const base = {
@@ -237,6 +244,7 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
 
     res.json({
       date: dateKey,
+      isToday,
       broughtInToday: { count: broughtInOrders.length, orders: broughtInOrders },
       washedToday: {
         count: washedItems.length,

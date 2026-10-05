@@ -72,8 +72,12 @@ class DailyStats {
   final int unmeasuredCount;
   final List<StatEntry> unmeasured;
 
+  /// Bugungi kunmi — "joriy holat" bo'limlari faqat bugun uchun bor.
+  final bool isToday;
+
   const DailyStats({
     required this.date,
+    this.isToday = true,
     required this.broughtInCount,
     required this.broughtIn,
     required this.washedTotals,
@@ -115,6 +119,7 @@ class DailyStats {
     final totalsRaw = washedToday['totals'];
     return DailyStats(
       date: json['date']?.toString() ?? '',
+      isToday: json['isToday'] != false,
       broughtInCount: (broughtIn['count'] as num?)?.toInt() ?? 0,
       broughtIn: _entries(broughtIn['orders']),
       washedTotals: totalsRaw is List
@@ -145,27 +150,34 @@ class StatsRepository {
   final ApiClient _api;
   StatsRepository(this._api);
 
-  Future<Map<String, dynamic>> fetchDailyStatsRaw() async {
+  /// [date] — "YYYY-MM-DD"; berilmasa bugun.
+  Future<Map<String, dynamic>> fetchDailyStatsRaw({String? date}) async {
     final token = await FirebaseAuth.instance.currentUser?.getIdToken();
     if (token == null) throw StateError('Tizimga kirilmagan');
-    return _api.post('/employeeDailyStats', idToken: token, body: const {});
+    return _api.post('/employeeDailyStats', idToken: token, body: {if (date != null) 'date': date});
   }
 }
 
 final statsRepositoryProvider = Provider<StatsRepository>((ref) => StatsRepository(ref.watch(apiClientProvider)));
 
-/// Kunlik ko'rsatkichlar — ekran ochilganda bir marta olinadi, "Yangilash"
-/// tugmasi bilan qayta so'raladi (real-vaqtli oqim emas: bu og'ir
-/// hisoblash, har bir o'zgarishda qayta chaqirish shart emas).
-/// Internetsiz — shu kuni oxirgi olingan nusxa ko'rsatiladi.
-final dailyStatsProvider = FutureProvider.autoDispose<DailyStats>((ref) async {
+/// "2026-10-06" — qurilmaning mahalliy sanasi (biznes vaqti bilan bir xil).
+String dateKeyOf(DateTime day) =>
+    '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+
+/// Kunlik ko'rsatkichlar (istalgan kun) — ekran ochilganda bir marta
+/// olinadi, "Yangilash" bilan qayta so'raladi (real-vaqtli oqim emas: bu
+/// og'ir hisoblash). Internetsiz — oxirgi olingan nusxa: bugun uchun faqat
+/// shu kuni saqlangani (u kun davomida o'zgaradi), o'tgan kun uchun esa
+/// istalgani (o'tgan kun ma'lumoti o'zgarmaydi).
+final dailyStatsProvider = FutureProvider.autoDispose.family<DailyStats, String>((ref, dateKey) async {
   ref.watch(authStateProvider);
   final employeeId = (await ref.watch(employeeClaimsProvider.future))?.employeeId ?? '';
+  final isToday = dateKey == dateKeyOf(DateTime.now());
   final raw = await fetchWithCache(
     ref.read(localStoreProvider),
-    'cache.dailyStats.$employeeId',
-    () => ref.read(statsRepositoryProvider).fetchDailyStatsRaw(),
-    usable: savedToday,
+    'cache.dailyStats.$employeeId.$dateKey',
+    () => ref.read(statsRepositoryProvider).fetchDailyStatsRaw(date: dateKey),
+    usable: isToday ? savedToday : (_) => true,
   );
   return DailyStats.fromJson(raw);
 });

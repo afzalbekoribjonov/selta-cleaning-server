@@ -10,6 +10,7 @@ import 'core/services/local_store.dart';
 import 'core/widgets/attendance_gate.dart';
 import 'core/widgets/connectivity_gate.dart';
 import 'firebase_options.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +51,11 @@ class SeltaCleaningApp extends StatelessWidget {
       theme: AppTheme.light(),
       themeMode: ThemeMode.light,
       routerConfig: appRouter,
+      // O'zbekcha: kalendar (sana tanlash), standart dialog va matn
+      // tanlash tugmalari xodimga tushunarli tilda chiqadi.
+      locale: const Locale('uz'),
+      supportedLocales: const [Locale('uz')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       builder: (context, child) => ConnectivityGate(child: AttendanceGate(child: child)),
     );
   }

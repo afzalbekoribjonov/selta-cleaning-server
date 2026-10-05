@@ -68,5 +68,18 @@ export function businessDayRangeUtc(dateKey: string): { start: Date; end: Date }
   const localMidnightMs = Date.UTC(Number(y), Number(m) - 1, Number(d));
   const start = new Date(localMidnightMs - BUSINESS_UTC_OFFSET_MINUTES * 60_000);
   if (Number.isNaN(start.getTime())) return null;
+  // Mavjud bo'lmagan sana ("2026-02-30", "2026-13-45") Date.UTC'da keyingi
+  // kunlarga "aylanib" ketadi — bunday kalit rad etiladi.
+  if (businessDateString(start) !== dateKey) return null;
   return { start, end: new Date(start.getTime() + 24 * 60 * 60_000) };
+}
+
+/**
+ * So'rovdagi kun kaliti ("YYYY-MM-DD"); berilmasa — bugungi biznes kuni.
+ * Noto'g'ri bo'lsa `null` — chaqiruvchi 400 qaytaradi.
+ */
+export function parseDateKey(raw: unknown, now: Date = new Date()): string | null {
+  if (raw === undefined || raw === null || raw === "") return businessDateString(now);
+  const dateKey = String(raw);
+  return businessDayRangeUtc(dateKey) ? dateKey : null;
 }
