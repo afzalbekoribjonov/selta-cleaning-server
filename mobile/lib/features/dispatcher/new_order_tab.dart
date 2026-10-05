@@ -14,6 +14,7 @@ import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../search/global_search_screen.dart';
 import '../shared/catalog_item_sheet.dart';
+import '../../core/utils/money_utils.dart';
 
 /// Sotuv menejerining "Yangi buyurtma" formasi (talab #3).
 ///
@@ -496,9 +497,14 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
                   decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(14)),
                   child: Row(
                     children: [
-                      const Text('Jami', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                      const Spacer(),
-                      Text("${_draftTotal.toStringAsFixed(0)} so'm", style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.primary)),
+                      const Expanded(child: Text('Jami', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                      Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(formatMoneyUz(_draftTotal), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.primary)),
+                ),
+              ),
                     ],
                   ),
                 ),
@@ -689,7 +695,12 @@ class _DraftItemRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(draft.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(
+                  draft.name,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
                 if (tariffInfo != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
@@ -698,7 +709,14 @@ class _DraftItemRow extends StatelessWidget {
               ],
             ),
           ),
-          Text("${(draft.price ?? 0).toStringAsFixed(0)} so'm", style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: AppColors.grayDark)),
+          const SizedBox(width: 8),
+          Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(formatMoneyUz(draft.price ?? 0), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: AppColors.grayDark)),
+                ),
+              ),
           IconButton(
             onPressed: onRemove,
             icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.gray),

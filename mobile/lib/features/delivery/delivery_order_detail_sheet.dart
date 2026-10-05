@@ -23,6 +23,7 @@ import 'zero_price_attention_sheet.dart';
 import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
 import '../../core/widgets/load_error_note.dart';
+import '../../core/utils/money_utils.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -195,9 +196,13 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text('Umumiy summa', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.grayDark)),
-                          Text(
-                            "${order.totalPrice.toStringAsFixed(0)} so'm",
-                            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.primary),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              formatMoneyUz(order.totalPrice),
+                              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.primary),
+                            ),
                           ),
                         ],
                       ),
@@ -305,12 +310,20 @@ class _PickupItemsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text('Mahsulotlar (ixtiyoriy)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: () => openCatalogItemSheet(context, order),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(items.isEmpty ? "Qo'shish" : "Yana qo'shish"),
+              const Expanded(
+                child: Text(
+                  'Mahsulotlar (ixtiyoriy)',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+              ),
+              Flexible(
+                child: TextButton.icon(
+                  onPressed: () => openCatalogItemSheet(context, order),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text(items.isEmpty ? "Qo'shish" : "Yana qo'shish"),
+                ),
               ),
             ],
           ),

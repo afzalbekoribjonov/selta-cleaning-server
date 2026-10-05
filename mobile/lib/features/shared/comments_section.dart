@@ -229,8 +229,15 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
         children: [
           Row(
             children: [
-              Text(widget.comment['authorName']?.toString() ?? 'Xodim', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5)),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                  widget.comment['authorName']?.toString() ?? 'Xodim',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(timeLabel, style: const TextStyle(fontSize: 11, color: AppColors.gray)),
               if (widget.canEdit && !_editing) ...[
                 const SizedBox(width: 6),

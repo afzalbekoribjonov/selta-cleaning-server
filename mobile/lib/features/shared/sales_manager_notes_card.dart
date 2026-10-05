@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
+import '../../core/utils/money_utils.dart';
 
 /// Sotuv menejeri onsite buyurtma yaratishda ixtiyoriy ravishda yozgan
 /// mahsulot nomlari va taxminiy summa — jamoa uchun faqat ma'lumot
@@ -27,7 +28,9 @@ class SalesManagerNotesCard extends StatelessWidget {
             children: [
               const Icon(Icons.sticky_note_2_rounded, size: 16, color: AppColors.ink),
               const SizedBox(width: 6),
-              const Text('Sotuv menejeri qaydlari', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+              const Expanded(
+                child: Text('Sotuv menejeri qaydlari', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+              ),
             ],
           ),
           if (order.notedItems.isNotEmpty) ...[
@@ -41,7 +44,7 @@ class SalesManagerNotesCard extends StatelessWidget {
           if (order.estimatedPrice != null) ...[
             const SizedBox(height: 8),
             Text(
-              "Taxminiy summa: ${order.estimatedPrice!.toStringAsFixed(0)} so'm",
+              'Taxminiy summa: ${formatMoneyUz(order.estimatedPrice!)}',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary),
             ),
           ],

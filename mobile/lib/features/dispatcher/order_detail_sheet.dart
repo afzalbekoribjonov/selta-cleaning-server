@@ -246,15 +246,33 @@ class _ItemsSummaryCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14))),
-              if (items.isNotEmpty)
-                Text(formatMoneyUz(order.totalPrice), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary)),
+              // Jami summa sarlavha ostida: "Qo'shish" tugmasi bilan bitta
+              // qatorda tor ekranda sig'masdi.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                    if (items.isNotEmpty)
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          formatMoneyUz(order.totalPrice),
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primary),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               if (editable) ...[
                 const SizedBox(width: 4),
-                TextButton.icon(
-                  onPressed: () => openCatalogItemSheet(context, order),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text("Qo'shish"),
+                Flexible(
+                  child: TextButton.icon(
+                    onPressed: () => openCatalogItemSheet(context, order),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text("Qo'shish"),
+                  ),
                 ),
               ],
             ],
@@ -336,14 +354,16 @@ class _ProgressChecklist extends StatelessWidget {
             ],
           ),
           const SizedBox(width: 12),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Text(
-              info.label,
-              style: TextStyle(
-                fontWeight: current ? FontWeight.w800 : FontWeight.w600,
-                fontSize: 13.5,
-                color: done || current ? AppColors.ink : AppColors.gray,
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                info.label,
+                style: TextStyle(
+                  fontWeight: current ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: 13.5,
+                  color: done || current ? AppColors.ink : AppColors.gray,
+                ),
               ),
             ),
           ),

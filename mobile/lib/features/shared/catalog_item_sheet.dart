@@ -11,6 +11,7 @@ import '../../core/services/catalog_repository.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/widgets/load_error_note.dart';
+import '../../core/utils/money_utils.dart';
 
 const _calcTypeIcons = {
   'sqm': Icons.crop_square_rounded,
@@ -482,12 +483,14 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                         children: [
                           const Icon(Icons.payments_rounded, color: AppColors.primary, size: 20),
                           const SizedBox(width: 10),
-                          const Text('Taxminiy narx', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                          const Spacer(),
-                          Text(
-                            "${_estimatedPrice.toStringAsFixed(0)} so'm",
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.primary),
-                          ),
+                          const Expanded(child: Text('Taxminiy narx', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
+                          Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(formatMoneyUz(_estimatedPrice), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.primary)),
+                ),
+              ),
                         ],
                       ),
                     ),
@@ -528,11 +531,16 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
         children: [
           Row(
             children: [
-              const Text('O\'lcham', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-              const Spacer(),
-              TextButton(
-                onPressed: () => setState(() => _sqmDirectMode = !_sqmDirectMode),
-                child: Text(_sqmDirectMode ? 'Eni x Bo\'yi kiritish' : 'To\'g\'ridan m² kiritish', style: const TextStyle(fontSize: 12)),
+              const Expanded(child: Text('O\'lcham', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
+              Flexible(
+                child: TextButton(
+                  onPressed: () => setState(() => _sqmDirectMode = !_sqmDirectMode),
+                  child: Text(
+                    _sqmDirectMode ? 'Eni x Bo\'yi kiritish' : 'To\'g\'ridan m² kiritish',
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
               ),
             ],
           ),

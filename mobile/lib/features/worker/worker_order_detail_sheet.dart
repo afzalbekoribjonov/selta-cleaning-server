@@ -114,12 +114,20 @@ class _ItemsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text('Mahsulotlar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: () => openCatalogItemSheet(context, order),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(items.isEmpty ? 'Belgilash' : "Qo'shish"),
+              const Expanded(
+                child: Text(
+                  'Mahsulotlar',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                ),
+              ),
+              Flexible(
+                child: TextButton.icon(
+                  onPressed: () => openCatalogItemSheet(context, order),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text(items.isEmpty ? 'Belgilash' : "Qo'shish"),
+                ),
               ),
             ],
           ),

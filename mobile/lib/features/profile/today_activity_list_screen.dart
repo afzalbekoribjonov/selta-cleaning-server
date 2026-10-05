@@ -104,9 +104,15 @@ class _OrderTile extends StatelessWidget {
             children: [
               Text('#${entry.orderNumber}',
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink)),
+              const SizedBox(width: 12),
               const Spacer(),
-              Text(formatMoneyUz(entry.totalPrice),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.primary)),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(formatMoneyUz(entry.totalPrice), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.primary)),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),

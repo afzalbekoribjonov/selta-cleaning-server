@@ -12,6 +12,7 @@ import '../../core/services/orders_repository.dart';
 import '../../core/utils/money_utils.dart';
 import '../shared/bonus_section.dart';
 import '../shared/payment_method_field.dart';
+import '../shared/item_detail_row.dart' show itemMeasurementLabel;
 
 /// Kamomad sababi — server bilan bir xil kalitlar (lib/payments.ts).
 enum ShortfallKind { partial, debt, discount }
@@ -461,14 +462,37 @@ class _ItemCheck extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Expanded(
-              child: Text(
-                item.name,
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.ink),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.ink),
+                  ),
+                  if (itemMeasurementLabel(item).isNotEmpty)
+                    Text(
+                      itemMeasurementLabel(item),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.grayDark),
+                    ),
+                ],
               ),
             ),
-            Text(
-              formatMoneyUz(item.price),
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.grayDark),
+            const SizedBox(width: 8),
+            // Katta summa nomni siqib chiqarmasin — raqam o'zi kichrayadi.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  formatMoneyUz(item.price),
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.grayDark),
+                ),
+              ),
             ),
           ],
         ),
