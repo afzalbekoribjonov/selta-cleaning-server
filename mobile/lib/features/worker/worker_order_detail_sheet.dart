@@ -8,6 +8,7 @@ import '../../core/services/order_items_provider.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_action_row.dart';
+import '../shared/order_copy.dart';
 
 void openWorkerOrderDetailSheet(BuildContext context, Order order) {
   showModalBottomSheet(
@@ -50,7 +51,18 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
                   // yopilib qolmasligi kerak.
                   padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.of(context).viewInsets.bottom),
                   children: [
-                    Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
+                          ),
+                        ),
+                        CopyOrderButton(order: order, items: itemsAsync.valueOrNull),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     Text(order.customerName, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.grayDark)),
                     const SizedBox(height: 20),

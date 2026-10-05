@@ -12,6 +12,7 @@ import '../../core/utils/date_utils.dart';
 import 'catalog_item_sheet.dart';
 import 'comments_section.dart';
 import 'item_detail_row.dart';
+import 'order_copy.dart';
 import 'sales_manager_notes_card.dart';
 
 void openTeamJobDetailSheet(BuildContext context, Order order) {
@@ -85,7 +86,15 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text('Joyida yuvish ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall)),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text('Joyida yuvish ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
+                          ),
+                        ),
+                        CopyOrderButton(order: order, items: itemsAsync.valueOrNull),
+                        const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(color: status.background, borderRadius: BorderRadius.circular(20)),

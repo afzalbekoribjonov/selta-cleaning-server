@@ -16,6 +16,7 @@ import '../../core/utils/phone_format.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_detail_row.dart';
+import '../shared/order_copy.dart';
 import '../shared/sales_manager_notes_card.dart';
 import '../shared/team_assign_sheet.dart';
 
@@ -76,7 +77,7 @@ class _OrderDetailSheet extends ConsumerWidget {
                   // yopilib qolmasligi kerak.
                   padding: EdgeInsets.fromLTRB(20, 16, 20, 32 + MediaQuery.of(context).viewInsets.bottom),
                   children: [
-                    _Header(order: liveOrder),
+                    _Header(order: liveOrder, items: itemsAsync.valueOrNull),
                     const SizedBox(height: 20),
                     _InfoCard(order: liveOrder),
                     if (liveOrder.notedItems.isNotEmpty || liveOrder.estimatedPrice != null) ...[
@@ -122,7 +123,11 @@ class _OrderDetailSheet extends ConsumerWidget {
 
 class _Header extends StatelessWidget {
   final Order order;
-  const _Header({required this.order});
+
+  /// Nusxa olish uchun — hali yuklanmagan bo'lsa tugma o'chiq turadi.
+  final List<OrderItem>? items;
+
+  const _Header({required this.order, required this.items});
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +155,8 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        CopyOrderButton(order: order, items: items),
+        const SizedBox(width: 6),
         IconButton(
           onPressed: () => showDialog(context: context, builder: (_) => _EditOrderDialog(order: order)),
           icon: const Icon(Icons.edit_rounded),

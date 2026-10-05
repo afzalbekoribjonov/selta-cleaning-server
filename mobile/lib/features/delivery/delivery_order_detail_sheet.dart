@@ -13,6 +13,7 @@ import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/launch_utils.dart';
 import '../dispatcher/widgets/order_card.dart';
+import '../shared/order_copy.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_action_row.dart';
@@ -156,7 +157,15 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                   children: [
                     Row(
                       children: [
-                        Expanded(child: Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall)),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
+                          ),
+                        ),
+                        CopyOrderButton(order: order, items: itemsAsync.valueOrNull),
+                        const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(color: status.background, borderRadius: BorderRadius.circular(20)),
