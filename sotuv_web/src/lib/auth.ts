@@ -51,6 +51,8 @@ export interface EmployeeProfile {
   fullName: string
   department: string
   attendanceEnabled?: boolean
+  /** Admin panelda beriladigan "Oldindan to'lov" vakolati. */
+  canTakePrepayment?: boolean
 }
 
 export async function fetchEmployeeProfile(employeeId: string): Promise<EmployeeProfile | null> {

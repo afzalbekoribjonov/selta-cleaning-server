@@ -9,6 +9,7 @@ import { isValidActionId } from "../lib/idempotency";
 import { computeItems, type ItemInput } from "../lib/pricing";
 import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
 import { logDailyActivity, itemActivityRefs } from "../lib/dailyActivity";
+import { prepaidCredit, prepaidToApply } from "../lib/prepayments";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -420,9 +421,19 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
         // "ko'chib ketardi" (qayta hisoblanganda ikki marta yoki
         // umuman hisobga olinmay qolishi mumkin edi).
         attributionUpdate.doneAt = FieldValue.serverTimestamp();
-        if (typeof collectedAmount === "number" && collectedAmount > 0) {
-          attributionUpdate.collectedAmount = collectedAmount;
-        }
+      }
+
+      // Yakunlashda olinadigan summa. Berilmasa — buyurtma summasi, undan
+      // oldindan to'langani ayiriladi (u pul olingan kuni kassaga tushgan,
+      // ikkinchi marta sanalmasligi kerak). Oldindan to'lov to'liq yopgan
+      // bo'lsa aniq 0 yoziladi: `null` kunlik hisobda "butun narx" degani.
+      const orderPrice = (order.totalPrice as number | undefined) ?? 0;
+      const prepaidApplied = toStatus === "done" ? prepaidToApply(prepaidCredit(order), orderPrice) : 0;
+      let collected: number | null = typeof collectedAmount === "number" && collectedAmount > 0 ? collectedAmount : null;
+      if (collected === null && prepaidApplied > 0) collected = orderPrice - prepaidApplied;
+      if (toStatus === "done") {
+        if (collected !== null) attributionUpdate.collectedAmount = collected;
+        if (prepaidApplied > 0) attributionUpdate.prepaidUsed = FieldValue.increment(prepaidApplied);
       }
 
       // Kunlik jurnal. Joyida yuvish item-darajasiga ega emas — u shu
@@ -441,8 +452,8 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
           serviceType,
           employeeId,
           itemName: serviceType === "onsite" ? "Joyida yuvish" : "Butun buyurtma",
-          price: (order.totalPrice as number | undefined) ?? 0,
-          collectedAmount: typeof collectedAmount === "number" && collectedAmount > 0 ? collectedAmount : null,
+          price: orderPrice,
+          collectedAmount: collected,
         });
       }
 
@@ -659,13 +670,18 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
           itemUpdate.deliveredByName = actorName.trim();
         }
         orderUpdate.deliveredByEmployees = FieldValue.arrayUnion(employeeId);
-        if (typeof collectedAmount === "number" && collectedAmount > 0) {
-          itemUpdate.collectedAmount = collectedAmount;
-        }
+        // Oldindan to'langan qoldiq bu mahsulot narxidan ayiriladi
+        // (deliverOrderItems bilan bir xil qoida).
+        const itemPrice = (item.price as number | undefined) ?? 0;
+        const prepaidApplied = prepaidToApply(prepaidCredit(order), itemPrice);
+        let collected: number | null = typeof collectedAmount === "number" && collectedAmount > 0 ? collectedAmount : null;
+        if (collected === null && prepaidApplied > 0) collected = itemPrice - prepaidApplied;
+        if (collected !== null) itemUpdate.collectedAmount = collected;
+        if (prepaidApplied > 0) orderUpdate.prepaidUsed = FieldValue.increment(prepaidApplied);
         logDailyActivity(tx, now, {
           ...activityBase(),
           type: "delivered",
-          collectedAmount: typeof collectedAmount === "number" && collectedAmount > 0 ? collectedAmount : null,
+          collectedAmount: collected,
         });
       }
 

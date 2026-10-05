@@ -183,11 +183,17 @@ employeeActivityRouter.post("/myDailyActivity", withAuth, async (req: AuthedRequ
     // qoida (routes/dailyReport.ts): yetkazish va shu kuni yopilgan
     // qarzlarning naqd qismi. Karta puli xodim qo'lidan o'tmaydi.
     let collectedCash = 0;
+    let prepaidCount = 0;
+    let prepaidTotal = 0;
 
     for (const doc of eventsSnap.docs) {
       const e = doc.data();
       if (e.type === "delivered" || e.type === "onsite_done") collectedCash += cashPartOf(e);
-      else if (e.type === "settled") collectedCash += cashPartOf({ ...e, price: 0 });
+      else if (e.type === "settled" || e.type === "prepaid") collectedCash += cashPartOf({ ...e, price: 0 });
+      if (e.type === "prepaid") {
+        prepaidCount += 1;
+        prepaidTotal += (e.collectedAmount as number | null) ?? 0;
+      }
       const calcType = (e.calcType as string | null) ?? null;
       const unit = UNIT_BY_CALC_TYPE[calcType ?? "fixed"] ?? "dona";
       const row: StageRow = {
@@ -278,6 +284,8 @@ employeeActivityRouter.post("/myDailyActivity", withAuth, async (req: AuthedRequ
         // qilingan chiqimlar. Manfiy — kompaniya xodimga qarzdor.
         cash: Math.round(collectedCash - cashExpenses),
         collectedCash: Math.round(collectedCash),
+        // Shu kuni qabul qilingan oldindan to'lovlar (naqd + karta).
+        prepaid: { count: prepaidCount, amount: Math.round(prepaidTotal) },
         debt: sumShortfall(byKind("debt", true)),
         partial: sumShortfall(byKind("partial", true)),
         discount: sumShortfall(byKind("discount", false)),

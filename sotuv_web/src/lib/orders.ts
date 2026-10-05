@@ -46,6 +46,10 @@ export interface Order {
   itemStageCategories: Record<string, string[]>
   notedItems: string[]
   estimatedPrice: number | null
+  /** Oldindan to'lov (server: lib/prepayments.ts): olingan jami va shundan topshirishda ishlatilgani. */
+  prepaidAmount: number
+  prepaidUsed: number
+  prepayments: Prepayment[]
   source: string | null
   intakeMethod: string | null
 }
@@ -81,9 +85,42 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     itemStageCategories: data.itemStageCategories ?? {},
     notedItems: data.notedItems ?? [],
     estimatedPrice: data.estimatedPrice ?? null,
+    prepaidAmount: data.prepaidAmount ?? 0,
+    prepaidUsed: data.prepaidUsed ?? 0,
+    prepayments: Array.isArray(data.prepayments) ? data.prepayments.map(toPrepayment) : [],
     source: data.source ?? null,
     intakeMethod: data.intakeMethod ?? null,
   }
+}
+
+/** Bitta oldindan to'lov yozuvi — buyurtma hujjatining `prepayments` ro'yxatidan. */
+export interface Prepayment {
+  id: string
+  amount: number
+  cashAmount: number
+  cardAmount: number
+  at: Date | null
+  employeeId: string
+  employeeName: string | null
+  note: string | null
+}
+
+function toPrepayment(raw: Record<string, unknown>): Prepayment {
+  return {
+    id: String(raw.id ?? ''),
+    amount: Number(raw.amount ?? 0),
+    cashAmount: Number(raw.cashAmount ?? 0),
+    cardAmount: Number(raw.cardAmount ?? 0),
+    at: (raw.at as Timestamp | undefined)?.toDate?.() ?? null,
+    employeeId: String(raw.employeeId ?? ''),
+    employeeName: typeof raw.employeeName === 'string' ? raw.employeeName : null,
+    note: typeof raw.note === 'string' ? raw.note : null,
+  }
+}
+
+/** Hali ishlatilmagan oldindan to'lov — keyingi topshirishda narxdan ayiriladi. */
+export function prepaidCredit(order: Pick<Order, 'prepaidAmount' | 'prepaidUsed'>): number {
+  return Math.max(0, order.prepaidAmount - order.prepaidUsed)
 }
 
 export function isOverdue(order: Order): boolean {

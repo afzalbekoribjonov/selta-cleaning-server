@@ -145,14 +145,14 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
       //
       // Topshiriladigan — faqat NAQD qism (admin paneli bilan bir xil):
       // karta puli to'g'ridan-to'g'ri kompaniya hisobiga tushadi.
-      if (type === "settled") {
+      if (type === "settled" || type === "prepaid") {
         const amount = cashPartOf({ ...e, price: 0 });
         if (amount > 0) {
           cashTotal += amount;
           cashEntries.push({
             ...base,
             amount,
-            itemName: "Yopilgan qarz",
+            itemName: type === "settled" ? "Yopilgan qarz" : "Oldindan to'lov",
             at: toIso(e.at),
           });
         }

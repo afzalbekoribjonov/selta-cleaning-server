@@ -113,6 +113,7 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           canViewFinance: data.canViewFinance ?? false,
           canAccessWarehouse: data.canAccessWarehouse ?? false,
           canAddExpenses: data.canAddExpenses ?? false,
+          canTakePrepayment: data.canTakePrepayment ?? false,
           attendanceEnabled: data.attendanceEnabled ?? false,
           attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -470,9 +471,10 @@ employeeAdminRouter.post("/adminSetEmployeeWarehousePermission", withAuth, requi
  * uchun bitta umumiy yo'l. Faqat ro'yxatdagi bayroqlarni o'zgartiradi;
  * har birini ishlatadigan route o'zi qayta tekshiradi.
  *
- *  - canAddExpenses — ilovadan chiqim kiritish (routes/expenses.ts).
+ *  - canAddExpenses    — ilovadan chiqim kiritish (routes/expenses.ts);
+ *  - canTakePrepayment — oldindan to'lov qabul qilish (routes/payments.ts).
  */
-const TOGGLE_PERMISSIONS = new Set(["canAddExpenses"]);
+const TOGGLE_PERMISSIONS = new Set(["canAddExpenses", "canTakePrepayment"]);
 
 employeeAdminRouter.post("/adminSetEmployeePermission", withAuth, requireAdmin, async (req, res) => {
   try {

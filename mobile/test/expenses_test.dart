@@ -234,6 +234,20 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets("oldindan to'lov qabul qilgan sotuv menejerida yig'ilgan pul ko'rinadi", (tester) async {
+      await pumpProfile(tester, 'dispatcher', {
+        'payments': {
+          'cash': 70000,
+          'collectedCash': 70000,
+          'prepaid': {'count': 1, 'amount': 100000},
+          'rows': const [],
+        },
+      });
+      expect(find.text("Oldindan to'lov (1)"), findsOneWidget);
+      expect(find.text("Qo'lingizda"), findsOneWidget);
+      expect(find.text("70 000 so'm"), findsOneWidget, reason: '30 000 karta bilan — qo\'lda faqat naqd');
+    });
+
     testWidgets("dastavchikda chiqimsiz — avvalgidek \"Qo'lingizda\"", (tester) async {
       await pumpProfile(tester, 'delivery', activityJson(collected: 300000));
       expect(find.text("Qo'lingizda"), findsOneWidget);

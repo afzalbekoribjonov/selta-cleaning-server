@@ -14,6 +14,7 @@ import 'comments_section.dart';
 import 'item_detail_row.dart';
 import 'order_copy.dart';
 import 'sales_manager_notes_card.dart';
+import 'prepayment_section.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -183,6 +184,7 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                         ),
                       ),
                     ],
+                    PrepaymentSection(order: order),
                     const SizedBox(height: 20),
                     CommentsSection(orderId: order.id, focus: widget.focusComments),
                   ],

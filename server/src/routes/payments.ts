@@ -1,9 +1,17 @@
 import { Router } from "express";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
-import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz";
+import { ApiError, sendError, withAuth, requireEmployeeFlag, type AuthedRequest } from "../lib/authz";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
-import { logDailyActivity } from "../lib/dailyActivity";
+import { dailyActivityDocId, dailyActivityEvents, logDailyActivity } from "../lib/dailyActivity";
+import { isValidActionId } from "../lib/idempotency";
+import {
+  MAX_PREPAYMENT,
+  prepaidCredit,
+  prepaidToApply,
+  prepaymentsOf,
+  type PrepaymentEntry,
+} from "../lib/prepayments";
 import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
 import { loadEmployeeNames } from "../lib/employeeNames";
 import { isPaymentKind, normalizePaymentSplit, splitPaidAmount, type PaymentKind } from "../lib/payments";
@@ -61,7 +69,8 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
     const now = new Date();
     const dateKey = businessDateString(now);
 
-    let result: { orderNumber: number; dueAmount: number; shortfall: number; kind: PaymentKind } | null = null;
+    let result: { orderNumber: number; dueAmount: number; prepaidApplied: number; shortfall: number; kind: PaymentKind } | null =
+      null;
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, itemsSnap] = await Promise.all([tx.get(orderRef), tx.get(orderRef.collection("items"))]);
@@ -82,7 +91,11 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
       });
 
       const prices = targets.map((d) => (d.data().price as number | undefined) ?? 0);
-      const dueAmount = prices.reduce((sum, p) => sum + p, 0);
+      const grossAmount = prices.reduce((sum, p) => sum + p, 0);
+      // Oldindan to'langan pul avval shu topshirishga ishlatiladi —
+      // dastavchik mijozdan faqat qolganini oladi.
+      const prepaidApplied = prepaidToApply(prepaidCredit(order), grossAmount);
+      const dueAmount = grossAmount - prepaidApplied;
       const shortfall = Math.max(0, Math.round(dueAmount - paidAmount));
 
       // Kamomad bo'lsa sababi majburiy — aks holda pul qayerga ketgani
@@ -149,6 +162,7 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
         updatedAt: FieldValue.serverTimestamp(),
         deliveredByEmployees: FieldValue.arrayUnion(employeeId),
       };
+      if (prepaidApplied > 0) orderUpdate.prepaidUsed = FieldValue.increment(prepaidApplied);
 
       if (remainingItemCount === 0 && order.status !== "done") {
         orderUpdate.status = "done";
@@ -183,6 +197,9 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
         itemCount: targets.length,
         remainingItemCount,
         dueAmount: Math.round(dueAmount),
+        // Mahsulotlar narxi va undan oldindan to'lov bilan yopilgani.
+        grossAmount: Math.round(grossAmount),
+        prepaidApplied,
         paidAmount: Math.round(paidAmount),
         cashAmount: split.cashAmount,
         cardAmount: split.cardAmount,
@@ -196,7 +213,7 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
         note: typeof note === "string" && note.trim() ? note.trim() : null,
       });
 
-      result = { orderNumber, dueAmount: Math.round(dueAmount), shortfall, kind: resolvedKind };
+      result = { orderNumber, dueAmount: Math.round(dueAmount), prepaidApplied, shortfall, kind: resolvedKind };
     });
 
     res.json({ ok: true, paymentId: paymentRef.id, ...(result ?? {}) });
@@ -271,6 +288,157 @@ paymentsRouter.post("/settlePayment", withAuth, async (req: AuthedRequest, res) 
         cashAmount: split.cashAmount,
         cardAmount: split.cardAmount,
       });
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Oldindan (qisman) to'lov qabul qilish — admin panelda "Oldindan to'lov"
+ * vakolati (`canTakePrepayment`) berilgan xodim yoki admin.
+ *
+ * Pul SHU KUNI xodim qo'liga tushadi: kunlik jurnalga `prepaid` hodisasi
+ * yoziladi va u kassa hisobida (routes/dailyReport.ts) ko'rinadi.
+ * Topshirishda esa bu summa mahsulotlar narxidan ayiriladi
+ * (yuqoridagi deliverOrderItems, joyida yuvishda changeOrderStatus).
+ *
+ * Ilova ID'ni o'zi beradi (`prepaymentId`) — takroriy yuborish
+ * ikkinchi to'lov yozmaydi.
+ */
+paymentsRouter.post("/addPrepayment", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    await requireEmployeeFlag(req, "canTakePrepayment", "Oldindan to'lov qabul qilish huquqingiz yo'q");
+    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    const { orderId, prepaymentId, amount, cashAmount, cardAmount, note, actorName } = req.body ?? {};
+
+    if (typeof orderId !== "string" || !orderId) throw new ApiError(400, "invalid-argument", "orderId majburiy");
+    if (prepaymentId !== undefined && !isValidActionId(prepaymentId)) {
+      throw new ApiError(400, "invalid-argument", "prepaymentId noto'g'ri");
+    }
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0 || amount > MAX_PREPAYMENT) {
+      throw new ApiError(400, "invalid-argument", "Summa noto'g'ri");
+    }
+    const paid = Math.round(amount);
+    const split = normalizePaymentSplit(paid, cashAmount, cardAmount);
+    if (!split) {
+      throw new ApiError(400, "invalid-argument", "Naqd va karta summalarining yig'indisi to'lov summasiga teng bo'lishi kerak");
+    }
+
+    const id = (prepaymentId as string | undefined) ?? db.collection("orders").doc().id;
+    const orderRef = db.collection("orders").doc(orderId);
+    const now = new Date();
+    let prepaidAmount = 0;
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+      const order = snap.data()!;
+      const existing = prepaymentsOf(order);
+      prepaidAmount = (order.prepaidAmount as number | undefined) ?? 0;
+      if (existing.some((p) => p.id === id)) return; // Takroriy yuborish.
+      if (order.status === "done") {
+        throw new ApiError(412, "failed-precondition", "Buyurtma yakunlangan — oldindan to'lov qabul qilinmaydi");
+      }
+
+      const entry: PrepaymentEntry = {
+        id,
+        amount: paid,
+        cashAmount: split.cashAmount,
+        cardAmount: split.cardAmount,
+        at: Timestamp.fromDate(now),
+        employeeId,
+        employeeName: typeof actorName === "string" && actorName.trim() ? actorName.trim() : null,
+        note: typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : null,
+      };
+      prepaidAmount += paid;
+      tx.update(orderRef, {
+        prepayments: [...existing, entry],
+        prepaidAmount,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      logDailyActivity(tx, now, {
+        type: "prepaid",
+        paymentId: id,
+        orderId,
+        orderNumber: (order.orderNumber as number) ?? 0,
+        customerName: (order.customerName as string) ?? "",
+        phone: (order.phone as string) ?? "",
+        serviceType: (order.serviceType as string) ?? "pickup",
+        employeeId,
+        itemName: "Oldindan to'lov",
+        collectedAmount: paid,
+        cashAmount: split.cashAmount,
+        cardAmount: split.cardAmount,
+      });
+    });
+
+    res.json({ ok: true, prepaymentId: id, prepaidAmount });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Xato kiritilgan oldindan to'lovni bekor qilish. Admin istalgan payt;
+ * uni qabul qilgan xodim esa faqat SHU KUNI va kunlik naqd hali kassaga
+ * topshirilmagan bo'lsa. Topshirishda ishlatib bo'lingan summa bekor
+ * qilinmaydi — pul allaqachon buyurtma hisobiga o'tgan.
+ */
+paymentsRouter.post("/cancelPrepayment", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const role = req.auth!.role;
+    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    const { orderId, prepaymentId } = req.body ?? {};
+    if (typeof orderId !== "string" || !orderId || typeof prepaymentId !== "string" || !prepaymentId) {
+      throw new ApiError(400, "invalid-argument", "orderId va prepaymentId majburiy");
+    }
+
+    const orderRef = db.collection("orders").doc(orderId);
+    const today = businessDateString(new Date());
+    const handoverSnap = role === "admin" ? null : await db.collection("cashHandovers").doc(today).get();
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+      const order = snap.data()!;
+      const entries = prepaymentsOf(order);
+      const entry = entries.find((p) => p.id === prepaymentId);
+      if (!entry) return; // Allaqachon bekor qilingan.
+
+      const dateKey = businessDateString(entry.at.toDate());
+      if (role !== "admin") {
+        if (entry.employeeId !== employeeId) {
+          throw new ApiError(403, "permission-denied", "Faqat o'zingiz qabul qilgan to'lovni bekor qila olasiz");
+        }
+        if (dateKey !== today) {
+          throw new ApiError(412, "failed-precondition", "Faqat bugungi to'lovni bekor qilish mumkin — adminga murojaat qiling");
+        }
+        if (handoverSnap?.data()?.handedOver?.[employeeId] !== undefined) {
+          throw new ApiError(412, "failed-precondition", "Bugungi naqd allaqachon topshirilgan — adminga murojaat qiling");
+        }
+      }
+      if (prepaidCredit(order) < entry.amount) {
+        throw new ApiError(412, "failed-precondition", "Bu to'lov topshirishda hisobga olingan — bekor qilib bo'lmaydi");
+      }
+
+      tx.update(orderRef, {
+        prepayments: entries.filter((p) => p.id !== prepaymentId),
+        prepaidAmount: Math.max(0, ((order.prepaidAmount as number | undefined) ?? 0) - entry.amount),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      // O'sha kunning kassa hisobidan ham chiqadi.
+      tx.delete(
+        dailyActivityEvents(dateKey).doc(
+          dailyActivityDocId(
+            { type: "prepaid", paymentId: prepaymentId, orderId, orderNumber: 0, customerName: "", phone: "", serviceType: "", employeeId: "" },
+            dateKey,
+          ),
+        ),
+      );
     });
 
     res.json({ ok: true });

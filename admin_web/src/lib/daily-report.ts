@@ -81,6 +81,8 @@ export interface DriverCashRow {
    * to'lovlardan kelgan qismi — yetkazish summasidan farqini tushuntiradi.
    */
   settledAmount: number
+  /** Shu kuni qabul qilingan oldindan to'lovlar (topshirishda narxdan ayiriladi). */
+  prepaidAmount: number
   /** Shu kuni xodim qo'lidagi naqddan qilgan chiqimlar (yoqilg'i va h.k.). */
   expenseAmount: number
   expenses: { id: string; name: string; amount: number; at: string | null }[]

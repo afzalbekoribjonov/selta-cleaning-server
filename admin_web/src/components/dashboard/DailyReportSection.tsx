@@ -4,6 +4,7 @@ import {
   Banknote,
   CreditCard,
   HandCoins,
+  PiggyBank,
   Receipt,
   ChevronLeft,
   ChevronRight,
@@ -360,8 +361,8 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold text-ink">Xodimlar qo'lidagi pul</div>
           <div className="text-xs text-gray-dark">
-            Shu kuni yetkazgani va yopgan qarzlari. Topshiriladigan — naqd qismi, qo'lidagi naqddan qilgan chiqimlari
-            ayirilgan holda.
+            Shu kuni yetkazgani, yopgan qarzlari va qabul qilgan oldindan to'lovlari. Topshiriladigan — naqd qismi,
+            qo'lidagi naqddan qilgan chiqimlari ayirilgan holda.
           </div>
         </div>
       </div>
@@ -398,6 +399,9 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
               <MoneyLine icon={CreditCard} label="Karta" amount={d.cardAmount} />
               {d.settledAmount > 0 && (
                 <MoneyLine icon={HandCoins} label="Shundan yopilgan qarz" amount={d.settledAmount} />
+              )}
+              {d.prepaidAmount > 0 && (
+                <MoneyLine icon={PiggyBank} label="Shundan oldindan to'lov" amount={d.prepaidAmount} />
               )}
               {d.expenseAmount > 0 && (
                 <>

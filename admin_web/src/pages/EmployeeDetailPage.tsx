@@ -18,6 +18,7 @@ import {
   ClipboardList,
   ReceiptText,
   Receipt,
+  PiggyBank,
   ArrowRight,
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
@@ -292,6 +293,15 @@ export default function EmployeeDetailPage() {
         description="Ilovadan yoqilg'i, texnik xizmat kabi chiqimlarni kiritish"
         grantText={"ilovada chiqim kirita oladi. \"Qo'limdagi naqddan\" belgilangan chiqim o'sha kuni u topshiradigan naqddan ayiriladi."}
         revokeText="endi ilovada chiqim kirita olmaydi. Avval kiritganlari saqlanib qoladi."
+      />
+      <PermissionToggleSection
+        employee={employee}
+        permission="canTakePrepayment"
+        icon={PiggyBank}
+        title="Oldindan to'lov"
+        description="Buyurtma topshirilishidan oldin mijozdan qisman yoki to'liq to'lov qabul qilish"
+        grantText="buyurtma kartasida oldindan to'lov qabul qila oladi. Summa o'sha kuni uning kassasiga tushadi va topshirishda narxdan ayiriladi."
+        revokeText="endi oldindan to'lov qabul qila olmaydi. Avval qabul qilinganlari saqlanib qoladi."
       />
       {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 

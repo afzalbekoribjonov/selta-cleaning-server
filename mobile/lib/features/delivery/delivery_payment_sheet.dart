@@ -74,9 +74,27 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
 
   List<OrderItem> get _selectedItems => widget.readyItems.where((i) => _selected.contains(i.id)).toList();
 
-  num get _due => _selectedItems.fold<num>(0, (sum, i) => sum + i.price);
+  /// Tanlangan mahsulotlar narxi.
+  num get _gross => _selectedItems.fold<num>(0, (sum, i) => sum + i.price);
 
-  num get _paid => num.tryParse(_amountController.text.replaceAll(' ', '').replaceAll(',', '.')) ?? -1;
+  /// Oldindan to'langan qoldiqdan shu topshirishga ishlatiladigani —
+  /// server ham aynan shunday hisoblaydi (lib/prepayments.ts).
+  num get _prepaidApplied {
+    final credit = widget.order.prepaidCredit;
+    final gross = _gross;
+    return credit <= 0 || gross <= 0 ? 0 : (credit < gross ? credit : gross);
+  }
+
+  /// Mijozdan olinishi kerak bo'lgani.
+  num get _due => _gross - _prepaidApplied;
+
+  /// Kiritilgan summa; kiritilmagan bo'lsa -1. Oldindan to'lov hammasini
+  /// yopgan bo'lsa bo'sh maydon 0 degani — dastavchik hech narsa olmaydi.
+  num get _paid {
+    final text = _amountController.text.replaceAll(' ', '').replaceAll(',', '.');
+    if (text.isEmpty) return _due == 0 ? 0 : -1;
+    return num.tryParse(text) ?? -1;
+  }
 
   num get _shortfall {
     final paid = _paid;
@@ -123,6 +141,7 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
     });
     try {
       final name = ref.read(currentEmployeeProvider).valueOrNull?['fullName'] as String?;
+      final applied = _prepaidApplied;
       await ref.read(ordersRepositoryProvider).deliverOrderItems(
             orderId: widget.order.id,
             itemIds: _selected.toList(),
@@ -131,6 +150,7 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
             cardAmount: split.card,
             kind: _kind == null ? null : _kindKeys[_kind!],
             actorName: name,
+            prepaidUsedAfter: applied > 0 ? widget.order.prepaidUsed + applied : null,
           );
       if (mounted) Navigator.pop(context, true);
     } catch (err) {
@@ -205,6 +225,16 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
                 const SizedBox(height: 12),
               ],
 
+              if (_prepaidApplied > 0) ...[
+                _SummaryRow(label: 'Mahsulotlar', value: formatMoneyUz(_gross)),
+                const SizedBox(height: 4),
+                _SummaryRow(
+                  label: "Oldindan to'langan",
+                  value: formatMoneyUz(-_prepaidApplied),
+                  tone: AppColors.success,
+                ),
+                const SizedBox(height: 4),
+              ],
               _SummaryRow(label: 'To\'lanishi kerak', value: formatMoneyUz(due), bold: true),
               const SizedBox(height: 12),
 
@@ -385,14 +415,24 @@ class _SummaryRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
+          flex: 5,
           child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.grayDark, fontWeight: FontWeight.w600)),
         ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: bold ? 16 : 13.5,
-            fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
-            color: tone ?? AppColors.ink,
+        const SizedBox(width: 8),
+        // Katta summa + katta shriftda ham qator sig'adi — raqam kichrayadi.
+        Expanded(
+          flex: 4,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: bold ? 16 : 13.5,
+                fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
+                color: tone ?? AppColors.ink,
+              ),
+            ),
           ),
         ),
       ],

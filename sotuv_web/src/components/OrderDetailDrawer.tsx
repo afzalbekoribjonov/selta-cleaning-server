@@ -13,6 +13,7 @@ import { CommentsSection } from '@/components/CommentsSection'
 import { EditOrderModal } from '@/components/EditOrderModal'
 import { TeamAssignModal } from '@/components/TeamAssignModal'
 import { Spinner } from '@/components/Spinner'
+import { PrepaymentCard } from '@/components/PrepaymentCard'
 
 function formatMoney(v: number): string {
   return `${Math.round(v).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -106,6 +107,8 @@ export function OrderDetailDrawer({ orderId, onClose }: { orderId: string; onClo
                   </div>
                 )}
               </div>
+
+              <PrepaymentCard order={order} />
 
               <ProgressCard order={order} />
 

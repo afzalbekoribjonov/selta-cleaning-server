@@ -15,6 +15,7 @@ export interface Employee {
   canViewFinance: boolean
   canAccessWarehouse: boolean
   canAddExpenses: boolean
+  canTakePrepayment: boolean
   canSeeWorkshopQueue: boolean
   attendanceEnabled: boolean
   attendanceEnabledAt: string | null

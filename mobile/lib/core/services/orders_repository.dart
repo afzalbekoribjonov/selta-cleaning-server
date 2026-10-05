@@ -8,7 +8,7 @@ import '../sync/action_queue.dart';
 import '../sync/overlay.dart';
 import '../sync/pending_action.dart';
 import '../utils/money_utils.dart';
-import 'auth_service.dart' show authStateProvider, employeeClaimsProvider;
+import 'auth_service.dart' show apiClientProvider, authStateProvider, employeeClaimsProvider;
 import 'order_items_provider.dart';
 import 'tariff_settings.dart';
 
@@ -227,6 +227,7 @@ class OrdersRepository {
     List<OrderItem> upserts = const [],
     List<String> removes = const [],
     String? orderStatus,
+    num? prepaidUsed,
   }) {
     final base = _baseOrder(orderId);
     return {
@@ -236,6 +237,7 @@ class OrdersRepository {
       if (after != null) 'summary': summarizeItems(after),
       'base': base == null ? null : orderSignature(base),
       if (orderStatus != null) 'orderStatus': orderStatus,
+      if (prepaidUsed != null) 'prepaidUsed': prepaidUsed,
     };
   }
 
@@ -445,6 +447,9 @@ class OrdersRepository {
   ///
   /// Summa majburiy. U mahsulotlar narxidan kam bo'lsa, `kind` bilan
   /// sababi ko'rsatiladi: 'partial' | 'debt' | 'discount'.
+  ///
+  /// Oldindan to'lov qoldig'ini server o'zi ayiradi; [prepaidUsedAfter]
+  /// faqat ekranda (javob kelguncha) qoldiqni to'g'ri ko'rsatish uchun.
   Future<void> deliverOrderItems({
     required String orderId,
     required List<String> itemIds,
@@ -454,6 +459,7 @@ class OrdersRepository {
     String? kind,
     String? note,
     String? actorName,
+    num? prepaidUsedAfter,
   }) async {
     final items = _items(orderId);
     final ids = itemIds.toSet();
@@ -483,7 +489,74 @@ class OrdersRepository {
         after: after,
         upserts: [for (final i in items ?? const <OrderItem>[]) if (ids.contains(i.id)) deliver(i)],
         orderStatus: remaining == 0 ? 'done' : null,
+        prepaidUsed: prepaidUsedAfter,
       ),
+    );
+  }
+
+  /// Oldindan (qisman) to'lov qabul qilish (server: routes/payments.ts).
+  ///
+  /// Navbat orqali — internetsiz ham darhol saqlanadi. To'lov ID'sini
+  /// ilova beradi, takroriy yuborish ikkinchi marta yozmaydi. Ekranda
+  /// [order]ning ko'rinib turgan holatiga qo'shib ko'rsatiladi.
+  void addPrepayment({
+    required Order order,
+    required num amount,
+    required num cashAmount,
+    required num cardAmount,
+    String? note,
+    String? actorName,
+  }) {
+    final id = newActionId();
+    final entry = Prepayment(
+      id: id,
+      amount: amount,
+      cashAmount: cashAmount,
+      cardAmount: cardAmount,
+      at: DateTime.now(),
+      employeeId: _employeeId,
+      employeeName: actorName,
+      note: note,
+    );
+    _enqueue(
+      id: id,
+      path: '/addPrepayment',
+      orderId: order.id,
+      label: _label(order.id, "Oldindan to'lov · ${formatMoneyUz(amount)}"),
+      body: {
+        'orderId': order.id,
+        'prepaymentId': id,
+        'amount': amount,
+        'cashAmount': cashAmount,
+        'cardAmount': cardAmount,
+        if (note != null && note.isNotEmpty) 'note': note,
+        if (actorName != null) 'actorName': actorName,
+      },
+      effect: {
+        'kind': EffectKind.orderUpdate,
+        'fields': {
+          'prepaidAmount': order.prepaidAmount + amount,
+          'prepayments': [for (final p in order.prepayments) p.toJson(), entry.toJson()],
+        },
+      },
+    );
+  }
+
+  /// Xato kiritilgan oldindan to'lovni bekor qilish. Hali yuborilmagan
+  /// bo'lsa navbatdan olinadi; aks holda to'g'ridan-to'g'ri server —
+  /// shartlar (shu kun, naqd topshirilmagan, ishlatilmagan) bajarilmasa
+  /// sababi darhol ko'rsatilishi uchun.
+  Future<void> cancelPrepayment({required String orderId, required String prepaymentId}) async {
+    final queued = _ref.read(actionQueueProvider).any((a) => a.id == prepaymentId && !a.acked);
+    if (queued) {
+      _queue.discard(prepaymentId);
+      return;
+    }
+    final token = await _ref.read(idTokenProvider)();
+    await _ref.read(apiClientProvider).post(
+      '/cancelPrepayment',
+      idToken: token,
+      body: {'orderId': orderId, 'prepaymentId': prepaymentId},
     );
   }
 
@@ -771,14 +844,21 @@ final ordersRepositoryProvider = Provider<OrdersRepository>((ref) => OrdersRepos
 /// keshlab qoladi — keyingi PIN bilan kirishlarda ham xuddi shu xatoni
 /// ko'rsataveradi. Auth holatiga bog'lash oqimni har safar kirish/chiqishda
 /// yangidan yaratadi.
+///
+/// Repozitoriy `read` bilan olinadi, `watch` EMAS: repozitoriyning o'zi
+/// yozishda shu ro'yxatni o'qiydi (`_order`, `_baseOrder`). `watch`
+/// bog'liqligi "repozitoriy → ro'yxat → repozitoriy" aylanasini hosil
+/// qilardi va Riverpod debug rejimida har bir yozishni
+/// CircularDependencyError bilan to'xtatardi. Repozitoriy o'zgarmas
+/// obyekt — kuzatishga hojat yo'q.
 final _activeOrdersStreamProvider = StreamProvider<List<Order>>((ref) {
   ref.watch(authStateProvider);
-  return ref.watch(ordersRepositoryProvider).watchActiveOrders();
+  return ref.read(ordersRepositoryProvider).watchActiveOrders();
 });
 
 final _recentOrdersStreamProvider = StreamProvider<List<Order>>((ref) {
   ref.watch(authStateProvider);
-  return ref.watch(ordersRepositoryProvider).watchRecentOrders();
+  return ref.read(ordersRepositoryProvider).watchRecentOrders();
 });
 
 /// SERVERDAGI buyurtmalar — FAOL buyurtmalar (to'liq, holat bo'yicha) +

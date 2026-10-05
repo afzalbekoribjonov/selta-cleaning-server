@@ -28,7 +28,7 @@ import { businessDateString } from "./businessTime";
  * kunlik hisobda bir marta sanaladi — bu ataylab, chunki savol "bugun
  * nechta mahsulot yuvildi", "nechta yuvish amali bo'ldi" emas.
  */
-export type DailyActivityType = "washed" | "packed" | "delivered" | "onsite_done" | "settled";
+export type DailyActivityType = "washed" | "packed" | "delivered" | "onsite_done" | "settled" | "prepaid";
 
 export interface DailyActivityInput {
   type: DailyActivityType;
@@ -56,8 +56,9 @@ export interface DailyActivityInput {
   cashAmount?: number | null;
   cardAmount?: number | null;
   /**
-   * `settled` hodisasi uchun yopilgan to'lov yozuvi. Hodisa mahsulotga
-   * emas, to'lovga tegishli — ID shu maydondan quriladi.
+   * `settled` hodisasi uchun yopilgan to'lov yozuvi, `prepaid` uchun
+   * oldindan to'lov ID'si. Hodisa mahsulotga emas, to'lovga tegishli —
+   * ID shu maydondan quriladi.
    */
   paymentId?: string | null;
 }

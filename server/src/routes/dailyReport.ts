@@ -137,6 +137,8 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
       // Boshqa kuni qolgan qarz shu kuni yopilgan bo'lsa — pul hodisasi,
       // mahsulot bosqichi emas. Faqat kassa hisobida ishtirok etadi.
       settled: [],
+      // Oldindan to'lov — xuddi shunday, faqat pul.
+      prepaid: [],
     };
     const referencedOrderIds = new Set<string>();
 
@@ -233,6 +235,8 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
       cashAmount: number;
       cardAmount: number;
       settledAmount: number;
+      /** Shu kuni qabul qilingan oldindan to'lovlar. */
+      prepaidAmount: number;
       /** Xodim shu kuni qo'lidagi naqddan qilgan chiqimlar. */
       expenseAmount: number;
       expenses: { id: string; name: string; amount: number; at: string | null }[];
@@ -250,6 +254,7 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
           cashAmount: 0,
           cardAmount: 0,
           settledAmount: 0,
+          prepaidAmount: 0,
           expenseAmount: 0,
           expenses: [],
           itemCount: 0,
@@ -282,6 +287,17 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
       entry.cardAmount += cardOf(r);
     }
 
+    // Oldindan to'lov ham pul olingan kuni xodim qo'liga tushadi;
+    // topshirish kuni u ayirib olinadi (ikki marta sanalmaydi).
+    for (const r of rowsByType.prepaid) {
+      const entry = driverEntry(r.employeeId);
+      const prepaid = r.collectedAmount ?? 0;
+      entry.amount += prepaid;
+      entry.prepaidAmount += prepaid;
+      entry.cashAmount += cashPartOf({ ...r, price: 0 });
+      entry.cardAmount += cardOf(r);
+    }
+
     // Xodim qo'lidagi naqddan qilgan chiqim (yoqilg'i va h.k.) kassaga
     // topshiriladigan naqdni kamaytiradi. Yetkazish qilmagan xodim ham
     // ro'yxatga tushadi: o'z cho'ntagidan to'lagan bo'lsa, unga qaytarilishi
@@ -303,6 +319,7 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
         cashAmount: Math.round(d.cashAmount),
         cardAmount: Math.round(d.cardAmount),
         settledAmount: Math.round(d.settledAmount),
+        prepaidAmount: Math.round(d.prepaidAmount),
         expenseAmount: Math.round(d.expenseAmount),
         expenses: d.expenses,
         // Kassaga topshiriladigan naqd. Manfiy — kompaniya xodimga qarzdor.

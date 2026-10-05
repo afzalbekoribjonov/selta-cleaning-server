@@ -19,6 +19,7 @@ import '../shared/item_detail_row.dart';
 import '../shared/order_copy.dart';
 import '../shared/sales_manager_notes_card.dart';
 import '../shared/team_assign_sheet.dart';
+import '../shared/prepayment_section.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -115,6 +116,7 @@ class _OrderDetailSheet extends ConsumerWidget {
                     ),
                     const SizedBox(height: 20),
                     _ProgressChecklist(order: liveOrder),
+                    PrepaymentSection(order: liveOrder),
                     const SizedBox(height: 20),
                     CommentsSection(orderId: liveOrder.id, focus: focusComments),
                   ],

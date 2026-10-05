@@ -6,6 +6,8 @@ interface AuthContextValue {
   user: User | null
   claims: EmployeeClaims | null
   fullName: string | null
+  /** Oldindan to'lov qabul qila oladimi — kirishda bir marta o'qiladi (server ham tekshiradi). */
+  canTakePrepayment: boolean
   loading: boolean
   logout: () => Promise<void>
 }
@@ -16,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [claims, setClaims] = useState<EmployeeClaims | null>(null)
   const [fullName, setFullName] = useState<string | null>(null)
+  const [canTakePrepayment, setCanTakePrepayment] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -24,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!u) {
         setClaims(null)
         setFullName(null)
+        setCanTakePrepayment(false)
         setLoading(false)
         return
       }
@@ -37,10 +41,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (c) {
           const profile = await fetchEmployeeProfile(c.employeeId)
           setFullName(profile?.fullName ?? null)
+          setCanTakePrepayment(profile?.canTakePrepayment === true)
         }
       } catch {
         setClaims(null)
         setFullName(null)
+        setCanTakePrepayment(false)
       }
       setLoading(false)
     })
@@ -50,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     claims,
     fullName,
+    canTakePrepayment,
     loading,
     logout: doLogout,
   }

@@ -161,6 +161,12 @@ List<Order> applyToOrders(List<Order> base, List<PendingAction> actions) {
           lastCommentText: f['lastCommentText'] as String?,
           lastCommentAuthor: f['lastCommentAuthor'] as String?,
           lastCommentAt: f['lastCommentAt'] is num ? DateTime.fromMillisecondsSinceEpoch((f['lastCommentAt'] as num).toInt()) : null,
+          // Oldindan to'lov — MUTLAQ qiymatlar (yig'indi va to'liq ro'yxat),
+          // shuning uchun server qo'llab bo'lgach ham qayta qo'llash zararsiz.
+          prepaidAmount: f['prepaidAmount'] as num?,
+          prepayments: (f['prepayments'] as List?)
+              ?.map((m) => Prepayment.fromMap(Map<String, dynamic>.from(m as Map)))
+              .toList(),
         );
       case EffectKind.orderStatus:
         final o = byId[id];
@@ -180,6 +186,10 @@ List<Order> applyToOrders(List<Order> base, List<PendingAction> actions) {
         var next = stillPending ? _withSummary(o, _summaryOf(e)) : o;
         final status = e['orderStatus'] as String?;
         if (status != null) next = next.copyWith(status: status);
+        // Topshirishda ishlatilgan oldindan to'lov — xuddi hosila maydonlar
+        // kabi, faqat server hali qo'llamagan bo'lsa.
+        final prepaidUsed = e['prepaidUsed'];
+        if (stillPending && prepaidUsed is num) next = next.copyWith(prepaidUsed: prepaidUsed);
         byId[id] = next;
       case EffectKind.orderTeam:
         final o = byId[id];

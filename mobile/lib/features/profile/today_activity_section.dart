@@ -191,6 +191,12 @@ class _MoneySummary extends ConsumerWidget {
           value: formatMoneyUz(activity.debt.amount),
           tone: AppColors.danger,
         ),
+      if (activity.prepaid.count > 0)
+        _MoneyTile(
+          label: "Oldindan to'lov (${activity.prepaid.count})",
+          value: formatMoneyUz(activity.prepaid.amount),
+          tone: AppColors.success,
+        ),
       if (activity.partial.count > 0)
         _MoneyTile(
           label: 'Qisman (${activity.partial.count})',

@@ -188,6 +188,9 @@ class MyDailyActivity {
   final CountAmount discount;
   final List<PaymentEntry> payments;
 
+  /// Shu kuni qabul qilingan oldindan to'lovlar (yig'ilgan pulning bir qismi).
+  final CountAmount prepaid;
+
   /// Xodimning shu kungi chiqimlari (yoqilg'i va h.k.).
   final List<ExpenseEntry> expenses;
 
@@ -215,6 +218,7 @@ class MyDailyActivity {
     required this.partial,
     required this.discount,
     required this.payments,
+    this.prepaid = const CountAmount(0, 0),
     this.expenses = const [],
   });
 
@@ -263,6 +267,7 @@ class MyDailyActivity {
       partial: CountAmount.fromMap(Map<Object?, Object?>.from((payments['partial'] as Map?) ?? const {})),
       discount: CountAmount.fromMap(Map<Object?, Object?>.from((payments['discount'] as Map?) ?? const {})),
       payments: _list(payments['rows'], PaymentEntry.fromMap),
+      prepaid: CountAmount.fromMap(Map<Object?, Object?>.from((payments['prepaid'] as Map?) ?? const {})),
       expenses: _list(expenses['rows'], ExpenseEntry.fromMap),
     );
   }

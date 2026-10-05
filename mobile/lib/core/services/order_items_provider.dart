@@ -29,7 +29,9 @@ final _baseOrderItemsProvider = StreamProvider.autoDispose.family<List<OrderItem
   ref.onResume(() => release?.cancel());
   ref.onDispose(() => release?.cancel());
 
-  return ref.watch(ordersRepositoryProvider).watchItems(orderId);
+  // `read` — repozitoriy yozishda shu providerni o'qiydi (`_items`);
+  // `watch` aylanma bog'liqlik hosil qilardi (orders_repository.dart'ga qarang).
+  return ref.read(ordersRepositoryProvider).watchItems(orderId);
 });
 
 /// Bitta buyurtmaning mahsulotlari — barcha tafsilot oynalari shu YAGONA

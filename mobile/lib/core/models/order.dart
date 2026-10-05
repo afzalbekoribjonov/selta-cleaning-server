@@ -64,6 +64,12 @@ class Order {
   final String? lastCommentAuthor;
   final DateTime? lastCommentAt;
 
+  /// Oldindan to'lov (server: lib/prepayments.ts): olingan jami va
+  /// shundan topshirishlarda hisobga olingani.
+  final num prepaidAmount;
+  final num prepaidUsed;
+  final List<Prepayment> prepayments;
+
   /// Bu buyurtmada serverga hali yetib bormagan (navbatdagi) o'zgarish bor.
   /// Firestore'da YO'Q maydon — faqat ilova ichida, oflayn navbat
   /// (core/sync) ekranga qo'yadi. Kartada kichik belgi bilan ko'rsatiladi.
@@ -108,8 +114,19 @@ class Order {
     this.lastCommentText,
     this.lastCommentAuthor,
     this.lastCommentAt,
+    this.prepaidAmount = 0,
+    this.prepaidUsed = 0,
+    this.prepayments = const [],
     this.pendingSync = false,
   });
+
+  /// Hali ishlatilmagan oldindan to'lov — keyingi topshirishda mahsulotlar
+  /// narxidan ayiriladi (server bilan bir xil qoida).
+  num get prepaidCredit => prepaidAmount > prepaidUsed ? prepaidAmount - prepaidUsed : 0;
+
+  /// Mijozdan yana olinishi kerak bo'lgan summa (buyurtma narxi minus
+  /// oldindan to'langani). Manfiy — ortiqcha to'langan.
+  num get remainingToPay => totalPrice - prepaidAmount;
 
   /// Oflayn yaratilgan buyurtma hali serverga yetmagan — raqami yo'q.
   bool get awaitingNumber => orderNumber <= 0;
@@ -146,6 +163,9 @@ class Order {
     String? lastCommentText,
     String? lastCommentAuthor,
     DateTime? lastCommentAt,
+    num? prepaidAmount,
+    num? prepaidUsed,
+    List<Prepayment>? prepayments,
     bool? pendingSync,
   }) {
     return Order(
@@ -187,6 +207,9 @@ class Order {
       lastCommentText: lastCommentText ?? this.lastCommentText,
       lastCommentAuthor: lastCommentAuthor ?? this.lastCommentAuthor,
       lastCommentAt: lastCommentAt ?? this.lastCommentAt,
+      prepaidAmount: prepaidAmount ?? this.prepaidAmount,
+      prepaidUsed: prepaidUsed ?? this.prepaidUsed,
+      prepayments: prepayments ?? this.prepayments,
       pendingSync: pendingSync ?? this.pendingSync,
     );
   }
@@ -237,6 +260,13 @@ class Order {
       lastCommentText: (data['lastComment'] as Map?)?['text']?.toString(),
       lastCommentAuthor: (data['lastComment'] as Map?)?['authorName']?.toString(),
       lastCommentAt: ((data['lastComment'] as Map?)?['at'] as Timestamp?)?.toDate(),
+      prepaidAmount: (data['prepaidAmount'] as num?) ?? 0,
+      prepaidUsed: (data['prepaidUsed'] as num?) ?? 0,
+      prepayments: (data['prepayments'] as List?)
+              ?.whereType<Map>()
+              .map((m) => Prepayment.fromMap(Map<String, dynamic>.from(m)))
+              .toList() ??
+          const [],
     );
   }
 
@@ -246,4 +276,57 @@ class Order {
     if (dueDate == null || isDone) return false;
     return DateTime.now().isAfter(dueDate!);
   }
+}
+
+/// Bitta oldindan to'lov yozuvi — buyurtma hujjatining `prepayments` ro'yxatidan.
+class Prepayment {
+  final String id;
+  final num amount;
+  final num cashAmount;
+  final num cardAmount;
+  final DateTime? at;
+  final String employeeId;
+  final String? employeeName;
+  final String? note;
+
+  const Prepayment({
+    required this.id,
+    required this.amount,
+    required this.cashAmount,
+    required this.cardAmount,
+    required this.at,
+    required this.employeeId,
+    this.employeeName,
+    this.note,
+  });
+
+  factory Prepayment.fromMap(Map<String, dynamic> m) {
+    final at = m['at'];
+    return Prepayment(
+      id: m['id']?.toString() ?? '',
+      amount: (m['amount'] as num?) ?? 0,
+      cashAmount: (m['cashAmount'] as num?) ?? 0,
+      cardAmount: (m['cardAmount'] as num?) ?? 0,
+      at: at is Timestamp
+          ? at.toDate()
+          : at is num
+              ? DateTime.fromMillisecondsSinceEpoch(at.toInt())
+              : null,
+      employeeId: m['employeeId']?.toString() ?? '',
+      employeeName: m['employeeName']?.toString(),
+      note: m['note']?.toString(),
+    );
+  }
+
+  /// Oflayn navbatda saqlash uchun (vaqt — millisekund).
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'amount': amount,
+        'cashAmount': cashAmount,
+        'cardAmount': cardAmount,
+        if (at != null) 'at': at!.millisecondsSinceEpoch,
+        'employeeId': employeeId,
+        if (employeeName != null) 'employeeName': employeeName,
+        if (note != null) 'note': note,
+      };
 }
