@@ -116,6 +116,9 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           canTakePrepayment: data.canTakePrepayment ?? false,
           canPrintReceipts: data.canPrintReceipts ?? false,
           canPrintDailyReport: data.canPrintDailyReport ?? false,
+          canViewPhotos: data.canViewPhotos ?? false,
+          canUploadPhotos: data.canUploadPhotos ?? false,
+          canDeletePhotos: data.canDeletePhotos ?? false,
           attendanceEnabled: data.attendanceEnabled ?? false,
           attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -476,9 +479,19 @@ employeeAdminRouter.post("/adminSetEmployeeWarehousePermission", withAuth, requi
  *  - canAddExpenses    — ilovadan chiqim kiritish (routes/expenses.ts);
  *  - canTakePrepayment — oldindan to'lov qabul qilish (routes/payments.ts);
  *  - canPrintReceipts  — buyurtma chekini chop etish (ilova);
- *  - canPrintDailyReport — kunlik hisobot chekini chop etish (routes/receipt.ts).
+ *  - canPrintDailyReport — kunlik hisobot chekini chop etish (routes/receipt.ts);
+ *  - canViewPhotos / canUploadPhotos / canDeletePhotos — mahsulot rasmlari
+ *    (routes/photos.ts; ko'rish faqat ilovada cheklanadi).
  */
-const TOGGLE_PERMISSIONS = new Set(["canAddExpenses", "canTakePrepayment", "canPrintReceipts", "canPrintDailyReport"]);
+const TOGGLE_PERMISSIONS = new Set([
+  "canAddExpenses",
+  "canTakePrepayment",
+  "canPrintReceipts",
+  "canPrintDailyReport",
+  "canViewPhotos",
+  "canUploadPhotos",
+  "canDeletePhotos",
+]);
 
 employeeAdminRouter.post("/adminSetEmployeePermission", withAuth, requireAdmin, async (req, res) => {
   try {

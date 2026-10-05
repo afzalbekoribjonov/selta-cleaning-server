@@ -14,6 +14,13 @@ services:
     envVars:
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false
+      # Mahsulot rasmlari (ImageKit → Developer options → API keys).
+      - key: IMAGEKIT_PRIVATE_KEY
+        sync: false
+      - key: IMAGEKIT_PUBLIC_KEY
+        sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
+        sync: false
 
   # Admin panel — statik SPA sifatida (Vite build). admin.seltacleaning.uz
   # custom domeni Render dashboard'da shu servisga qo'shiladi (DNS CNAME

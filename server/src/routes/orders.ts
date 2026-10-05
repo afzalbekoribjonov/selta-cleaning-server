@@ -12,6 +12,8 @@ import { logDailyActivity, itemActivityRefs } from "../lib/dailyActivity";
 import { prepaidCredit, prepaidToApply } from "../lib/prepayments";
 import { prepareCompletionBonus } from "../lib/bonus";
 import { paymentSummaryIncrements } from "../lib/paymentSummary";
+import { deleteImageKitFiles } from "../lib/imagekit";
+import { photoFileIdsOf } from "../lib/itemPhotos";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -974,6 +976,7 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
 
     const orderRef = db.collection("orders").doc(orderId);
     const itemRef = orderRef.collection("items").doc(itemId);
+    let photoFileIds: string[] = [];
 
     await db.runTransaction(async (tx) => {
       const [orderSnap, itemSnap, allItemsSnap] = await Promise.all([
@@ -987,6 +990,7 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
 
       const price = Number(itemSnap.data()!.price) || 0;
       const area = Number(itemSnap.data()!.area) || 0;
+      photoFileIds = photoFileIdsOf(itemSnap.data());
 
       tx.delete(itemRef);
       // Mahsulot o'chirilsa, u haqidagi kunlik hisobot yozuvlari ham
@@ -1008,6 +1012,7 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
       });
     });
 
+    await deleteImageKitFiles(photoFileIds);
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);
@@ -1101,8 +1106,10 @@ ordersRouter.post("/adminDeleteOrder", withAuth, requireAdmin, async (req, res) 
     const orderRef = db.collection("orders").doc(orderId);
     const snap = await orderRef.get();
     if (!snap.exists) throw new ApiError(404, "not-found", "Buyurtma topilmadi");
+    const items = await orderRef.collection("items").get();
 
     await db.recursiveDelete(orderRef);
+    await deleteImageKitFiles(items.docs.flatMap((d) => photoFileIdsOf(d.data())));
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);

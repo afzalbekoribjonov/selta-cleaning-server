@@ -19,6 +19,7 @@ import { warehouseRouter } from "./routes/warehouse";
 import { commentsRouter } from "./routes/comments";
 import { bonusRouter } from "./routes/bonus";
 import { receiptRouter } from "./routes/receipt";
+import { photosRouter } from "./routes/photos";
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/", warehouseRouter);
 app.use("/", commentsRouter);
 app.use("/", bonusRouter);
 app.use("/", receiptRouter);
+app.use("/", photosRouter);
 app.use("/", employeeAdminRouter);
 app.use("/", ordersRouter);
 app.use("/", bootstrapRouter);
