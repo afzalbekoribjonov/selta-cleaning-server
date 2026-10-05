@@ -12,6 +12,7 @@ import '../shared/order_copy.dart';
 import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
 import '../../core/widgets/load_error_note.dart';
+import '../printing/print_receipt_button.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -72,6 +73,7 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
                             child: Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
                           ),
                         ),
+                        PrintReceiptButton(order: order, items: itemsAsync.valueOrNull),
                         CopyOrderButton(order: order, items: itemsAsync.valueOrNull),
                       ],
                     ),

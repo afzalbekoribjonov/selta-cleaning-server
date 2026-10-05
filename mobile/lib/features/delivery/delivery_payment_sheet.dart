@@ -14,6 +14,13 @@ import '../shared/bonus_section.dart';
 import '../shared/payment_method_field.dart';
 import '../shared/item_detail_row.dart' show itemMeasurementLabel;
 
+/// Topshirishdan keyingi to'lov yig'indilari (server: lib/paymentSummary.ts).
+Map<String, num> paymentSummaryAfterDelivery(Order order, {required num paid, required num shortfall, String? kind}) => {
+      'paidTotal': (order.paidTotal ?? 0) + paid,
+      'discountTotal': order.discountTotal + (kind == 'discount' ? shortfall : 0),
+      'debtTotal': order.debtTotal + (kind == 'debt' || kind == 'partial' ? shortfall : 0),
+    };
+
 /// Kamomad sababi — server bilan bir xil kalitlar (lib/payments.ts).
 enum ShortfallKind { partial, debt, discount }
 
@@ -226,6 +233,14 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
             kind: _kind == null ? null : _kindKeys[_kind!],
             actorName: name,
             prepaidUsedAfter: applied > 0 ? widget.order.prepaidUsed + applied : null,
+            // Ekranda (va chekda) javob kelguncha — server ham aynan shunday
+            // yig'adi (lib/paymentSummary.ts).
+            paymentSummaryAfter: paymentSummaryAfterDelivery(
+              widget.order,
+              paid: paid,
+              shortfall: _shortfall,
+              kind: _kind == null ? null : _kindKeys[_kind!],
+            ),
           );
       if (mounted) Navigator.pop(context, true);
     } catch (err) {

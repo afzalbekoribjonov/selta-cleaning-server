@@ -17,6 +17,7 @@ import 'sales_manager_notes_card.dart';
 import 'bonus_section.dart';
 import 'prepayment_section.dart';
 import '../../core/widgets/load_error_note.dart';
+import '../printing/print_receipt_button.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -106,6 +107,7 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                             child: Text('Joyida yuvish ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
                           ),
                         ),
+                        PrintReceiptButton(order: order, items: itemsAsync.valueOrNull),
                         CopyOrderButton(order: order, items: itemsAsync.valueOrNull),
                         const SizedBox(width: 6),
                         Container(

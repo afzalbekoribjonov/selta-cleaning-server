@@ -11,6 +11,7 @@ import { computeOrderItemsSummary, summaryItemOf, type SummaryItemInput } from "
 import { logDailyActivity, itemActivityRefs } from "../lib/dailyActivity";
 import { prepaidCredit, prepaidToApply } from "../lib/prepayments";
 import { prepareCompletionBonus } from "../lib/bonus";
+import { paymentSummaryIncrements } from "../lib/paymentSummary";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -428,6 +429,10 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
       if (toStatus === "done") {
         if (collected !== null) attributionUpdate.collectedAmount = collected;
         if (prepaidApplied > 0) attributionUpdate.prepaidUsed = FieldValue.increment(prepaidApplied);
+        // Joyida yuvishda summa kiritilmagan bo'lsa — narxning kreditdan
+        // qolgani olingan deb hisoblanadi (kunlik hisob bilan bir xil qoida).
+        const received = collected ?? (serviceType === "onsite" ? Math.max(0, orderPrice - prepaidApplied) : 0);
+        Object.assign(attributionUpdate, paymentSummaryIncrements(received, "full", 0));
       }
 
       // Yakunlanish — mijozga keshbek (lib/bonus.ts). Joyida yuvishda
@@ -688,6 +693,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         if (collected === null && prepaidApplied > 0) collected = itemPrice - prepaidApplied;
         if (collected !== null) itemUpdate.collectedAmount = collected;
         if (prepaidApplied > 0) orderUpdate.prepaidUsed = FieldValue.increment(prepaidApplied);
+        Object.assign(orderUpdate, paymentSummaryIncrements(collected ?? Math.max(0, itemPrice - prepaidApplied), "full", 0));
         logDailyActivity(tx, now, {
           ...activityBase(),
           type: "delivered",

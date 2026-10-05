@@ -246,6 +246,7 @@ class OrdersRepository {
     List<String> removes = const [],
     String? orderStatus,
     num? prepaidUsed,
+    Map<String, num>? paymentSummary,
   }) {
     final base = _baseOrder(orderId);
     return {
@@ -256,6 +257,7 @@ class OrdersRepository {
       'base': base == null ? null : orderSignature(base),
       if (orderStatus != null) 'orderStatus': orderStatus,
       if (prepaidUsed != null) 'prepaidUsed': prepaidUsed,
+      if (paymentSummary != null) 'paymentSummary': paymentSummary,
     };
   }
 
@@ -478,6 +480,7 @@ class OrdersRepository {
     String? note,
     String? actorName,
     num? prepaidUsedAfter,
+    Map<String, num>? paymentSummaryAfter,
   }) async {
     final items = _items(orderId);
     final ids = itemIds.toSet();
@@ -508,6 +511,7 @@ class OrdersRepository {
         upserts: [for (final i in items ?? const <OrderItem>[]) if (ids.contains(i.id)) deliver(i)],
         orderStatus: remaining == 0 ? 'done' : null,
         prepaidUsed: prepaidUsedAfter,
+        paymentSummary: paymentSummaryAfter,
       ),
     );
   }

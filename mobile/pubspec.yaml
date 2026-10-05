@@ -55,6 +55,10 @@ dependencies:
   # faqat ADMIN_PANEL build bayrog'i yoqilgan buildlarda ishlatiladi.
   webview_flutter: ^4.10.0
   shared_preferences: ^2.5.3
+  print_bluetooth_thermal: ^1.2.1
+  esc_pos_utils_plus: ^2.0.4
+  image: ^4.10.1
+  permission_handler: ^13.0.2
 
 dev_dependencies:
   flutter_test:

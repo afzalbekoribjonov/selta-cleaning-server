@@ -24,6 +24,7 @@ import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
 import '../../core/widgets/load_error_note.dart';
 import '../../core/utils/money_utils.dart';
+import '../printing/print_receipt_button.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -178,12 +179,21 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                             child: Text('Buyurtma ${order.displayNumber}', style: Theme.of(context).textTheme.headlineSmall),
                           ),
                         ),
+                        PrintReceiptButton(order: order, items: itemsAsync.valueOrNull),
                         CopyOrderButton(order: order, items: itemsAsync.valueOrNull),
                         const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(color: status.background, borderRadius: BorderRadius.circular(20)),
-                          child: Text(status.label, style: TextStyle(color: status.color, fontWeight: FontWeight.w800, fontSize: 12)),
+                        // Tor ekranda holat nomi qisqaradi — sarlavha qatori toshmaydi.
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(color: status.background, borderRadius: BorderRadius.circular(20)),
+                            child: Text(
+                              status.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: status.color, fontWeight: FontWeight.w800, fontSize: 12),
+                            ),
+                          ),
                         ),
                       ],
                     ),

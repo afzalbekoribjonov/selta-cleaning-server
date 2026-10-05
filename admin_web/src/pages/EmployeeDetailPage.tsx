@@ -19,6 +19,8 @@ import {
   ReceiptText,
   Receipt,
   PiggyBank,
+  Printer,
+  FileSpreadsheet,
   ArrowRight,
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
@@ -302,6 +304,24 @@ export default function EmployeeDetailPage() {
         description="Buyurtma topshirilishidan oldin mijozdan qisman yoki to'liq to'lov qabul qilish"
         grantText="buyurtma kartasida oldindan to'lov qabul qila oladi. Summa o'sha kuni uning kassasiga tushadi va topshirishda narxdan ayiriladi."
         revokeText="endi oldindan to'lov qabul qila olmaydi. Avval qabul qilinganlari saqlanib qoladi."
+      />
+      <PermissionToggleSection
+        employee={employee}
+        permission="canPrintReceipts"
+        icon={Printer}
+        title="Chek chiqarish"
+        description="Ilovada buyurtma chekini Bluetooth printerda chop etish"
+        grantText="buyurtma kartasida chekni ko'rib, Bluetooth printerda chop eta oladi."
+        revokeText="endi chek chiqara olmaydi."
+      />
+      <PermissionToggleSection
+        employee={employee}
+        permission="canPrintDailyReport"
+        icon={FileSpreadsheet}
+        title="Kunlik hisobot cheki"
+        description="Xodimlar bo'yicha kunlik hisobotni chekda chop etish"
+        grantText="kunlik hisobot chekini (barcha xodimlar ishi, qo'ldagi pullar) ko'rib, chop eta oladi."
+        revokeText="endi kunlik hisobot chekini ko'ra olmaydi."
       />
       {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 

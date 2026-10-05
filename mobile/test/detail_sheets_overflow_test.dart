@@ -208,6 +208,7 @@ Future<void> pumpSheet(
             'specializations': ['gilam'],
             'canPack': true,
             'canTakePrepayment': true,
+            'canPrintReceipts': true,
           }),
         ),
         employeeClaimsProvider.overrideWith(

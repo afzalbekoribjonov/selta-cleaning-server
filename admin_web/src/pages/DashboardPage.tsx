@@ -39,6 +39,9 @@ export default function DashboardPage() {
     // Kartalardagi "oxirgi izoh" maydonidan oldingi faol buyurtmalar uchun —
     // server bir marta bajargach belgi qo'yadi va keyin darhol qaytadi.
     apiPost('/adminBackfillLastComment', {}).catch(() => {})
+    // Cheklardagi "To'landi / Chegirma / Qarzdorlik" yig'indilari — eski
+    // buyurtmalar uchun bir marta (keyingilarini server o'zi yozadi).
+    apiPost('/adminBackfillPaymentSummary', {}).catch(() => {})
   }, [])
 
   const stats = useMemo(() => {

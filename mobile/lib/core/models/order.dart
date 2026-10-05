@@ -80,6 +80,13 @@ class Order {
   /// Yakunlanganda mijozga berilgan keshbek; `null` — hali berilmagan.
   final num? bonusEarned;
 
+  /// To'lov yig'indilari (server: lib/paymentSummary.ts): topshirishda va
+  /// keyin yopilgan qarzlarda olingan pul (oldindan to'lovsiz), chegirma
+  /// va yopilmagan qarz. `null` — maydon hali yozilmagan eski buyurtma.
+  final num? paidTotal;
+  final num discountTotal;
+  final num debtTotal;
+
   /// Buyurtmadagi mahsulotlar NUSXASI (server: lib/orderSummary.ts) —
   /// buyurtma bilan birga keladi va keshlanadi, shuning uchun mahsulotlar
   /// darhol va internetsiz ham ko'rinadi, alohida o'qishsiz. `null` —
@@ -136,6 +143,9 @@ class Order {
     this.bonusAmount = 0,
     this.bonusEntries = const [],
     this.bonusEarned,
+    this.paidTotal,
+    this.discountTotal = 0,
+    this.debtTotal = 0,
     this.itemsMirror,
     this.pendingSync = false,
   });
@@ -192,6 +202,9 @@ class Order {
     List<Prepayment>? prepayments,
     num? bonusAmount,
     List<BonusUse>? bonusEntries,
+    num? paidTotal,
+    num? discountTotal,
+    num? debtTotal,
     bool? pendingSync,
   }) {
     return Order(
@@ -239,6 +252,9 @@ class Order {
       bonusAmount: bonusAmount ?? this.bonusAmount,
       bonusEntries: bonusEntries ?? this.bonusEntries,
       bonusEarned: bonusEarned,
+      paidTotal: paidTotal ?? this.paidTotal,
+      discountTotal: discountTotal ?? this.discountTotal,
+      debtTotal: debtTotal ?? this.debtTotal,
       itemsMirror: itemsMirror,
       pendingSync: pendingSync ?? this.pendingSync,
     );
@@ -304,6 +320,9 @@ class Order {
               .toList() ??
           const [],
       bonusEarned: data['bonusEarned'] as num?,
+      paidTotal: data['paidTotal'] as num?,
+      discountTotal: (data['discountTotal'] as num?) ?? 0,
+      debtTotal: (data['debtTotal'] as num?) ?? 0,
       itemsMirror: _itemsMirrorOf(data['itemsMirror']),
     );
   }

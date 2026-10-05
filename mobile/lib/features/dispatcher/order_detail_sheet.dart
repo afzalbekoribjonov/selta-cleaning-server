@@ -22,6 +22,7 @@ import '../shared/team_assign_sheet.dart';
 import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
 import '../../core/widgets/load_error_note.dart';
+import '../printing/print_receipt_button.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -157,6 +158,7 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
+        PrintReceiptButton(order: order, items: items),
         CopyOrderButton(order: order, items: items),
         const SizedBox(width: 6),
         IconButton(

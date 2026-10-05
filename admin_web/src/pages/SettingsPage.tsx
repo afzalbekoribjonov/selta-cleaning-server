@@ -16,6 +16,7 @@ import {
   type TariffSetting,
 } from '@/lib/tariffs'
 import { Spinner } from '@/components/ui/Spinner'
+import { ReceiptSettingsCard } from '@/components/settings/ReceiptSettingsCard'
 import { DEFAULT_WAREHOUSE_DAYS, subscribeWarehouseDays, updateWarehouseDays } from '@/lib/warehouse'
 import {
   DEFAULT_BONUS_PERCENT,
@@ -64,6 +65,7 @@ export default function SettingsPage() {
 
       <WarehouseSettingsCard />
       <BonusSettingsCard />
+      <ReceiptSettingsCard />
 
       <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <h2 className="mb-1 flex items-center gap-2 font-heading font-bold text-ink">

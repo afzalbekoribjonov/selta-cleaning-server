@@ -114,6 +114,8 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           canAccessWarehouse: data.canAccessWarehouse ?? false,
           canAddExpenses: data.canAddExpenses ?? false,
           canTakePrepayment: data.canTakePrepayment ?? false,
+          canPrintReceipts: data.canPrintReceipts ?? false,
+          canPrintDailyReport: data.canPrintDailyReport ?? false,
           attendanceEnabled: data.attendanceEnabled ?? false,
           attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -472,9 +474,11 @@ employeeAdminRouter.post("/adminSetEmployeeWarehousePermission", withAuth, requi
  * har birini ishlatadigan route o'zi qayta tekshiradi.
  *
  *  - canAddExpenses    — ilovadan chiqim kiritish (routes/expenses.ts);
- *  - canTakePrepayment — oldindan to'lov qabul qilish (routes/payments.ts).
+ *  - canTakePrepayment — oldindan to'lov qabul qilish (routes/payments.ts);
+ *  - canPrintReceipts  — buyurtma chekini chop etish (ilova);
+ *  - canPrintDailyReport — kunlik hisobot chekini chop etish (routes/receipt.ts).
  */
-const TOGGLE_PERMISSIONS = new Set(["canAddExpenses", "canTakePrepayment"]);
+const TOGGLE_PERMISSIONS = new Set(["canAddExpenses", "canTakePrepayment", "canPrintReceipts", "canPrintDailyReport"]);
 
 employeeAdminRouter.post("/adminSetEmployeePermission", withAuth, requireAdmin, async (req, res) => {
   try {

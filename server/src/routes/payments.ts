@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
-import { ApiError, sendError, withAuth, requireEmployeeFlag, type AuthedRequest } from "../lib/authz";
+import { ApiError, sendError, withAuth, requireAdmin, requireEmployeeFlag, type AuthedRequest } from "../lib/authz";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
 import { dailyActivityDocId, dailyActivityEvents, logDailyActivity } from "../lib/dailyActivity";
 import { isValidActionId } from "../lib/idempotency";
@@ -17,6 +17,7 @@ import { loadEmployeeNames } from "../lib/employeeNames";
 import { isPaymentKind, normalizePaymentSplit, splitPaidAmount, type PaymentKind } from "../lib/payments";
 import { phoneVariants } from "../lib/phone";
 import { bonusFor, customerKey, loadBonusPercent, prepareCompletionBonus, writeBonus } from "../lib/bonus";
+import { paymentSummaryIncrements, settlementIncrements, summarizePayments } from "../lib/paymentSummary";
 
 export const paymentsRouter = Router();
 
@@ -176,6 +177,10 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
         deliveredByEmployees: FieldValue.arrayUnion(employeeId),
       };
       if (prepaidApplied > 0) orderUpdate.prepaidUsed = FieldValue.increment(prepaidApplied);
+      // To'lov yig'indilari buyurtmaning o'zida (lib/paymentSummary.ts) —
+      // chek va karta internetsiz ham aniq "to'landi/chegirma/qarz"ni
+      // ko'rsatishi uchun (to'lov yozuvlari ilovaga yopiq).
+      Object.assign(orderUpdate, paymentSummaryIncrements(Math.round(paidAmount), resolvedKind, shortfall));
 
       if (completing) {
         orderUpdate.status = "done";
@@ -289,6 +294,9 @@ paymentsRouter.post("/settlePayment", withAuth, async (req: AuthedRequest, res) 
       // paytida hisobga olinadi (lib/bonus.ts: prepareCompletionBonus).
       const order = orderSnap?.data();
       const key = customerKey(order?.phone);
+      const orderUpdate: Record<string, unknown> = orderRef && order
+        ? settlementIncrements(settledAmount, (payment.shortfall as number | undefined) ?? 0)
+        : {};
       if (orderRef && order && order.status === "done" && typeof order.bonusEarned === "number" && key) {
         const earned = bonusFor(settledAmount, bonusPercent);
         if (earned > 0) {
@@ -307,9 +315,10 @@ paymentsRouter.post("/settlePayment", withAuth, async (req: AuthedRequest, res) 
             { phone: (order.phone as string) ?? "", name: (order.customerName as string) ?? "" },
             now,
           );
-          tx.update(orderRef, { bonusEarned: FieldValue.increment(earned) });
+          orderUpdate.bonusEarned = FieldValue.increment(earned);
         }
       }
+      if (orderRef && order) tx.update(orderRef, orderUpdate);
 
       // Yopilgan pul YOPILGAN KUNGA yoziladi: u shu kuni xodim qo'liga
       // tushadi, shuning uchun o'sha kunning kassa hisobida ko'rinishi
@@ -482,6 +491,57 @@ paymentsRouter.post("/cancelPrepayment", withAuth, async (req: AuthedRequest, re
     });
 
     res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * To'lov yig'indilarini (paidTotal, discountTotal, debtTotal) buyurtma
+ * yozuvlariga bir marta to'ldiradi — bu maydonlar joriy etilishidan
+ * oldingi buyurtmalar uchun. Admin paneli ochilganda chaqiriladi; belgi
+ * (`settings/paymentSummaryBackfill`) bo'lsa hech narsa o'qilmaydi.
+ */
+const PAYMENT_SUMMARY_BACKFILL_VERSION = 1;
+
+paymentsRouter.post("/adminBackfillPaymentSummary", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  try {
+    const marker = db.collection("settings").doc("paymentSummaryBackfill");
+    if (req.body?.force !== true && (await marker.get()).data()?.version === PAYMENT_SUMMARY_BACKFILL_VERSION) {
+      res.json({ ok: true, skipped: true });
+      return;
+    }
+
+    const [paymentsSnap, onsiteDoneSnap] = await Promise.all([
+      db.collection("payments").get(),
+      db.collection("orders").where("serviceType", "==", "onsite").where("status", "==", "done").get(),
+    ]);
+
+    const byOrder = summarizePayments(paymentsSnap.docs.map((d) => d.data()));
+    // Joyida yuvish to'lov yozuvisiz yakunlanadi: olingan pul — kiritilgan
+    // summa yoki (kiritilmagan bo'lsa) narxning kreditdan qolgan qismi.
+    for (const doc of onsiteDoneSnap.docs) {
+      const o = doc.data();
+      const credit = ((o.prepaidUsed as number | undefined) ?? 0);
+      const collected =
+        typeof o.collectedAmount === "number" ? o.collectedAmount : Math.max(0, ((o.totalPrice as number | undefined) ?? 0) - credit);
+      const entry = byOrder.get(doc.id) ?? { paidTotal: 0, discountTotal: 0, debtTotal: 0 };
+      entry.paidTotal += collected;
+      byOrder.set(doc.id, entry);
+    }
+
+    const ids = [...byOrder.keys()];
+    let updated = 0;
+    for (let i = 0; i < ids.length; i += 400) {
+      const batch = db.batch();
+      for (const id of ids.slice(i, i + 400)) {
+        batch.set(db.collection("orders").doc(id), byOrder.get(id)!, { merge: true });
+        updated++;
+      }
+      await batch.commit();
+    }
+    await marker.set({ version: PAYMENT_SUMMARY_BACKFILL_VERSION, doneAt: new Date(), updated });
+    res.json({ ok: true, updated });
   } catch (err) {
     sendError(res, err);
   }

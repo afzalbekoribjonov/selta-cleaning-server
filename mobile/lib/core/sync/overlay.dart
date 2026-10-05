@@ -193,6 +193,15 @@ List<Order> applyToOrders(List<Order> base, List<PendingAction> actions) {
         // kabi, faqat server hali qo'llamagan bo'lsa.
         final prepaidUsed = e['prepaidUsed'];
         if (stillPending && prepaidUsed is num) next = next.copyWith(prepaidUsed: prepaidUsed);
+        // To'lov yig'indilari (chek uchun) — xuddi shu qoida bilan.
+        final pay = e['paymentSummary'];
+        if (stillPending && pay is Map) {
+          next = next.copyWith(
+            paidTotal: pay['paidTotal'] as num?,
+            discountTotal: pay['discountTotal'] as num?,
+            debtTotal: pay['debtTotal'] as num?,
+          );
+        }
         byId[id] = next;
       case EffectKind.orderTeam:
         final o = byId[id];

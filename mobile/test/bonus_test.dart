@@ -64,6 +64,7 @@ class _FakeRepo extends OrdersRepository {
     String? note,
     String? actorName,
     num? prepaidUsedAfter,
+    Map<String, num>? paymentSummaryAfter,
   }) async {
     paid.add(paidAmount);
   }
