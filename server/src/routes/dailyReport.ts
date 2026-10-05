@@ -7,10 +7,12 @@ import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
 import { loadEmployeeNames } from "../lib/employeeNames";
 import {
   buildDailyActivityDoc,
+  cashPartOf,
   dailyActivityDocId,
   dailyActivityEvents,
   type DailyActivityInput,
 } from "../lib/dailyActivity";
+import { loadEmployeeExpenses } from "../lib/expenses";
 
 /**
  * Admin panelining "Kunlik ko'rsatkichlar" bo'limi — istalgan kun uchun:
@@ -60,18 +62,7 @@ function toIso(value: unknown): string | null {
   return value instanceof Timestamp ? value.toDate().toISOString() : null;
 }
 
-/**
- * Yozuvning naqd va karta ulushlari.
- *
- * Maydonlar joriy etilishidan oldingi hodisalarda ular yo'q — o'sha
- * paytda mijoz pulni faqat naqd berardi, shuning uchun butun summa naqd
- * deb hisoblanadi. Aks holda eski kunlar birdan "0 naqd" bo'lib
- * ko'rinardi.
- */
-function cashOf(r: { cashAmount: number | null; collectedAmount: number | null; price: number }): number {
-  return r.cashAmount ?? r.collectedAmount ?? r.price;
-}
-
+/** Yozuvning karta ulushi (naqd ulushi — lib/dailyActivity.ts: cashPartOf). */
 function cardOf(r: { cardAmount: number | null }): number {
   return r.cardAmount ?? 0;
 }
@@ -125,7 +116,7 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
     const dateKey = resolveDateKey(req.body?.date);
     const range = businessDayRangeUtc(dateKey)!;
 
-    const [eventsSnap, intakeSnap, employeeNames, handoverSnap] = await Promise.all([
+    const [eventsSnap, intakeSnap, employeeNames, handoverSnap, expenses] = await Promise.all([
       db.collection("dailyActivity").doc(dateKey).collection("events").get(),
       db
         .collection("orders")
@@ -134,6 +125,7 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
         .get(),
       loadEmployeeNames(),
       db.collection("cashHandovers").doc(dateKey).get(),
+      loadEmployeeExpenses(dateKey),
     ]);
 
     // --- Bosqich hodisalari ---
@@ -241,32 +233,37 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
       cashAmount: number;
       cardAmount: number;
       settledAmount: number;
+      /** Xodim shu kuni qo'lidagi naqddan qilgan chiqimlar. */
+      expenseAmount: number;
+      expenses: { id: string; name: string; amount: number; at: string | null }[];
       itemCount: number;
       orderIds: Set<string>;
     }
     const driverMap = new Map<string, DriverEntry>();
-    const driverEntry = (r: ActivityRow): DriverEntry => {
-      let entry = driverMap.get(r.employeeId);
+    const driverEntry = (employeeId: string): DriverEntry => {
+      let entry = driverMap.get(employeeId);
       if (!entry) {
         entry = {
-          employeeId: r.employeeId,
-          name: r.employeeName,
+          employeeId,
+          name: employeeNames.get(employeeId) ?? "Noma'lum",
           amount: 0,
           cashAmount: 0,
           cardAmount: 0,
           settledAmount: 0,
+          expenseAmount: 0,
+          expenses: [],
           itemCount: 0,
           orderIds: new Set<string>(),
         };
-        driverMap.set(r.employeeId, entry);
+        driverMap.set(employeeId, entry);
       }
       return entry;
     };
 
     for (const r of deliveredRows) {
-      const entry = driverEntry(r);
+      const entry = driverEntry(r.employeeId);
       entry.amount += r.collectedAmount ?? r.price;
-      entry.cashAmount += cashOf(r);
+      entry.cashAmount += cashPartOf(r);
       entry.cardAmount += cardOf(r);
       entry.itemCount += 1;
       entry.orderIds.add(r.orderId);
@@ -277,12 +274,23 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
     // boshqa kuni yetkazilgan, uni bugungi ish hajmiga qo'shish
     // ko'rsatkichni buzardi.
     for (const r of rowsByType.settled) {
-      const entry = driverEntry(r);
+      const entry = driverEntry(r.employeeId);
       const settled = r.collectedAmount ?? 0;
       entry.amount += settled;
       entry.settledAmount += settled;
-      entry.cashAmount += cashOf(r);
+      entry.cashAmount += cashPartOf(r);
       entry.cardAmount += cardOf(r);
+    }
+
+    // Xodim qo'lidagi naqddan qilgan chiqim (yoqilg'i va h.k.) kassaga
+    // topshiriladigan naqdni kamaytiradi. Yetkazish qilmagan xodim ham
+    // ro'yxatga tushadi: o'z cho'ntagidan to'lagan bo'lsa, unga qaytarilishi
+    // kerak bo'lgan summa (manfiy qoldiq) ko'rinib turishi kerak.
+    for (const e of expenses) {
+      if (!e.fromCash) continue;
+      const entry = driverEntry(e.employeeId);
+      entry.expenseAmount += e.amount;
+      entry.expenses.push({ id: e.id, name: e.name, amount: e.amount, at: e.at });
     }
 
     const handedOver =
@@ -295,6 +303,10 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
         cashAmount: Math.round(d.cashAmount),
         cardAmount: Math.round(d.cardAmount),
         settledAmount: Math.round(d.settledAmount),
+        expenseAmount: Math.round(d.expenseAmount),
+        expenses: d.expenses,
+        // Kassaga topshiriladigan naqd. Manfiy — kompaniya xodimga qarzdor.
+        handOverAmount: Math.round(d.cashAmount - d.expenseAmount),
         itemCount: d.itemCount,
         orderCount: d.orderIds.size,
         handedOver: handedOver[d.employeeId] !== undefined,
@@ -364,7 +376,7 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
         // Yetkazishda "nechta buyurtma" asosiy ko'rsatkich (talab), shuning
         // uchun pul summasi ham alohida beriladi.
         deliveredAmount: Math.round(deliveredRows.reduce((s, r) => s + (r.collectedAmount ?? r.price), 0)),
-        cashAmount: Math.round(deliveredRows.reduce((s, r) => s + cashOf(r), 0)),
+        cashAmount: Math.round(deliveredRows.reduce((s, r) => s + cashPartOf(r), 0)),
         cardAmount: Math.round(deliveredRows.reduce((s, r) => s + cardOf(r), 0)),
       },
       drivers,

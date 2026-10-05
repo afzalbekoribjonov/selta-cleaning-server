@@ -4,6 +4,9 @@ import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
 import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
+import { cashPartOf } from "../lib/dailyActivity";
+import { loadEmployeeExpenses } from "../lib/expenses";
+import { loadEmployeeNames } from "../lib/employeeNames";
 
 export const statsRouter = Router();
 
@@ -77,7 +80,7 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
     const dateKey = businessDateString(now);
     const range = businessDayRangeUtc(dateKey)!;
 
-    const [activeSnap, intakeSnap, eventsSnap] = await Promise.all([
+    const [activeSnap, intakeSnap, eventsSnap, expenses] = await Promise.all([
       db.collection("orders").where("status", "in", ACTIVE_ORDER_STATUSES).limit(MAX_ORDERS_SCANNED).get(),
       db
         .collection("orders")
@@ -85,6 +88,7 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
         .where("pickedUpAt", "<", Timestamp.fromDate(range.end))
         .get(),
       db.collection("dailyActivity").doc(dateKey).collection("events").get(),
+      loadEmployeeExpenses(dateKey),
     ]);
 
     // --- 1. Bugun sexga keldi ---
@@ -138,8 +142,11 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
       // olingan. Admin panelidagi kunlik kassa ham aynan shu qoida
       // bo'yicha hisoblaydi — ikki joyda ikki xil raqam chiqmasligi
       // uchun shart.
+      //
+      // Topshiriladigan — faqat NAQD qism (admin paneli bilan bir xil):
+      // karta puli to'g'ridan-to'g'ri kompaniya hisobiga tushadi.
       if (type === "settled") {
-        const amount = (e.collectedAmount as number | undefined) ?? 0;
+        const amount = cashPartOf({ ...e, price: 0 });
         if (amount > 0) {
           cashTotal += amount;
           cashEntries.push({
@@ -158,9 +165,9 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
         });
         // Talab: dastavchik yetkazgach buyurtma summasini mijozdan oladi
         // — ya'ni qo'lda alohida summa kiritilmagan bo'lsa ham pul unda.
-        // Shu sabab qiymat `collectedAmount ?? price`, va admin
-        // panelidagi hisob bilan bir xil.
-        const amount = ((e.collectedAmount as number | null) ?? (e.price as number | undefined) ?? 0) as number;
+        // Shu sabab qiymat `collectedAmount ?? price` (naqd qismi), va
+        // admin panelidagi hisob bilan bir xil.
+        const amount = cashPartOf(e);
         if (amount > 0) {
           cashTotal += amount;
           cashEntries.push({
@@ -170,6 +177,25 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
             at: toIso(e.at),
           });
         }
+      }
+    }
+
+    // Xodimlar qo'lidagi naqddan qilgan chiqimlar (yoqilg'i va h.k.)
+    // topshiriladigan summani kamaytiradi.
+    const cashExpenses = expenses.filter((x) => x.fromCash);
+    if (cashExpenses.length > 0) {
+      const names = await loadEmployeeNames();
+      for (const x of cashExpenses) {
+        cashTotal -= x.amount;
+        cashEntries.push({
+          orderId: "",
+          orderNumber: 0,
+          customerName: names.get(x.employeeId) ?? "Xodim",
+          phone: "",
+          amount: -x.amount,
+          itemName: `Chiqim · ${x.name}`,
+          at: x.at,
+        });
       }
     }
 

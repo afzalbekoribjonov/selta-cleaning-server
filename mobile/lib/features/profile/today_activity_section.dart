@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/services/expenses_repository.dart';
 import '../../core/services/my_activity_repository.dart';
+import '../../core/sync/action_queue.dart';
 import '../../core/utils/money_utils.dart';
 import '../../core/widgets/selta_loader.dart';
+import '../expenses/expenses_screen.dart';
 import 'today_activity_list_screen.dart';
 
 /// Profil sahifasidagi "Bugungi ish" bo'limi — xodim aynan BUGUN nima
@@ -28,6 +32,7 @@ class TodayActivitySection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    listenExpenseSync(ref);
     final async = ref.watch(myDailyActivityProvider);
 
     return Column(
@@ -145,22 +150,41 @@ class _Body extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final card in cards) ...[card, const SizedBox(height: 10)],
-        if (isDelivery) _MoneySummary(activity: activity),
+        _MoneySummary(activity: activity, alwaysShow: isDelivery),
       ],
     );
   }
 }
 
-/// Dastavchik uchun pul xulosasi — qo'lidagi naqd, qarz, qisman va
-/// chegirma. Nol bo'lganlari umuman ko'rsatilmaydi (ortiqcha so'z yo'q).
-class _MoneySummary extends StatelessWidget {
+/// Pul xulosasi — qo'lidagi naqd, qarz, qisman va chegirma. Nol
+/// bo'lganlari umuman ko'rsatilmaydi (ortiqcha so'z yo'q).
+///
+/// Dastavchikda doim; boshqa xodimda faqat pul bo'lsa (masalan joyida
+/// yuvishda pul olgan yoki chiqim kiritgan bo'lsa). Qo'ldagi naqddan
+/// qilingan chiqim — hali yuborilmagani ham — darhol ayiriladi.
+class _MoneySummary extends ConsumerWidget {
   final MyDailyActivity activity;
-  const _MoneySummary({required this.activity});
+  final bool alwaysShow;
+  const _MoneySummary({required this.activity, required this.alwaysShow});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final expenses = mergeExpenses(activity.expenses, ref.watch(actionQueueProvider));
+    final cash = cashInHand(activity.collectedCash, expenses);
+    if (!alwaysShow && expenses.isEmpty && cash.collected == 0 && activity.payments.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     final tiles = <Widget>[
-      _MoneyTile(label: 'Qo\'lingizda', value: formatMoneyUz(activity.cash), tone: AppColors.ink),
+      if (cash.cashExpenses > 0) ...[
+        _MoneyTile(label: "Yig'ilgan naqd", value: formatMoneyUz(cash.collected), tone: AppColors.ink),
+        _MoneyTile(label: 'Naqddan chiqim', value: formatMoneyUz(-cash.cashExpenses), tone: AppColors.danger),
+      ],
+      _MoneyTile(
+        label: cash.inHand < 0 ? 'Sizga qaytariladi' : 'Qo\'lingizda',
+        value: formatMoneyUz(cash.inHand.abs()),
+        tone: AppColors.ink,
+      ),
       if (activity.debt.count > 0)
         _MoneyTile(
           label: 'Qarz (${activity.debt.count})',
@@ -211,6 +235,25 @@ class _MoneySummary extends StatelessWidget {
               ),
             ),
           ],
+          if (expenses.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => context.push('/expenses'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.border),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  "Chiqimlarni ko'rish (${expenses.length})",
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -228,9 +271,19 @@ class _MoneyTile extends StatelessWidget {
     return Row(
       children: [
         Expanded(
+          flex: 5,
           child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.grayDark, fontWeight: FontWeight.w600)),
         ),
-        Text(value, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: tone)),
+        const SizedBox(width: 8),
+        // Katta summa + katta shriftda ham qator sig'adi — raqam kichrayadi.
+        Expanded(
+          flex: 4,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Text(value, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: tone)),
+          ),
+        ),
       ],
     );
   }

@@ -4,6 +4,7 @@ import {
   Banknote,
   CreditCard,
   HandCoins,
+  Receipt,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -297,6 +298,11 @@ function MetricCard({
  * Kichik pul qatori: belgi, nomi va summa. Naqd/karta ajratmasi hamma
  * joyda AYNAN shu ko'rinishda — kartada ham, dastavchik ro'yxatida ham.
  */
+/** "Yoqilg'i 50 000 so'm, Texnik xizmat 30 000 so'm" */
+function expenseList(expenses: DailyReport['drivers'][number]['expenses']): string {
+  return expenses.map((e) => `${e.name} ${formatMoney(e.amount)}`).join(', ')
+}
+
 function MoneyLine({
   icon: Icon,
   label,
@@ -320,9 +326,10 @@ function MoneyLine({
 }
 
 /**
- * Dastavchiklar qo'lidagi pul — shu kuni yetkazgan buyurtmalari
- * summasidan. Qoldiq kundan-kunga o'tmaydi (talab): har kun o'z
- * hisobiga ega, "Topshirdi" belgisi ham aynan shu kunga tegishli.
+ * Xodimlar qo'lidagi pul — shu kuni yetkazgan buyurtmalari summasidan,
+ * qo'lidagi naqddan qilgan chiqimlari ayirilgan holda. Qoldiq
+ * kundan-kunga o'tmaydi (talab): har kun o'z hisobiga ega, "Topshirdi"
+ * belgisi ham aynan shu kunga tegishli.
  */
 function DriversCashPanel({ date, report }: { date: string; report: DailyReport }) {
   const queryClient = useQueryClient()
@@ -332,10 +339,10 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dailyReport', date] }),
   })
 
-  // Topshiriladigan narsa — faqat NAQD: karta puli to'g'ridan-to'g'ri
-  // kompaniya hisobiga tushadi va dastavchik qo'lidan o'tmaydi.
+  // Topshiriladigan narsa — faqat NAQD (karta puli to'g'ridan-to'g'ri
+  // kompaniya hisobiga tushadi), xodim undan qilgan chiqimlar ayirilgan.
   const pendingCash = useMemo(
-    () => report.drivers.filter((d) => !d.handedOver).reduce((sum, d) => sum + d.cashAmount, 0),
+    () => report.drivers.filter((d) => !d.handedOver).reduce((sum, d) => sum + d.handOverAmount, 0),
     [report.drivers],
   )
 
@@ -351,9 +358,10 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
           <Wallet size={17} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold text-ink">Dastavchiklar qo'lidagi pul</div>
+          <div className="text-sm font-bold text-ink">Xodimlar qo'lidagi pul</div>
           <div className="text-xs text-gray-dark">
-            Shu kuni yetkazgani va yopgan qarzlari. Topshiriladigan — faqat naqd qismi.
+            Shu kuni yetkazgani va yopgan qarzlari. Topshiriladigan — naqd qismi, qo'lidagi naqddan qilgan chiqimlari
+            ayirilgan holda.
           </div>
         </div>
       </div>
@@ -386,16 +394,32 @@ function DriversCashPanel({ date, report }: { date: string; report: DailyReport 
             {/* Naqd va karta ALOHIDA qatorlarda: topshirish faqat naqdga
                 tegishli, shuning uchun ular bitta summaga qo'shilmaydi. */}
             <div className="mt-2 space-y-1 rounded-xl bg-bg px-3 py-2">
-              <MoneyLine icon={Banknote} label="Naqd" amount={d.cashAmount} struck={d.handedOver} />
+              <MoneyLine icon={Banknote} label="Naqd" amount={d.cashAmount} struck={d.handedOver && d.expenseAmount === 0} />
               <MoneyLine icon={CreditCard} label="Karta" amount={d.cardAmount} />
               {d.settledAmount > 0 && (
                 <MoneyLine icon={HandCoins} label="Shundan yopilgan qarz" amount={d.settledAmount} />
+              )}
+              {d.expenseAmount > 0 && (
+                <>
+                  <MoneyLine icon={Receipt} label="Naqddan chiqim" amount={-d.expenseAmount} />
+                  <div className="truncate pl-[18px] text-[11px] text-gray-dark" title={expenseList(d.expenses)}>
+                    {expenseList(d.expenses)}
+                  </div>
+                  <div className="border-t border-border pt-1">
+                    <MoneyLine
+                      icon={Wallet}
+                      label={d.handOverAmount < 0 ? 'Xodimga qaytariladi' : 'Topshiradi'}
+                      amount={Math.abs(d.handOverAmount)}
+                      struck={d.handedOver}
+                    />
+                  </div>
+                </>
               )}
             </div>
 
             <button
               onClick={() =>
-                mutation.mutate({ employeeId: d.employeeId, handedOver: !d.handedOver, amount: d.cashAmount })
+                mutation.mutate({ employeeId: d.employeeId, handedOver: !d.handedOver, amount: d.handOverAmount })
               }
               disabled={mutation.isPending}
               className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50 sm:w-auto ${

@@ -90,7 +90,7 @@ class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
   }
 }
 
-enum _MenuAction { createOrder, stats, warehouse, profile, sync }
+enum _MenuAction { createOrder, stats, warehouse, expenses, profile, sync }
 
 /// ⋮ menyu — xodimga FAQAT o'ziga ruxsat berilgan amallar ko'rinadi.
 ///
@@ -107,6 +107,8 @@ class EmployeeMenuButton extends ConsumerWidget {
     final canCreateOrders = (employee?['canCreateOrders'] as bool? ?? false) && department != 'dispatcher';
     final canViewStats = employee?['canViewStats'] as bool? ?? false;
     final canAccessWarehouse = employee?['canAccessWarehouse'] as bool? ?? false;
+    final canAddExpenses = employee?['canAddExpenses'] as bool? ?? false;
+    final hasExtras = canCreateOrders || canViewStats || canAccessWarehouse || canAddExpenses;
 
     return PopupMenuButton<_MenuAction>(
       tooltip: 'Boshqa amallar',
@@ -121,6 +123,8 @@ class EmployeeMenuButton extends ConsumerWidget {
             context.push('/stats');
           case _MenuAction.warehouse:
             context.push('/warehouse');
+          case _MenuAction.expenses:
+            context.push('/expenses');
           case _MenuAction.profile:
             context.push('/profile');
           case _MenuAction.sync:
@@ -131,7 +135,8 @@ class EmployeeMenuButton extends ConsumerWidget {
         if (canCreateOrders) _item(_MenuAction.createOrder, Icons.add_circle_rounded, 'Yangi buyurtma'),
         if (canViewStats) _item(_MenuAction.stats, Icons.insights_rounded, "Kunlik ko'rsatkichlar"),
         if (canAccessWarehouse) _item(_MenuAction.warehouse, Icons.warehouse_rounded, 'Omborxona'),
-        if (canCreateOrders || canViewStats || canAccessWarehouse) const PopupMenuDivider(),
+        if (canAddExpenses) _item(_MenuAction.expenses, Icons.receipt_long_rounded, 'Chiqimlar'),
+        if (hasExtras) const PopupMenuDivider(),
         _item(_MenuAction.profile, Icons.person_rounded, 'Bugungi ishim'),
         _item(_MenuAction.sync, Icons.sync_rounded, 'Sinxronlash holati'),
       ],

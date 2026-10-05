@@ -62,6 +62,17 @@ export interface DailyActivityInput {
   paymentId?: string | null;
 }
 
+/**
+ * Hodisa summasining NAQD qismi — xodim qo'lida qoladigan va kassaga
+ * topshiriladigan pul. Naqd/karta maydonlari joriy etilishidan oldingi
+ * yozuvlarda ular yo'q: o'sha paytda pul har doim naqd olingan, shuning
+ * uchun butun summa naqd deb hisoblanadi (aks holda eski kunlar birdan
+ * "0 naqd" bo'lib ko'rinardi).
+ */
+export function cashPartOf(e: { cashAmount?: number | null; collectedAmount?: number | null; price?: number | null }): number {
+  return e.cashAmount ?? e.collectedAmount ?? e.price ?? 0;
+}
+
 /** Berilgan kunning hodisalari jamlanmasi. */
 export function dailyActivityEvents(dateKey: string) {
   return db.collection("dailyActivity").doc(dateKey).collection("events");

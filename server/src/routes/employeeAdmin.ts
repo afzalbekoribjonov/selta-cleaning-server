@@ -112,6 +112,7 @@ employeeAdminRouter.post("/adminListEmployees", withAuth, requireAdmin, async (_
           canViewStats: data.canViewStats ?? false,
           canViewFinance: data.canViewFinance ?? false,
           canAccessWarehouse: data.canAccessWarehouse ?? false,
+          canAddExpenses: data.canAddExpenses ?? false,
           attendanceEnabled: data.attendanceEnabled ?? false,
           attendanceEnabledAt: data.attendanceEnabledAt?.toDate?.().toISOString() ?? null,
           createdAt: data.createdAt?.toDate?.().toISOString() ?? null,
@@ -458,6 +459,41 @@ employeeAdminRouter.post("/adminSetEmployeeWarehousePermission", withAuth, requi
     }
 
     await employeeRef.update({ canAccessWarehouse });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Oddiy "bor/yo'q" vakolatlar — har biri uchun alohida endpoint yozmaslik
+ * uchun bitta umumiy yo'l. Faqat ro'yxatdagi bayroqlarni o'zgartiradi;
+ * har birini ishlatadigan route o'zi qayta tekshiradi.
+ *
+ *  - canAddExpenses — ilovadan chiqim kiritish (routes/expenses.ts).
+ */
+const TOGGLE_PERMISSIONS = new Set(["canAddExpenses"]);
+
+employeeAdminRouter.post("/adminSetEmployeePermission", withAuth, requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, permission, value } = req.body ?? {};
+    if (typeof employeeId !== "string" || !employeeId) {
+      throw new ApiError(400, "invalid-argument", "employeeId majburiy");
+    }
+    if (typeof permission !== "string" || !TOGGLE_PERMISSIONS.has(permission)) {
+      throw new ApiError(400, "invalid-argument", "Noma'lum vakolat");
+    }
+    if (typeof value !== "boolean") {
+      throw new ApiError(400, "invalid-argument", "Qiymat noto'g'ri");
+    }
+
+    const employeeRef = db.collection("employees").doc(employeeId);
+    const snap = await employeeRef.get();
+    if (!snap.exists) {
+      throw new ApiError(404, "not-found", "Xodim topilmadi");
+    }
+
+    await employeeRef.update({ [permission]: value });
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);

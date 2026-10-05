@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../sync/cached_fetch.dart';
 import 'api_client.dart';
 import 'auth_service.dart' show apiClientProvider, authStateProvider, employeeClaimsProvider;
+import 'expenses_repository.dart';
 import 'local_store.dart';
 
 /// Birlik bo'yicha hajm — "145.6 m²" kabi, har biri alohida ko'rsatiladi.
@@ -176,11 +177,19 @@ class MyDailyActivity {
   final num createdTotal;
   final List<OrderEntry> created;
 
+  /// Kassaga topshiriladigan naqd (server hisobi): [collectedCash] minus
+  /// qo'ldagi naqddan qilingan chiqimlar.
   final num cash;
+
+  /// Shu kuni yig'ilgan naqd — yetkazish va yopilgan qarzlarning naqd qismi.
+  final num collectedCash;
   final CountAmount debt;
   final CountAmount partial;
   final CountAmount discount;
   final List<PaymentEntry> payments;
+
+  /// Xodimning shu kungi chiqimlari (yoqilg'i va h.k.).
+  final List<ExpenseEntry> expenses;
 
   const MyDailyActivity({
     required this.date,
@@ -201,10 +210,12 @@ class MyDailyActivity {
     required this.createdTotal,
     required this.created,
     required this.cash,
+    required this.collectedCash,
     required this.debt,
     required this.partial,
     required this.discount,
     required this.payments,
+    this.expenses = const [],
   });
 
   static Map<Object?, Object?> _section(Map<String, dynamic> json, String key) {
@@ -224,6 +235,8 @@ class MyDailyActivity {
     final packed = _section(json, 'packed');
     final created = _section(json, 'created');
     final payments = _section(json, 'payments');
+    final expenses = _section(json, 'expenses');
+    final cash = (payments['cash'] as num?) ?? 0;
 
     return MyDailyActivity(
       date: json['date']?.toString() ?? '',
@@ -243,11 +256,14 @@ class MyDailyActivity {
       createdCount: (created['count'] as num?)?.toInt() ?? 0,
       createdTotal: (created['totalPrice'] as num?) ?? 0,
       created: _list(created['orders'], OrderEntry.fromMap),
-      cash: (payments['cash'] as num?) ?? 0,
+      cash: cash,
+      // Eski (yangilanishdan oldingi) kesh nusxasida bu maydon yo'q.
+      collectedCash: (payments['collectedCash'] as num?) ?? cash,
       debt: CountAmount.fromMap(Map<Object?, Object?>.from((payments['debt'] as Map?) ?? const {})),
       partial: CountAmount.fromMap(Map<Object?, Object?>.from((payments['partial'] as Map?) ?? const {})),
       discount: CountAmount.fromMap(Map<Object?, Object?>.from((payments['discount'] as Map?) ?? const {})),
       payments: _list(payments['rows'], PaymentEntry.fromMap),
+      expenses: _list(expenses['rows'], ExpenseEntry.fromMap),
     );
   }
 }

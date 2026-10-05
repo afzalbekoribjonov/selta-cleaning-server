@@ -17,6 +17,7 @@ import {
   CalendarDays,
   ClipboardList,
   ReceiptText,
+  Receipt,
   ArrowRight,
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
@@ -44,6 +45,7 @@ import { OnsiteWashingPermissionSection } from '@/components/employees/OnsiteWas
 import { StatsPermissionSection } from '@/components/employees/StatsPermissionSection'
 import { FinancePermissionSection } from '@/components/employees/FinancePermissionSection'
 import { WarehousePermissionSection } from '@/components/employees/WarehousePermissionSection'
+import { PermissionToggleSection } from '@/components/employees/PermissionToggleSection'
 import { WorkshopVisibilitySection } from '@/components/employees/WorkshopVisibilitySection'
 import { DeliverySelfAddedSection } from '@/components/employees/DeliverySelfAddedSection'
 
@@ -282,6 +284,15 @@ export default function EmployeeDetailPage() {
       <StatsPermissionSection employee={employee} />
       <FinancePermissionSection employee={employee} />
       <WarehousePermissionSection employee={employee} />
+      <PermissionToggleSection
+        employee={employee}
+        permission="canAddExpenses"
+        icon={Receipt}
+        title="Chiqim qo'shish"
+        description="Ilovadan yoqilg'i, texnik xizmat kabi chiqimlarni kiritish"
+        grantText={"ilovada chiqim kirita oladi. \"Qo'limdagi naqddan\" belgilangan chiqim o'sha kuni u topshiradigan naqddan ayiriladi."}
+        revokeText="endi ilovada chiqim kirita olmaydi. Avval kiritganlari saqlanib qoladi."
+      />
       {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 [&>*]:min-w-0">

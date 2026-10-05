@@ -239,7 +239,7 @@ class _CashCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           const Text(
-            'Bugun yetkazilgan buyurtmalardan',
+            "Bugun yig'ilgan naqd, xodimlarning naqddan chiqimlari ayirilgan",
             style: TextStyle(fontSize: 11.5, color: AppColors.grayDark, fontWeight: FontWeight.w500),
           ),
         ],
@@ -424,6 +424,9 @@ class _EntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Buyurtmasiz qator — xodimning naqddan qilgan chiqimi (server: stats.ts).
+    final isExpense = entry.orderNumber == 0 && (entry.amount ?? 0) < 0;
+    final tagColor = isExpense ? AppColors.danger : AppColors.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -436,12 +439,12 @@ class _EntryTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
+              color: tagColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(9),
             ),
             child: Text(
-              '#${entry.orderNumber}',
-              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 12),
+              isExpense ? 'Chiqim' : '#${entry.orderNumber}',
+              style: TextStyle(color: tagColor, fontWeight: FontWeight.w900, fontSize: 12),
             ),
           ),
           const SizedBox(width: 11),
@@ -472,7 +475,11 @@ class _EntryTile extends StatelessWidget {
           if (entry.amount != null)
             Text(
               formatMoneyUz(entry.amount!),
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.success),
+              style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                color: entry.amount! < 0 ? AppColors.danger : AppColors.success,
+              ),
             )
           else if (entry.itemCount != null && entry.itemCount! > 0)
             Text(

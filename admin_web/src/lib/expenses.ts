@@ -7,6 +7,11 @@ export interface Expense {
   amount: number
   date: Date
   recurring: boolean
+  /** Ilovadan xodim kiritgan chiqim — kim kiritgani. Admin chiqimida `null`. */
+  employeeId: string | null
+  note: string | null
+  /** Xodim qo'lidagi naqddan to'langan — o'sha kungi topshiriladigan naqddan ayiriladi. */
+  fromCash: boolean
 }
 
 function toExpense(doc: QueryDocumentSnapshot<DocumentData>): Expense {
@@ -17,6 +22,9 @@ function toExpense(doc: QueryDocumentSnapshot<DocumentData>): Expense {
     amount: data.amount ?? 0,
     date: (data.date as Timestamp | undefined)?.toDate() ?? new Date(),
     recurring: !!data.recurring,
+    employeeId: typeof data.employeeId === 'string' ? data.employeeId : null,
+    note: typeof data.note === 'string' ? data.note : null,
+    fromCash: data.fromCash === true,
   }
 }
 

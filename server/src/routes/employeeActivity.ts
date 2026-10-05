@@ -3,7 +3,8 @@ import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
-import { dailyActivityEvents } from "../lib/dailyActivity";
+import { cashPartOf, dailyActivityEvents } from "../lib/dailyActivity";
+import { loadEmployeeExpenses } from "../lib/expenses";
 import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
 import { loadEmployeeNames } from "../lib/employeeNames";
 
@@ -166,20 +167,27 @@ employeeActivityRouter.post("/myDailyActivity", withAuth, async (req: AuthedRequ
     const start = Timestamp.fromDate(range.start);
     const end = Timestamp.fromDate(range.end);
 
-    const [eventsSnap, pickedUpSnap, createdSnap, paymentsSnap] = await Promise.all([
+    const [eventsSnap, pickedUpSnap, createdSnap, paymentsSnap, allExpenses] = await Promise.all([
       dailyActivityEvents(dateKey).where("employeeId", "==", employeeId).get(),
       db.collection("orders").where("pickedUpAt", ">=", start).where("pickedUpAt", "<", end).get(),
       db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
       db.collection("payments").where("dateKey", "==", dateKey).get(),
+      loadEmployeeExpenses(dateKey),
     ]);
 
     // --- Bosqich hodisalari (yuvildi / upakovka / yetkazildi) ---
     const washed: StageRow[] = [];
     const packed: StageRow[] = [];
     const delivered: StageRow[] = [];
+    // Qo'ldagi naqd — admin panelidagi kunlik kassa bilan AYNAN bir xil
+    // qoida (routes/dailyReport.ts): yetkazish va shu kuni yopilgan
+    // qarzlarning naqd qismi. Karta puli xodim qo'lidan o'tmaydi.
+    let collectedCash = 0;
 
     for (const doc of eventsSnap.docs) {
       const e = doc.data();
+      if (e.type === "delivered" || e.type === "onsite_done") collectedCash += cashPartOf(e);
+      else if (e.type === "settled") collectedCash += cashPartOf({ ...e, price: 0 });
       const calcType = (e.calcType as string | null) ?? null;
       const unit = UNIT_BY_CALC_TYPE[calcType ?? "fixed"] ?? "dona";
       const row: StageRow = {
@@ -240,7 +248,8 @@ employeeActivityRouter.post("/myDailyActivity", withAuth, async (req: AuthedRequ
       })
       .sort(newestFirst);
 
-    const cash = payments.reduce((sum, p) => sum + p.paidAmount, 0);
+    const expenses = allExpenses.filter((x) => x.employeeId === employeeId);
+    const cashExpenses = expenses.filter((x) => x.fromCash).reduce((sum, x) => sum + x.amount, 0);
     const byKind = (kind: string, onlyOpen: boolean) =>
       payments.filter((p) => p.kind === kind && (!onlyOpen || !p.settled));
 
@@ -265,11 +274,20 @@ employeeActivityRouter.post("/myDailyActivity", withAuth, async (req: AuthedRequ
         orders: created,
       },
       payments: {
-        cash,
+        // Kassaga topshiriladigan naqd: yig'ilgani minus qo'ldagi naqddan
+        // qilingan chiqimlar. Manfiy — kompaniya xodimga qarzdor.
+        cash: Math.round(collectedCash - cashExpenses),
+        collectedCash: Math.round(collectedCash),
         debt: sumShortfall(byKind("debt", true)),
         partial: sumShortfall(byKind("partial", true)),
         discount: sumShortfall(byKind("discount", false)),
         rows: payments,
+      },
+      expenses: {
+        count: expenses.length,
+        total: expenses.reduce((sum, x) => sum + x.amount, 0),
+        cashTotal: cashExpenses,
+        rows: expenses,
       },
     });
   } catch (err) {

@@ -4,6 +4,7 @@ import '../core/config.dart';
 import '../features/admin/admin_panel_screen.dart';
 import '../features/auth/employee_list_screen.dart';
 import '../features/auth/pin_entry_screen.dart';
+import '../features/expenses/expenses_screen.dart';
 import '../features/home/employee_home_screen.dart';
 import '../features/profile/employee_profile_screen.dart';
 import '../features/role_select/role_select_screen.dart';
@@ -33,6 +34,7 @@ final appRouter = GoRouter(
     GoRoute(path: '/profile', builder: (context, state) => const EmployeeProfileScreen()),
     GoRoute(path: '/stats', builder: (context, state) => const DailyStatsScreen()),
     GoRoute(path: '/warehouse', builder: (context, state) => const WarehouseScreen()),
+    GoRoute(path: '/expenses', builder: (context, state) => const ExpensesScreen()),
     // Faqat ADMIN_PANEL bayrog'i yoqilgan buildda mavjud — oddiy
     // buildda marshrut ham, unga olib boradigan tugma ham yo'q, ya'ni
     // xodim uni manzil orqali ham topa olmaydi.

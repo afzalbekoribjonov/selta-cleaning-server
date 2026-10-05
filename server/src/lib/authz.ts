@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { auth } from "./admin";
+import { auth, db } from "./admin";
 import { isValidActionId, runIdempotent } from "./idempotency";
 
 export interface AuthedRequest extends Request {
@@ -60,6 +60,24 @@ export function requireAdmin(req: AuthedRequest, res: Response, next: NextFuncti
     return res.status(403).json({ error: "permission-denied", message: "Faqat admin bu amalni bajara oladi" });
   }
   next();
+}
+
+/**
+ * Admin panelda xodimga beriladigan vakolat (`employees/{id}.<flag> === true`).
+ * Admin uchun har doim ruxsat. Xodim hujjati qaytariladi — chaqiruvchiga
+ * ko'pincha ismi va boshqa maydonlari ham kerak bo'ladi.
+ */
+export async function requireEmployeeFlag(
+  req: AuthedRequest,
+  flag: string,
+  deniedMessage: string,
+): Promise<FirebaseFirestore.DocumentData | undefined> {
+  const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+  const snap = await db.collection("employees").doc(employeeId).get();
+  if (req.auth!.role !== "admin" && snap.data()?.[flag] !== true) {
+    throw new ApiError(403, "permission-denied", deniedMessage);
+  }
+  return snap.data();
 }
 
 /** onCall'dagi HttpsError o'rnini bosadi — route handlerlar shu klassni throw qiladi. */

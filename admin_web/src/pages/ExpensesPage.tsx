@@ -1,13 +1,14 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Plus, X, Pencil, Trash2, Receipt, Repeat, TrendingDown, PieChart } from 'lucide-react'
+import { Plus, X, Pencil, Trash2, Receipt, Repeat, TrendingDown, PieChart, UserRound, Banknote } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { useExpenses } from '@/hooks/useExpenses'
 import { computeMonthlyExpenses, type Expense } from '@/lib/expenses'
 import { UZ_MONTHS_SHORT, formatDateUz } from '@/lib/date-utils'
 import { Spinner } from '@/components/ui/Spinner'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -18,8 +19,29 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Xodim kiritgan chiqim belgilari: kim kiritgani, naqddanmi, izohi. */
+function EmployeeExpenseMeta({ expense, names }: { expense: Expense; names: Record<string, string> }) {
+  if (!expense.employeeId) return null
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-info-bg px-2 py-0.5 font-bold text-info">
+        <UserRound size={11} className="shrink-0" />
+        <span className="truncate">{names[expense.employeeId] ?? 'Xodim'}</span>
+      </span>
+      {expense.fromCash && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-warning-bg px-2 py-0.5 font-bold text-warning">
+          <Banknote size={11} />
+          Qo'lidagi naqddan
+        </span>
+      )}
+      {expense.note && <span className="min-w-0 truncate text-gray-dark">{expense.note}</span>}
+    </div>
+  )
+}
+
 export default function ExpensesPage() {
   const { expenses, loading } = useExpenses()
+  const employeeNames = useEmployeesMap()
   const [formOpen, setFormOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Expense | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null)
@@ -166,6 +188,7 @@ export default function ExpensesPage() {
               <li key={e.id} className="flex items-start gap-2 rounded-2xl border border-border bg-bg/40 p-3.5">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold text-ink">{e.name}</div>
+                  <EmployeeExpenseMeta expense={e} names={employeeNames} />
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-dark">
                     <span>{formatDateUz(e.date)}</span>
                     {e.recurring ? (
@@ -213,7 +236,10 @@ export default function ExpensesPage() {
               <tbody>
                 {expenses.map((e) => (
                   <tr key={e.id} className="border-b border-border last:border-0">
-                    <td className="px-5 py-3 font-semibold text-ink">{e.name}</td>
+                    <td className="max-w-xs px-5 py-3">
+                      <div className="font-semibold text-ink">{e.name}</div>
+                      <EmployeeExpenseMeta expense={e} names={employeeNames} />
+                    </td>
                     <td className="px-5 py-3 text-ink">{formatDateUz(e.date)}</td>
                     <td className="px-5 py-3">
                       {e.recurring ? (
@@ -270,12 +296,16 @@ function ExpenseFormDialog({ expense, onClose }: { expense?: Expense; onClose: (
     expense ? `${expense.date.getFullYear()}-${String(expense.date.getMonth() + 1).padStart(2, '0')}-${String(expense.date.getDate()).padStart(2, '0')}` : todayIso(),
   )
   const [recurring, setRecurring] = useState(expense?.recurring ?? false)
+  const [fromCash, setFromCash] = useState(expense?.fromCash ?? false)
+  const byEmployee = !!expense?.employeeId
   const [error, setError] = useState<string | null>(null)
 
   const mutation = useMutation({
     mutationFn: () => {
       const body = { name: name.trim(), amount: Number(amount) || 0, date, recurring }
-      if (editing) return apiPost('/adminUpdateExpense', { ...body, expenseId: expense!.id })
+      if (editing) {
+        return apiPost('/adminUpdateExpense', { ...body, expenseId: expense!.id, ...(byEmployee ? { fromCash } : {}) })
+      }
       return apiPost('/adminCreateExpense', body)
     },
     onSuccess: () => {
@@ -341,6 +371,20 @@ function ExpenseFormDialog({ expense, onClose }: { expense?: Expense; onClose: (
               className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
             />
           </div>
+          {byEmployee && (
+            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-bg px-4 py-3">
+              <input
+                type="checkbox"
+                checked={fromCash}
+                onChange={(e) => setFromCash(e.target.checked)}
+                className="h-4 w-4 accent-brand-primary"
+              />
+              <div>
+                <div className="text-sm font-bold text-ink">Xodim qo'lidagi naqddan</div>
+                <div className="text-xs text-gray-dark">Belgilansa o'sha kuni xodim topshiradigan naqddan ayiriladi</div>
+              </div>
+            </label>
+          )}
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-bg px-4 py-3">
             <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} className="h-4 w-4 accent-brand-primary" />
             <div>
