@@ -10,6 +10,7 @@ import { computeItems, type ItemInput } from "../lib/pricing";
 import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
 import { logDailyActivity, itemActivityRefs } from "../lib/dailyActivity";
 import { prepaidCredit, prepaidToApply } from "../lib/prepayments";
+import { prepareCompletionBonus } from "../lib/bonus";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -435,6 +436,22 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
         if (collected !== null) attributionUpdate.collectedAmount = collected;
         if (prepaidApplied > 0) attributionUpdate.prepaidUsed = FieldValue.increment(prepaidApplied);
       }
+
+      // Yakunlanish — mijozga keshbek (lib/bonus.ts). Joyida yuvishda
+      // yakunlashda olingan pul: kiritilgan summa yoki (kiritilmagan
+      // bo'lsa) narxning kreditdan qolgan qismi. Olib kelishni admin
+      // qo'lda yopsa — faqat qayd etilgan to'lovlar.
+      const finishBonus =
+        toStatus === "done" && fromStatus !== "done"
+          ? await prepareCompletionBonus(
+              tx,
+              orderId,
+              order,
+              collected ?? (serviceType === "onsite" ? Math.max(0, orderPrice - prepaidApplied) : 0),
+              employeeId,
+            )
+          : null;
+      if (finishBonus) attributionUpdate.bonusEarned = finishBonus(now);
 
       // Kunlik jurnal. Joyida yuvish item-darajasiga ega emas — u shu
       // yerda, butunligicha yakunlanadi. Pickup buyurtmalar odatda

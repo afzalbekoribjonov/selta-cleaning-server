@@ -70,6 +70,14 @@ class Order {
   final num prepaidUsed;
   final List<Prepayment> prepayments;
 
+  /// Mijozning bonusidan shu buyurtmaga qo'llangani (server: routes/bonus.ts).
+  /// Oldindan to'lov kabi topshirishda narxdan ayiriladi, lekin pul emas.
+  final num bonusAmount;
+  final List<BonusUse> bonusEntries;
+
+  /// Yakunlanganda mijozga berilgan keshbek; `null` — hali berilmagan.
+  final num? bonusEarned;
+
   /// Bu buyurtmada serverga hali yetib bormagan (navbatdagi) o'zgarish bor.
   /// Firestore'da YO'Q maydon — faqat ilova ichida, oflayn navbat
   /// (core/sync) ekranga qo'yadi. Kartada kichik belgi bilan ko'rsatiladi.
@@ -117,16 +125,23 @@ class Order {
     this.prepaidAmount = 0,
     this.prepaidUsed = 0,
     this.prepayments = const [],
+    this.bonusAmount = 0,
+    this.bonusEntries = const [],
+    this.bonusEarned,
     this.pendingSync = false,
   });
 
-  /// Hali ishlatilmagan oldindan to'lov — keyingi topshirishda mahsulotlar
-  /// narxidan ayiriladi (server bilan bir xil qoida).
-  num get prepaidCredit => prepaidAmount > prepaidUsed ? prepaidAmount - prepaidUsed : 0;
+  /// Hali ishlatilmagan "kredit" — oldindan to'lov va qo'llangan bonus;
+  /// keyingi topshirishda mahsulotlar narxidan ayiriladi (server bilan bir
+  /// xil qoida: lib/prepayments.ts).
+  num get prepaidCredit {
+    final credit = prepaidAmount + bonusAmount - prepaidUsed;
+    return credit > 0 ? credit : 0;
+  }
 
   /// Mijozdan yana olinishi kerak bo'lgan summa (buyurtma narxi minus
-  /// oldindan to'langani). Manfiy — ortiqcha to'langan.
-  num get remainingToPay => totalPrice - prepaidAmount;
+  /// oldindan to'langani va bonus). Manfiy — ortiqcha to'langan.
+  num get remainingToPay => totalPrice - prepaidAmount - bonusAmount;
 
   /// Oflayn yaratilgan buyurtma hali serverga yetmagan — raqami yo'q.
   bool get awaitingNumber => orderNumber <= 0;
@@ -166,6 +181,8 @@ class Order {
     num? prepaidAmount,
     num? prepaidUsed,
     List<Prepayment>? prepayments,
+    num? bonusAmount,
+    List<BonusUse>? bonusEntries,
     bool? pendingSync,
   }) {
     return Order(
@@ -210,6 +227,9 @@ class Order {
       prepaidAmount: prepaidAmount ?? this.prepaidAmount,
       prepaidUsed: prepaidUsed ?? this.prepaidUsed,
       prepayments: prepayments ?? this.prepayments,
+      bonusAmount: bonusAmount ?? this.bonusAmount,
+      bonusEntries: bonusEntries ?? this.bonusEntries,
+      bonusEarned: bonusEarned,
       pendingSync: pendingSync ?? this.pendingSync,
     );
   }
@@ -267,6 +287,13 @@ class Order {
               .map((m) => Prepayment.fromMap(Map<String, dynamic>.from(m)))
               .toList() ??
           const [],
+      bonusAmount: (data['bonusAmount'] as num?) ?? 0,
+      bonusEntries: (data['bonusEntries'] as List?)
+              ?.whereType<Map>()
+              .map((m) => BonusUse.fromMap(Map<String, dynamic>.from(m)))
+              .toList() ??
+          const [],
+      bonusEarned: data['bonusEarned'] as num?,
     );
   }
 
@@ -329,4 +356,23 @@ class Prepayment {
         if (employeeName != null) 'employeeName': employeeName,
         if (note != null) 'note': note,
       };
+}
+
+/// Buyurtmaga qo'llangan bonus (`bonusEntries` ro'yxatidan).
+class BonusUse {
+  final String id;
+  final num amount;
+  final DateTime? at;
+  final String employeeId;
+  final String? employeeName;
+
+  const BonusUse({required this.id, required this.amount, required this.at, required this.employeeId, this.employeeName});
+
+  factory BonusUse.fromMap(Map<String, dynamic> m) => BonusUse(
+        id: m['id']?.toString() ?? '',
+        amount: (m['amount'] as num?) ?? 0,
+        at: (m['at'] as Timestamp?)?.toDate(),
+        employeeId: m['employeeId']?.toString() ?? '',
+        employeeName: m['employeeName']?.toString(),
+      );
 }

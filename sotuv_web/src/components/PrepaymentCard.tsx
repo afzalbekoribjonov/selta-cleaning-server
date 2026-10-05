@@ -38,7 +38,7 @@ export function PrepaymentCard({ order }: { order: Order }) {
   if (!hasAny && !canAdd) return null
 
   const credit = prepaidCredit(order)
-  const rest = order.totalPrice - order.prepaidAmount
+  const rest = order.totalPrice - order.prepaidAmount - order.bonusAmount
 
   async function cancel(p: Prepayment) {
     if (!window.confirm(`${formatMoney(p.amount)} oldindan to'lov bekor qilinsinmi? Bugungi kassa hisobidan ham chiqadi.`)) return

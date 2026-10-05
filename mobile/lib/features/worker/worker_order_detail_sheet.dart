@@ -9,6 +9,7 @@ import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_action_row.dart';
 import '../shared/order_copy.dart';
+import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
@@ -80,6 +81,7 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
                       data: (items) => _ItemsCard(order: order, items: items),
                     ),
                     PrepaymentSection(order: order),
+                    BonusSection(order: order),
                     const SizedBox(height: 20),
                     CommentsSection(orderId: order.id, focus: focusComments),
                   ],

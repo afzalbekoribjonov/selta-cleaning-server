@@ -13,6 +13,7 @@ import { useOrderSources } from '@/hooks/useOrderSources'
 import { Spinner } from '@/components/ui/Spinner'
 import { DeleteOrderDialog } from './DeleteOrderDialog'
 import { PrepaymentsSection } from './PrepaymentsSection'
+import { BonusSection } from './BonusSection'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -250,6 +251,7 @@ export function OrderDetailDrawer({
           )}
 
           <PrepaymentsSection order={order} />
+          <BonusSection order={order} />
 
           <section className="rounded-2xl border border-border bg-surface p-4">
             <h3 className="mb-3 text-sm font-extrabold text-ink">Mahsulotlar ({items.length})</h3>

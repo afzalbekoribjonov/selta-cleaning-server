@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/auth_service.dart' show describeApiError, employeeClaimsProvider;
+import '../../core/services/bonus_service.dart';
 import '../../core/services/customer_search.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/utils/launch_utils.dart';
@@ -13,6 +14,7 @@ import '../../core/utils/phone_format.dart';
 import '../delivery/delivery_order_detail_sheet.dart';
 import '../dispatcher/order_detail_sheet.dart';
 import '../dispatcher/widgets/order_card.dart';
+import '../shared/bonus_section.dart' show bonusPhoneKey;
 import '../shared/team_job_detail_sheet.dart';
 import '../worker/worker_order_detail_sheet.dart';
 
@@ -236,6 +238,7 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
       children: [
         _CustomerCard(result: result),
+        _BonusBalance(phone: result.phone),
         if (_finance != null) ...[
           const SizedBox(height: 12),
           _FinanceCard(finance: _finance!),
@@ -315,6 +318,60 @@ class _CustomerCard extends StatelessWidget {
               _Stat(value: '${result.completed.length}', label: 'Yakunlangan'),
               _Stat(value: formatMoneyShortUz(result.totalSpent), label: 'Jami summa', flex: 4),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mijozning bonus (keshbek) hisobi — "bonusingiz bor" deb taklif qilish
+/// uchun. Internet bo'lmasa yoki bonus yo'q bo'lsa ko'rinmaydi.
+class _BonusBalance extends ConsumerWidget {
+  final String phone;
+  const _BonusBalance({required this.phone});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final key = bonusPhoneKey(phone);
+    final bonus = key == null ? null : ref.watch(customerBonusProvider(key)).valueOrNull;
+    if (bonus == null || (bonus.balance <= 0 && bonus.earnedTotal <= 0)) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.card_giftcard_rounded, size: 20, color: AppColors.warning),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Bonus hisobi', style: TextStyle(fontSize: 12, color: AppColors.grayDark, fontWeight: FontWeight.w700)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    formatMoneyUz(bonus.balance),
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.ink),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Jami olgan: ${formatMoneyShortUz(bonus.earnedTotal)}\nIshlatgan: ${formatMoneyShortUz(bonus.spentTotal)}',
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11.5, color: AppColors.grayDark, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),

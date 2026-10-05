@@ -72,6 +72,9 @@ export interface Order {
   prepaidAmount: number
   prepaidUsed: number
   prepayments: Prepayment[]
+  /** Mijoz bonusidan shu buyurtmaga qo'llangani va yakunda berilgan keshbek. */
+  bonusAmount: number
+  bonusEarned: number | null
   // Talab: marketing statistikasi — sotuv menejeri buyurtma yaratishda
   // ixtiyoriy ravishda tanlaydi.
   source: string | null
@@ -123,6 +126,8 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     prepaidAmount: data.prepaidAmount ?? 0,
     prepaidUsed: data.prepaidUsed ?? 0,
     prepayments: Array.isArray(data.prepayments) ? data.prepayments.map(toPrepayment) : [],
+    bonusAmount: data.bonusAmount ?? 0,
+    bonusEarned: typeof data.bonusEarned === 'number' ? data.bonusEarned : null,
     source: data.source ?? null,
     intakeMethod: data.intakeMethod ?? null,
   }
@@ -166,9 +171,12 @@ function toPrepayment(raw: Record<string, unknown>): Prepayment {
   }
 }
 
-/** Hali ishlatilmagan oldindan to'lov — keyingi topshirishda narxdan ayiriladi. */
-export function prepaidCredit(order: Pick<Order, 'prepaidAmount' | 'prepaidUsed'>): number {
-  return Math.max(0, order.prepaidAmount - order.prepaidUsed)
+/**
+ * Hali ishlatilmagan "kredit" — oldindan to'lov va qo'llangan bonus;
+ * keyingi topshirishda narxdan ayiriladi (server: lib/prepayments.ts).
+ */
+export function prepaidCredit(order: Pick<Order, 'prepaidAmount' | 'prepaidUsed' | 'bonusAmount'>): number {
+  return Math.max(0, order.prepaidAmount + order.bonusAmount - order.prepaidUsed)
 }
 
 export function isOverdue(order: Order): boolean {

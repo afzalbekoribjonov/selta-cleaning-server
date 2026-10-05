@@ -16,6 +16,7 @@ import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSum
 import { loadEmployeeNames } from "../lib/employeeNames";
 import { isPaymentKind, normalizePaymentSplit, splitPaidAmount, type PaymentKind } from "../lib/payments";
 import { phoneVariants } from "../lib/phone";
+import { bonusFor, customerKey, loadBonusPercent, prepareCompletionBonus, writeBonus } from "../lib/bonus";
 
 export const paymentsRouter = Router();
 
@@ -127,6 +128,13 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
       const customerName = (order.customerName as string) ?? "";
       const phone = (order.phone as string) ?? "";
 
+      // Oxirgi mahsulotlar topshirilsa buyurtma yakunlanadi — mijozga
+      // keshbek (lib/bonus.ts). O'qishlari yozishlardan OLDIN bo'lishi shart.
+      const completing = remainingItemCount === 0 && order.status !== "done";
+      const finishBonus = completing
+        ? await prepareCompletionBonus(tx, orderId, order, Math.round(paidAmount), employeeId)
+        : null;
+
       targets.forEach((doc, i) => {
         const item = doc.data();
         tx.update(doc.ref, {
@@ -164,10 +172,11 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
       };
       if (prepaidApplied > 0) orderUpdate.prepaidUsed = FieldValue.increment(prepaidApplied);
 
-      if (remainingItemCount === 0 && order.status !== "done") {
+      if (completing) {
         orderUpdate.status = "done";
         orderUpdate.doneAt = FieldValue.serverTimestamp();
         orderUpdate.deliveredBy = employeeId;
+        if (finishBonus) orderUpdate.bonusEarned = finishBonus(now);
         tx.set(orderRef.collection("statusHistory").doc(), {
           fromStatus: order.status,
           toStatus: "done",
@@ -236,11 +245,14 @@ paymentsRouter.post("/settlePayment", withAuth, async (req: AuthedRequest, res) 
 
     const ref = db.collection("payments").doc(paymentId);
     const now = new Date();
+    const bonusPercent = await loadBonusPercent();
 
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) throw new ApiError(404, "not-found", "To'lov yozuvi topilmadi");
       const payment = snap.data()!;
+      const orderRef = typeof payment.orderId === "string" && payment.orderId ? db.collection("orders").doc(payment.orderId) : null;
+      const orderSnap = orderRef ? await tx.get(orderRef) : null;
 
       if (role !== "admin" && payment.employeeId !== employeeId) {
         throw new ApiError(403, "permission-denied", "Bu yozuvni faqat uni qayd etgan xodim yoki admin yopa oladi");
@@ -270,6 +282,33 @@ paymentsRouter.post("/settlePayment", withAuth, async (req: AuthedRequest, res) 
         settledCardAmount: split.cardAmount,
         settledNote: typeof note === "string" && note.trim() ? note.trim() : null,
       });
+
+      // Buyurtma allaqachon yakunlangan (va bonus tizimida) bo'lsa — qarz
+      // yopilgan summadan keshbek. Yakunlanmagan bo'lsa bu pul yakunlanish
+      // paytida hisobga olinadi (lib/bonus.ts: prepareCompletionBonus).
+      const order = orderSnap?.data();
+      const key = customerKey(order?.phone);
+      if (orderRef && order && order.status === "done" && typeof order.bonusEarned === "number" && key) {
+        const earned = bonusFor(settledAmount, bonusPercent);
+        if (earned > 0) {
+          writeBonus(
+            tx,
+            key,
+            earned,
+            {
+              type: "earn",
+              amount: earned,
+              orderId: orderRef.id,
+              orderNumber: (order.orderNumber as number) ?? 0,
+              employeeId,
+              note: `${bonusPercent}% · yopilgan qarz`,
+            },
+            { phone: (order.phone as string) ?? "", name: (order.customerName as string) ?? "" },
+            now,
+          );
+          tx.update(orderRef, { bonusEarned: FieldValue.increment(earned) });
+        }
+      }
 
       // Yopilgan pul YOPILGAN KUNGA yoziladi: u shu kuni xodim qo'liga
       // tushadi, shuning uchun o'sha kunning kassa hisobida ko'rinishi

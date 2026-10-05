@@ -30,11 +30,16 @@ export interface PrepaymentEntry {
 
 export const MAX_PREPAYMENT = 100_000_000;
 
-/** Buyurtmadagi hali ishlatilmagan oldindan to'lov. */
+/**
+ * Buyurtmadagi hali ishlatilmagan "kredit": oldindan to'lov va ishlatilgan
+ * bonus (lib/bonus.ts) — ikkalasi ham topshirishda narxdan bir xil
+ * ayiriladi. Farqi faqat kassada: bonus pul emas, kassaga tushmaydi.
+ */
 export function prepaidCredit(order: Record<string, unknown>): number {
   const paid = typeof order.prepaidAmount === "number" ? order.prepaidAmount : 0;
+  const bonus = typeof order.bonusAmount === "number" ? order.bonusAmount : 0;
   const used = typeof order.prepaidUsed === "number" ? order.prepaidUsed : 0;
-  return Math.max(0, Math.round(paid - used));
+  return Math.max(0, Math.round(paid + bonus - used));
 }
 
 /** Bitta topshirishda qancha oldindan to'lov hisobga olinadi. */

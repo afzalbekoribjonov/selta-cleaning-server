@@ -17,6 +17,7 @@ import { paymentsRouter } from "./routes/payments";
 import { tariffsRouter } from "./routes/tariffs";
 import { warehouseRouter } from "./routes/warehouse";
 import { commentsRouter } from "./routes/comments";
+import { bonusRouter } from "./routes/bonus";
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use("/", authRouter);
 app.use("/", tariffsRouter);
 app.use("/", warehouseRouter);
 app.use("/", commentsRouter);
+app.use("/", bonusRouter);
 app.use("/", employeeAdminRouter);
 app.use("/", ordersRouter);
 app.use("/", bootstrapRouter);

@@ -20,6 +20,7 @@ import '../shared/item_action_row.dart';
 import 'delivery_payment_sheet.dart';
 import '../shared/item_detail_row.dart';
 import 'zero_price_attention_sheet.dart';
+import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
@@ -256,6 +257,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                       ),
                     ],
                     PrepaymentSection(order: order),
+                    BonusSection(order: order),
                     const SizedBox(height: 20),
                     CommentsSection(orderId: order.id, focus: widget.focusComments),
                   ],

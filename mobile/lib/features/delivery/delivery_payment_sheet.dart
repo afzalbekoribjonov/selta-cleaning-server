@@ -6,9 +6,11 @@ import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/bonus_service.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/money_utils.dart';
+import '../shared/bonus_section.dart';
 import '../shared/payment_method_field.dart';
 
 /// Kamomad sababi — server bilan bir xil kalitlar (lib/payments.ts).
@@ -60,6 +62,12 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
   late final Set<String> _selected = widget.readyItems.map((i) => i.id).toSet();
   final _amountController = TextEditingController();
   ShortfallKind? _kind;
+
+  /// Shu oynada qo'llangan bonus — buyurtma nusxasi oyna ochilgandagi
+  /// holat, shuning uchun yangi kredit shu yerda qo'shib boriladi.
+  num _bonusAdded = 0;
+  bool _bonusBusy = false;
+
   /// Naqd/karta taqsimoti. `null` — aralash usul tanlangan, lekin naqd
   /// qismi hali to'g'ri kiritilmagan.
   PaymentSplit? _split;
@@ -80,7 +88,7 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
   /// Oldindan to'langan qoldiqdan shu topshirishga ishlatiladigani —
   /// server ham aynan shunday hisoblaydi (lib/prepayments.ts).
   num get _prepaidApplied {
-    final credit = widget.order.prepaidCredit;
+    final credit = widget.order.prepaidCredit + _bonusAdded;
     final gross = _gross;
     return credit <= 0 || gross <= 0 ? 0 : (credit < gross ? credit : gross);
   }
@@ -113,6 +121,72 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
         .where((e) => e.key != 'done')
         .fold<int>(0, (sum, e) => sum + e.value);
     return notDone > widget.readyItems.length;
+  }
+
+  /// Mijoz rozi bo'lsa bonusi shu topshirishga ishlatiladi (server darhol
+  /// tekshiradi va hisobdan yechadi — internet kerak).
+  Future<void> _useBonus(String phoneKey, num balance) async {
+    setState(() {
+      _bonusBusy = true;
+      _error = null;
+    });
+    try {
+      final applied = await ref.read(bonusServiceProvider).apply(
+            orderId: widget.order.id,
+            amount: balance < _due ? balance : _due,
+            actorName: ref.read(currentEmployeeProvider).valueOrNull?['fullName'] as String?,
+          );
+      ref.invalidate(customerBonusProvider(phoneKey));
+      if (!mounted) return;
+      setState(() {
+        _bonusAdded += applied;
+        // Summa o'zgardi — kiritilgani qayta tekshirilishi kerak.
+        _amountController.clear();
+        _kind = null;
+      });
+    } catch (err) {
+      if (mounted) setState(() => _error = describeApiError(err));
+    } finally {
+      if (mounted) setState(() => _bonusBusy = false);
+    }
+  }
+
+  /// "Bonusni ishlatish" tugmasi — mijozda bonus bo'lsa va olinadigan
+  /// summa qolgan bo'lsa.
+  Widget _bonusButton() {
+    final key = bonusPhoneKey(widget.order.phone);
+    final claims = ref.watch(employeeClaimsProvider).valueOrNull;
+    final employee = ref.watch(currentEmployeeProvider).valueOrNull;
+    if (key == null || _due <= 0 || !canApplyBonus(employee, claims, widget.order)) return const SizedBox.shrink();
+    final balance = ref.watch(customerBonusProvider(key)).valueOrNull?.balance ?? 0;
+    if (balance <= 0) return const SizedBox.shrink();
+    final use = balance < _due ? balance : _due;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: OutlinedButton.icon(
+        onPressed: _bonusBusy ? null : () => _useBonus(key, balance),
+        icon: _bonusBusy
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.redeem_rounded, size: 18),
+        label: Text(
+          'Bonusni ishlatish · ${formatMoneyUz(use)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.warning,
+          side: const BorderSide(color: AppColors.warning),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  String get _creditLabel {
+    final bonus = widget.order.bonusAmount + _bonusAdded;
+    if (bonus <= 0) return "Oldindan to'langan";
+    return widget.order.prepaidAmount > 0 ? "Oldindan to'lov va bonus" : 'Bonusdan';
   }
 
   Future<void> _submit() async {
@@ -229,13 +303,14 @@ class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
                 _SummaryRow(label: 'Mahsulotlar', value: formatMoneyUz(_gross)),
                 const SizedBox(height: 4),
                 _SummaryRow(
-                  label: "Oldindan to'langan",
+                  label: _creditLabel,
                   value: formatMoneyUz(-_prepaidApplied),
                   tone: AppColors.success,
                 ),
                 const SizedBox(height: 4),
               ],
               _SummaryRow(label: 'To\'lanishi kerak', value: formatMoneyUz(due), bold: true),
+              _bonusButton(),
               const SizedBox(height: 12),
 
               const Text(
