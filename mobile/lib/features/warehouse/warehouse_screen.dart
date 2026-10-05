@@ -116,6 +116,7 @@ class _WarehouseScreenState extends ConsumerState<WarehouseScreen> {
                           return OrderCard(
                             order: order,
                             onTap: () => openDeliveryOrderDetailSheet(context, order),
+                            onCommentTap: () => openDeliveryOrderDetailSheet(context, order, focusComments: true),
                             facts: [
                               CardFact(
                                 Icons.warehouse_rounded,

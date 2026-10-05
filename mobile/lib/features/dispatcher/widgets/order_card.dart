@@ -34,7 +34,18 @@ class OrderCard extends StatelessWidget {
   /// Birinchi qatorning o'ng tomonida (masalan masofa "~4 km").
   final String? trailing;
 
-  const OrderCard({super.key, required this.order, required this.onTap, this.facts, this.trailing});
+  /// Oxirgi izoh bosilganda — odatda ichki kartani izohlar bo'limiga
+  /// aylantirib ochadi. Berilmasa [onTap].
+  final VoidCallback? onCommentTap;
+
+  const OrderCard({
+    super.key,
+    required this.order,
+    required this.onTap,
+    this.facts,
+    this.trailing,
+    this.onCommentTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +97,10 @@ class OrderCard extends StatelessWidget {
                     if (dueDate != null && !order.isDone) ...[
                       const SizedBox(height: 4),
                       _DueRow(due: dueDate, overdue: overdue, tariff: order.tariff),
+                    ],
+                    if ((order.lastCommentText ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _LastComment(order: order, onTap: onCommentTap ?? onTap),
                     ],
                   ],
                 ),
@@ -310,6 +325,52 @@ class _DueRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Oxirgi izoh — bir qatorda, sig'masa "…". Ogohlantiruvchi fon bilan:
+/// izoh ko'pincha muhim ko'rsatma ("3-qavat, lift yo'q", "faqat kechqurun")
+/// va ro'yxatda ko'zga tashlanishi kerak.
+class _LastComment extends StatelessWidget {
+  final Order order;
+  final VoidCallback onTap;
+
+  const _LastComment({required this.order, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final author = (order.lastCommentAuthor ?? '').trim();
+    return Material(
+      color: AppColors.warning.withValues(alpha: 0.13),
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(9),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          child: Row(
+            children: [
+              const Icon(Icons.chat_bubble_rounded, size: 13, color: AppColors.warning),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      if (author.isNotEmpty)
+                        TextSpan(text: '$author: ', style: const TextStyle(fontWeight: FontWeight.w800)),
+                      TextSpan(text: order.lastCommentText!.trim().replaceAll(RegExp(r'\s+'), ' ')),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.ink, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

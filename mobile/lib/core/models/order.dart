@@ -58,6 +58,12 @@ class Order {
   // yaratilgan bo'lsa 'walk_in', aks holda null (odatiy olib kelish).
   final String? intakeMethod;
 
+  /// Oxirgi izoh — ro'yxat kartasida bir qatorda ko'rsatish uchun server
+  /// buyurtmaga yozib qo'yadi (routes/comments.ts). Karta izohlarni o'qimaydi.
+  final String? lastCommentText;
+  final String? lastCommentAuthor;
+  final DateTime? lastCommentAt;
+
   /// Bu buyurtmada serverga hali yetib bormagan (navbatdagi) o'zgarish bor.
   /// Firestore'da YO'Q maydon — faqat ilova ichida, oflayn navbat
   /// (core/sync) ekranga qo'yadi. Kartada kichik belgi bilan ko'rsatiladi.
@@ -99,6 +105,9 @@ class Order {
     this.estimatedPrice,
     this.source,
     this.intakeMethod,
+    this.lastCommentText,
+    this.lastCommentAuthor,
+    this.lastCommentAt,
     this.pendingSync = false,
   });
 
@@ -134,6 +143,9 @@ class Order {
     num? estimatedPrice,
     String? source,
     String? intakeMethod,
+    String? lastCommentText,
+    String? lastCommentAuthor,
+    DateTime? lastCommentAt,
     bool? pendingSync,
   }) {
     return Order(
@@ -172,6 +184,9 @@ class Order {
       estimatedPrice: estimatedPrice ?? this.estimatedPrice,
       source: source ?? this.source,
       intakeMethod: intakeMethod ?? this.intakeMethod,
+      lastCommentText: lastCommentText ?? this.lastCommentText,
+      lastCommentAuthor: lastCommentAuthor ?? this.lastCommentAuthor,
+      lastCommentAt: lastCommentAt ?? this.lastCommentAt,
       pendingSync: pendingSync ?? this.pendingSync,
     );
   }
@@ -219,6 +234,9 @@ class Order {
       estimatedPrice: data['estimatedPrice'] as num?,
       source: data['source']?.toString(),
       intakeMethod: data['intakeMethod']?.toString(),
+      lastCommentText: (data['lastComment'] as Map?)?['text']?.toString(),
+      lastCommentAuthor: (data['lastComment'] as Map?)?['authorName']?.toString(),
+      lastCommentAt: ((data['lastComment'] as Map?)?['at'] as Timestamp?)?.toDate(),
     );
   }
 

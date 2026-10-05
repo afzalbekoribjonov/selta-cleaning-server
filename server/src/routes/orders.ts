@@ -1103,9 +1103,23 @@ ordersRouter.post("/adminDeleteOrder", withAuth, requireAdmin, async (req, res) 
  * `force: true` bilan chaqirilsa, allaqachon to'ldirilganlarni ham qayta
  * hisoblaydi (ma'lumot eskirib qolgan deb gumon qilinsa).
  */
+/**
+ * To'ldirish versiyasi — buyurtma xulosasiga YANGI hosila maydon
+ * qo'shilganda oshiriladi, shunda to'ldirish bir marta qayta ishlaydi.
+ */
+const ORDER_SUMMARY_BACKFILL_VERSION = 1;
+
 ordersRouter.post("/adminBackfillOrderSummary", withAuth, requireAdmin, async (req, res) => {
   try {
     const force = req.body?.force === true;
+    // Admin panel har ochilganda chaqiradi. Belgisiz bu har safar BARCHA
+    // faol buyurtmalarni o'qirdi (yuzlab o'qish) — eski buyurtmalar bir
+    // marta to'ldirilgach esa ish yo'q: yangilarining xulosasini server
+    // yozish paytida o'zi hisoblaydi.
+    const marker = db.collection("settings").doc("orderSummaryBackfill");
+    if (!force && (await marker.get()).data()?.version === ORDER_SUMMARY_BACKFILL_VERSION) {
+      return res.json({ ok: true, skipped: true });
+    }
     const snap = await db
       .collection("orders")
       .where("serviceType", "==", "pickup")
@@ -1136,6 +1150,7 @@ ordersRouter.post("/adminBackfillOrderSummary", withAuth, requireAdmin, async (r
       await batch.commit();
     }
 
+    await marker.set({ version: ORDER_SUMMARY_BACKFILL_VERSION, doneAt: new Date(), scanned: snap.size, updated });
     res.json({ ok: true, scanned: snap.size, updated });
   } catch (err) {
     sendError(res, err);

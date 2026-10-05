@@ -117,16 +117,16 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
     }
   }
 
-  void _openOrder(Order order) {
+  void _openOrder(Order order, {bool focusComments = false}) {
     final department = ref.read(currentEmployeeProvider).valueOrNull?['department'] as String?;
     if (order.serviceType == 'onsite' && department != 'dispatcher') {
-      openTeamJobDetailSheet(context, order);
+      openTeamJobDetailSheet(context, order, focusComments: focusComments);
     } else if (department == 'delivery') {
-      openDeliveryOrderDetailSheet(context, order);
+      openDeliveryOrderDetailSheet(context, order, focusComments: focusComments);
     } else if (department == 'worker') {
-      openWorkerOrderDetailSheet(context, order);
+      openWorkerOrderDetailSheet(context, order, focusComments: focusComments);
     } else {
-      openOrderDetailSheet(context, order);
+      openOrderDetailSheet(context, order, focusComments: focusComments);
     }
   }
 
@@ -171,8 +171,10 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
                       fillColor: AppColors.surface,
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
                     ),
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
@@ -183,7 +185,8 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
                   width: 50,
                   child: FilledButton(
                     onPressed: _canSearch && !_searching ? _search : null,
-                    style: FilledButton.styleFrom(padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                    style: FilledButton.styleFrom(
+                        padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                     child: _searching
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
                         : const Icon(Icons.search_rounded),
@@ -223,19 +226,23 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
         ],
         if (result.focus != null) ...[
           const _SectionTitle('Qidirilgan buyurtma'),
-          OrderCard(order: result.focus!, onTap: () => _openOrder(result.focus!)),
+          OrderCard(
+            order: result.focus!,
+            onTap: () => _openOrder(result.focus!),
+            onCommentTap: () => _openOrder(result.focus!, focusComments: true),
+          ),
         ],
         if (active.isNotEmpty) ...[
           _SectionTitle('Faol buyurtmalar · ${active.length}'),
           for (final o in active) ...[
-            OrderCard(order: o, onTap: () => _openOrder(o)),
+            OrderCard(order: o, onTap: () => _openOrder(o), onCommentTap: () => _openOrder(o, focusComments: true)),
             const SizedBox(height: 10),
           ],
         ],
         if (completed.isNotEmpty) ...[
           _SectionTitle('Yakunlangan · ${completed.length}'),
           for (final o in completed) ...[
-            OrderCard(order: o, onTap: () => _openOrder(o)),
+            OrderCard(order: o, onTap: () => _openOrder(o), onCommentTap: () => _openOrder(o, focusComments: true)),
             const SizedBox(height: 10),
           ],
         ],
@@ -367,7 +374,8 @@ class _FinanceCard extends StatelessWidget {
             : Column(
                 children: [
                   if (f.debtCount > 0)
-                    _MoneyRow(icon: Icons.money_off_rounded, label: 'Qarz', count: f.debtCount, amount: f.debtAmount, color: AppColors.danger),
+                    _MoneyRow(
+                        icon: Icons.money_off_rounded, label: 'Qarz', count: f.debtCount, amount: f.debtAmount, color: AppColors.danger),
                   if (f.partialCount > 0)
                     _MoneyRow(
                       icon: Icons.hourglass_bottom_rounded,
@@ -377,7 +385,12 @@ class _FinanceCard extends StatelessWidget {
                       color: AppColors.warning,
                     ),
                   if (f.discountCount > 0)
-                    _MoneyRow(icon: Icons.percent_rounded, label: 'Chegirma', count: f.discountCount, amount: f.discountAmount, color: AppColors.info),
+                    _MoneyRow(
+                        icon: Icons.percent_rounded,
+                        label: 'Chegirma',
+                        count: f.discountCount,
+                        amount: f.discountAmount,
+                        color: AppColors.info),
                 ],
               ),
       ),
@@ -443,7 +456,8 @@ class _Hint extends StatelessWidget {
           children: [
             Icon(icon, size: 42, color: AppColors.gray),
             const SizedBox(height: 12),
-            Text(text, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w600, height: 1.4)),
+            Text(text,
+                textAlign: TextAlign.center, style: const TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w600, height: 1.4)),
           ],
         ),
       ),

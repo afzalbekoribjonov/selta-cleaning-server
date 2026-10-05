@@ -10,12 +10,14 @@ import '../shared/comments_section.dart';
 import '../shared/item_action_row.dart';
 import '../shared/order_copy.dart';
 
-void openWorkerOrderDetailSheet(BuildContext context, Order order) {
+/// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
+/// bo'limigacha o'zi aylanadi.
+void openWorkerOrderDetailSheet(BuildContext context, Order order, {bool focusComments = false}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => _WorkerOrderDetailSheet(order: order),
+    builder: (context) => _WorkerOrderDetailSheet(order: order, focusComments: focusComments),
   );
 }
 
@@ -26,7 +28,8 @@ bool itemEditableFor(String? status) => status == null || _itemStillEditableStat
 
 class _WorkerOrderDetailSheet extends ConsumerWidget {
   final Order order;
-  const _WorkerOrderDetailSheet({required this.order});
+  final bool focusComments;
+  const _WorkerOrderDetailSheet({required this.order, this.focusComments = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,6 +49,10 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
               Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
               Expanded(
                 child: ListView(
+                  // Izohga o'tishda butun varaq oldindan quriladi — aks
+                  // holda ekrandan pastdagi izohlar bo'limi hali yo'q
+                  // bo'ladi va unga aylanib bo'lmaydi. Varaq kichik, narxi arzon.
+                  cacheExtent: focusComments ? 4000 : null,
                   controller: scrollController,
                   // Talab: klaviatura chiqqanda eng pastdagi inputlar
                   // yopilib qolmasligi kerak.
@@ -72,7 +79,7 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
                       data: (items) => _ItemsCard(order: order, items: items),
                     ),
                     const SizedBox(height: 20),
-                    CommentsSection(orderId: order.id),
+                    CommentsSection(orderId: order.id, focus: focusComments),
                   ],
                 ),
               ),

@@ -158,6 +158,9 @@ List<Order> applyToOrders(List<Order> base, List<PendingAction> actions) {
           source: f['source'] as String?,
           notedItems: (f['notedItems'] as List?)?.map((x) => x.toString()).toList(),
           estimatedPrice: f['estimatedPrice'] as num?,
+          lastCommentText: f['lastCommentText'] as String?,
+          lastCommentAuthor: f['lastCommentAuthor'] as String?,
+          lastCommentAt: f['lastCommentAt'] is num ? DateTime.fromMillisecondsSinceEpoch((f['lastCommentAt'] as num).toInt()) : null,
         );
       case EffectKind.orderStatus:
         final o = byId[id];

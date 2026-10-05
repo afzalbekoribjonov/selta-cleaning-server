@@ -165,6 +165,7 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
                               return OrderCard(
                                 order: order,
                                 onTap: () => openOrderDetailSheet(context, order),
+                                onCommentTap: () => openOrderDetailSheet(context, order, focusComments: true),
                                 facts: [
                                   CardFact(Icons.payments_rounded, formatMoneyUz(order.totalPrice)),
                                   if (order.serviceType == 'pickup' && order.status == 'brought_in') CardFact.stages(order),

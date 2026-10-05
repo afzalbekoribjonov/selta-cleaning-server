@@ -140,6 +140,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
                     return OrderCard(
                       order: order,
                       onTap: () => openWorkerOrderDetailSheet(context, order),
+                      onCommentTap: () => openWorkerOrderDetailSheet(context, order, focusComments: true),
                       facts: [CardFact.stages(order)],
                     );
                   },

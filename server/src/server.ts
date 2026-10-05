@@ -16,6 +16,7 @@ import { employeeActivityRouter } from "./routes/employeeActivity";
 import { paymentsRouter } from "./routes/payments";
 import { tariffsRouter } from "./routes/tariffs";
 import { warehouseRouter } from "./routes/warehouse";
+import { commentsRouter } from "./routes/comments";
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.head("/health", (_req, res) => res.status(200).end());
 app.use("/", authRouter);
 app.use("/", tariffsRouter);
 app.use("/", warehouseRouter);
+app.use("/", commentsRouter);
 app.use("/", employeeAdminRouter);
 app.use("/", ordersRouter);
 app.use("/", bootstrapRouter);

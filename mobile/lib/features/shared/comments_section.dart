@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +15,10 @@ import '../../core/utils/date_utils.dart';
 /// kerak") — barcha bo'lim ekranlari shu bitta komponentni ishlatadi.
 class CommentsSection extends ConsumerStatefulWidget {
   final String orderId;
-  const CommentsSection({super.key, required this.orderId});
+
+  /// Ochilishi bilan shu bo'limgacha aylantirish (kartadagi izoh bosilganda).
+  final bool focus;
+  const CommentsSection({super.key, required this.orderId, this.focus = false});
 
   @override
   ConsumerState<CommentsSection> createState() => _CommentsSectionState();
@@ -21,6 +26,23 @@ class CommentsSection extends ConsumerStatefulWidget {
 
 class _CommentsSectionState extends ConsumerState<CommentsSection> {
   final _controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.focus) {
+      // Varaq ochilish animatsiyasi tugab, joylashuv aniq bo'lgach.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+          alignment: 0.02,
+        );
+      });
+    }
+  }
   bool _sending = false;
 
   @override
@@ -118,8 +140,16 @@ class _CommentsSectionState extends ConsumerState<CommentsSection> {
   }
 }
 
-final _commentsProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, orderId) {
+/// `autoDispose` + qisqa ushlab turish — mahsulotlar provideri bilan bir
+/// xil sabab: avval bu `autoDispose`SIZ edi va xodim ochgan HAR BIR
+/// buyurtmaning izohlar obunasi ilova yopilguncha ochiq qolardi.
+final _commentsProvider = StreamProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, orderId) {
   ref.watch(authStateProvider);
+  final link = ref.keepAlive();
+  Timer? release;
+  ref.onCancel(() => release = Timer(const Duration(minutes: 3), link.close));
+  ref.onResume(() => release?.cancel());
+  ref.onDispose(() => release?.cancel());
   return ref.watch(ordersRepositoryProvider).watchComments(orderId);
 });
 
@@ -149,10 +179,13 @@ class _CommentTileState extends ConsumerState<_CommentTile> {
     if (text.isEmpty) return;
     setState(() => _saving = true);
     try {
+      final createdAt = widget.comment['createdAt'];
       await ref.read(ordersRepositoryProvider).editComment(
             orderId: widget.orderId,
             commentId: widget.comment['id'].toString(),
             text: text,
+            authorName: widget.comment['authorName']?.toString(),
+            createdAt: createdAt is Timestamp ? createdAt.toDate() : null,
           );
       if (mounted) setState(() => _editing = false);
     } finally {

@@ -82,7 +82,10 @@ function CommentTile({
     if (!trimmed) return
     setSaving(true)
     try {
-      await editComment(orderId, comment.id as string, trimmed)
+      await editComment(orderId, comment.id as string, trimmed, {
+        authorName: (comment.authorName as string | undefined) ?? '',
+        createdAt: createdAt?.toDate(),
+      })
       setEditing(false)
     } finally {
       setSaving(false)

@@ -20,19 +20,22 @@ import '../shared/order_copy.dart';
 import '../shared/sales_manager_notes_card.dart';
 import '../shared/team_assign_sheet.dart';
 
-void openOrderDetailSheet(BuildContext context, Order order) {
+/// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
+/// bo'limigacha o'zi aylanadi.
+void openOrderDetailSheet(BuildContext context, Order order, {bool focusComments = false}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => _OrderDetailSheet(order: order),
+    builder: (context) => _OrderDetailSheet(order: order, focusComments: focusComments),
   );
 }
 
 
 class _OrderDetailSheet extends ConsumerWidget {
   final Order order;
-  const _OrderDetailSheet({required this.order});
+  final bool focusComments;
+  const _OrderDetailSheet({required this.order, this.focusComments = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -72,6 +75,10 @@ class _OrderDetailSheet extends ConsumerWidget {
               Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
               Expanded(
                 child: ListView(
+                  // Izohga o'tishda butun varaq oldindan quriladi — aks
+                  // holda ekrandan pastdagi izohlar bo'limi hali yo'q
+                  // bo'ladi va unga aylanib bo'lmaydi. Varaq kichik, narxi arzon.
+                  cacheExtent: focusComments ? 4000 : null,
                   controller: scrollController,
                   // Talab: klaviatura chiqqanda eng pastdagi inputlar
                   // yopilib qolmasligi kerak.
@@ -109,7 +116,7 @@ class _OrderDetailSheet extends ConsumerWidget {
                     const SizedBox(height: 20),
                     _ProgressChecklist(order: liveOrder),
                     const SizedBox(height: 20),
-                    CommentsSection(orderId: liveOrder.id),
+                    CommentsSection(orderId: liveOrder.id, focus: focusComments),
                   ],
                 ),
               ),

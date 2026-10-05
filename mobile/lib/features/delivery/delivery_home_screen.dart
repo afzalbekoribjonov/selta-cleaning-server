@@ -312,6 +312,7 @@ class _OrdersList extends StatelessWidget {
         return OrderCard(
           order: order,
           onTap: () => openDeliveryOrderDetailSheet(context, order),
+          onCommentTap: () => openDeliveryOrderDetailSheet(context, order, focusComments: true),
           facts: _factsFor(tab, order),
           trailing: position != null && gps != null ? formatDistance(distanceKm(position!, gps)) : null,
         );

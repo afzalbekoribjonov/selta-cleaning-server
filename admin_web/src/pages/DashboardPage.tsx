@@ -36,6 +36,9 @@ export default function DashboardPage() {
   // ma'lumotga muhtoj bo'lgan joyning o'zida.)
   useEffect(() => {
     apiPost('/adminBackfillOrderSummary', {}).catch(() => {})
+    // Kartalardagi "oxirgi izoh" maydonidan oldingi faol buyurtmalar uchun —
+    // server bir marta bajargach belgi qo'yadi va keyin darhol qaytadi.
+    apiPost('/adminBackfillLastComment', {}).catch(() => {})
   }, [])
 
   const stats = useMemo(() => {

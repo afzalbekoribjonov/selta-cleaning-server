@@ -520,18 +520,25 @@ class OrdersRepository {
     required String authorName,
     required String text,
   }) async {
-    FirebaseFirestore.instance.collection('orders').doc(orderId).collection('comments').add({
+    // ID oldindan olinadi — kartadagi "oxirgi izoh" aynan shu izohga bog'lanadi.
+    final ref = FirebaseFirestore.instance.collection('orders').doc(orderId).collection('comments').doc();
+    ref.set({
       'authorId': employeeId,
       'authorName': authorName,
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     }).ignore();
+    _setLastComment(orderId: orderId, commentId: ref.id, text: text, authorName: authorName, at: DateTime.now());
   }
 
+  /// [createdAt] — izoh yozilgan payt. Server faqat shu izoh kartadagi
+  /// oxirgisi bo'lsa yangilaydi (eski izohni tahrirlash yangisini bosmaydi).
   Future<void> editComment({
     required String orderId,
     required String commentId,
     required String text,
+    String? authorName,
+    DateTime? createdAt,
   }) async {
     FirebaseFirestore.instance
         .collection('orders')
@@ -539,6 +546,44 @@ class OrdersRepository {
         .collection('comments')
         .doc(commentId)
         .update({'text': text, 'editedAt': FieldValue.serverTimestamp()}).ignore();
+    _setLastComment(orderId: orderId, commentId: commentId, text: text, authorName: authorName ?? '', at: createdAt, edit: true);
+  }
+
+  /// Kartadagi oxirgi izohni navbat orqali yangilaydi (routes/comments.ts).
+  /// Ekranda darhol ko'rinadi; tahrirda esa faqat bu izoh hozir kartada
+  /// turgan bo'lsa.
+  void _setLastComment({
+    required String orderId,
+    required String commentId,
+    required String text,
+    required String authorName,
+    DateTime? at,
+    bool edit = false,
+  }) {
+    final order = _order(orderId);
+    final isShown = !edit || order?.lastCommentAt == null || (at != null && !at.isBefore(order!.lastCommentAt!));
+    _enqueue(
+      path: '/setLastComment',
+      orderId: orderId,
+      label: _label(orderId, edit ? 'Izoh tahrirlandi' : "Izoh qo'shildi"),
+      body: {
+        'orderId': orderId,
+        'commentId': commentId,
+        'text': text,
+        'authorName': authorName,
+        if (at != null) 'at': at.millisecondsSinceEpoch,
+      },
+      effect: isShown
+          ? {
+              'kind': EffectKind.orderUpdate,
+              'fields': {
+                'lastCommentText': text,
+                if (authorName.isNotEmpty) 'lastCommentAuthor': authorName,
+                if (at != null) 'lastCommentAt': at.millisecondsSinceEpoch,
+              },
+            }
+          : const {'kind': 'none'},
+    );
   }
 
   Future<void> addOrderItems({

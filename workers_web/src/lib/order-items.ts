@@ -1,4 +1,4 @@
-import { collection, doc, addDoc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, type Timestamp } from 'firebase/firestore'
+import { collection, doc, setDoc, updateDoc, query, orderBy, onSnapshot, serverTimestamp, type Timestamp } from 'firebase/firestore'
 import { db } from './firebase'
 import { apiPost } from './api'
 
@@ -110,15 +110,37 @@ export async function changeItemStatus(
   await apiPost('/changeItemStatus', { orderId, itemId, toStatus, qcNote: opts?.qcNote, actorName: opts?.actorName })
 }
 
+/**
+ * Ro'yxat kartalaridagi "oxirgi izoh"ni server yangilaydi
+ * (server/src/routes/comments.ts). Javob kutilmaydi va xatosi izohning
+ * o'ziga ta'sir qilmaydi — eng yomoni kartada eski izoh qoladi.
+ */
+function syncLastComment(body: { orderId: string; commentId: string; text: string; authorName: string; at?: number }) {
+  apiPost('/setLastComment', body).catch(() => {})
+}
+
 export async function addComment(orderId: string, employeeId: string, authorName: string, text: string): Promise<void> {
-  await addDoc(collection(db, 'orders', orderId, 'comments'), {
+  // ID oldindan olinadi — kartadagi "oxirgi izoh" aynan shu izohga bog'lanadi.
+  const ref = doc(collection(db, 'orders', orderId, 'comments'))
+  await setDoc(ref, {
     authorId: employeeId,
     authorName,
     text,
     createdAt: serverTimestamp(),
   })
+  syncLastComment({ orderId, commentId: ref.id, text, authorName, at: Date.now() })
 }
 
-export async function editComment(orderId: string, commentId: string, text: string): Promise<void> {
+/**
+ * `createdAt` — izoh yozilgan payt: server kartani faqat shu izoh u
+ * yerda turgan bo'lsa yangilaydi (eski izohni tahrirlash yangisini bosmaydi).
+ */
+export async function editComment(
+  orderId: string,
+  commentId: string,
+  text: string,
+  opts?: { authorName?: string; createdAt?: Date },
+): Promise<void> {
   await updateDoc(doc(db, 'orders', orderId, 'comments', commentId), { text, editedAt: serverTimestamp() })
+  syncLastComment({ orderId, commentId, text, authorName: opts?.authorName ?? '', at: opts?.createdAt?.getTime() })
 }
