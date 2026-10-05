@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../app/theme.dart';
 import '../../core/config.dart';
+import '../../core/printing/receipt.dart';
 import '../../core/widgets/selta_loader.dart';
+import '../printing/receipt_preview_sheet.dart';
 
 /// Admin panelni (admin.seltacleaning.uz) ilova ichida ochadi.
 ///
@@ -33,6 +37,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(AppColors.bg)
+      // Admin panel "Chop etish"ni bossa, chek bloklari shu kanal orqali
+      // keladi va ilovaning Bluetooth printeridan chiqadi (brauzerdan
+      // Bluetooth printerga to'g'ridan-to'g'ri chop etib bo'lmaydi).
+      ..addJavaScriptChannel('SeltaPrinter', onMessageReceived: _onPrintRequest)
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) => setState(() => _progress = progress),
@@ -52,6 +60,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ),
       )
       ..loadRequest(Uri.parse(kAdminPanelUrl));
+  }
+
+  /// Faqat admin panel sahifasidan kelgan so'rov qabul qilinadi.
+  Future<void> _onPrintRequest(JavaScriptMessage message) async {
+    final current = Uri.tryParse(await _controller.currentUrl() ?? '');
+    if (current == null || current.host != Uri.parse(kAdminPanelUrl).host) return;
+    try {
+      final data = jsonDecode(message.message);
+      if (data is! Map || data['blocks'] is! List) return;
+      final receipt = Receipt.fromBlocks(data['blocks'] as List);
+      final title = data['title'] is String ? data['title'] as String : 'Chek';
+      if (mounted) await openReceiptPreview(context, receipt: receipt, title: title);
+    } on FormatException {
+      // Buzilgan xabar — e'tiborsiz.
+    }
   }
 
   Future<void> _handleBack() async {

@@ -90,7 +90,7 @@ class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
   }
 }
 
-enum _MenuAction { createOrder, stats, warehouse, expenses, printer, profile, sync }
+enum _MenuAction { createOrder, stats, dailyReceipt, warehouse, expenses, printer, profile, sync }
 
 /// ⋮ menyu — xodimga FAQAT o'ziga ruxsat berilgan amallar ko'rinadi.
 ///
@@ -109,7 +109,8 @@ class EmployeeMenuButton extends ConsumerWidget {
     final canAccessWarehouse = employee?['canAccessWarehouse'] as bool? ?? false;
     final canAddExpenses = employee?['canAddExpenses'] as bool? ?? false;
     // Printer sozlamasi — chek chiqara oladiganlarga.
-    final canPrint = employee?['canPrintReceipts'] == true || employee?['canPrintDailyReport'] == true;
+    final canDailyReceipt = employee?['canPrintDailyReport'] == true;
+    final canPrint = employee?['canPrintReceipts'] == true || canDailyReceipt;
     final hasExtras = canCreateOrders || canViewStats || canAccessWarehouse || canAddExpenses || canPrint;
 
     return PopupMenuButton<_MenuAction>(
@@ -123,6 +124,8 @@ class EmployeeMenuButton extends ConsumerWidget {
             openCreateOrderScreen(context);
           case _MenuAction.stats:
             context.push('/stats');
+          case _MenuAction.dailyReceipt:
+            context.push('/daily-receipt');
           case _MenuAction.warehouse:
             context.push('/warehouse');
           case _MenuAction.expenses:
@@ -138,6 +141,7 @@ class EmployeeMenuButton extends ConsumerWidget {
       itemBuilder: (context) => [
         if (canCreateOrders) _item(_MenuAction.createOrder, Icons.add_circle_rounded, 'Yangi buyurtma'),
         if (canViewStats) _item(_MenuAction.stats, Icons.insights_rounded, "Kunlik ko'rsatkichlar"),
+        if (canDailyReceipt) _item(_MenuAction.dailyReceipt, Icons.summarize_rounded, 'Kunlik hisobot cheki'),
         if (canAccessWarehouse) _item(_MenuAction.warehouse, Icons.warehouse_rounded, 'Omborxona'),
         if (canAddExpenses) _item(_MenuAction.expenses, Icons.receipt_long_rounded, 'Chiqimlar'),
         if (canPrint) _item(_MenuAction.printer, Icons.print_rounded, 'Printer'),

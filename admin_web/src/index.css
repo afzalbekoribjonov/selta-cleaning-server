@@ -50,3 +50,25 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
 }
+
+/* Kunlik hisobot cheki — brauzerda chop etishda FAQAT chek, qog'oz enida
+   (components/dashboard/DailyReceiptDialog.tsx). Ekranda u yashirin. */
+.receipt-print {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 0;
+  }
+  body > *:not(#receipt-print-root) {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  .receipt-print {
+    display: block;
+    padding: 2mm;
+  }
+}

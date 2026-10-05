@@ -33,6 +33,7 @@ import {
 } from '@/lib/daily-report'
 import { UnitTotals } from './UnitTotals'
 import { DailyReportDrawer, type DrawerKind } from './DailyReportDrawer'
+import { DailyReceiptDialog } from './DailyReceiptDialog'
 
 /** "2026-09-05" -> "5-sentabr, 2026" */
 function formatDateKeyUz(dateKey: string): string {
@@ -60,6 +61,7 @@ export function DailyReportSection() {
   const queryClient = useQueryClient()
   const [date, setDate] = useState(todayKey)
   const [drawer, setDrawer] = useState<DrawerKind | null>(null)
+  const [receiptOpen, setReceiptOpen] = useState(false)
 
   // Kunlik jurnal 2026-09-05 da joriy etilgan — undan oldingi kunlar
   // uchun u bo'sh. Bu migratsiya mahsulotlardagi mavjud vaqt
@@ -131,8 +133,17 @@ export function DailyReportSection() {
               Bugun
             </button>
           )}
+          <button
+            onClick={() => setReceiptOpen(true)}
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-brand-primary px-3 text-xs font-bold text-brand-primary hover:bg-brand-primary/5"
+            title="Kunlik hisobot cheki"
+          >
+            <Receipt size={15} />
+            <span className="hidden sm:inline">Chek</span>
+          </button>
         </div>
       </header>
+      {receiptOpen && <DailyReceiptDialog date={date} onClose={() => setReceiptOpen(false)} />}
 
       {report.isLoading ? (
         <Spinner className="py-10" />

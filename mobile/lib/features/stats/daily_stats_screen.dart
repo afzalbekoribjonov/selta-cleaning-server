@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
-import '../../core/services/auth_service.dart' show describeApiError;
+import '../../core/services/auth_service.dart' show describeApiError, employeeClaimsProvider;
+import '../../core/services/employee_repository.dart';
+import '../printing/daily_report_receipt_screen.dart' show canPrintDailyReport;
 import '../../core/services/stats_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/money_utils.dart';
@@ -33,6 +36,15 @@ class _DailyStatsScreenState extends ConsumerState<DailyStatsScreen> {
       appBar: AppBar(
         title: const Text('Kunlik ko\'rsatkichlar'),
         actions: [
+          if (canPrintDailyReport(
+            ref.watch(currentEmployeeProvider).valueOrNull,
+            ref.watch(employeeClaimsProvider).valueOrNull?.role,
+          ))
+            IconButton(
+              onPressed: () => context.push('/daily-receipt'),
+              tooltip: 'Kunlik hisobot cheki',
+              icon: const Icon(Icons.summarize_rounded),
+            ),
           IconButton(
             onPressed: () => ref.invalidate(provider),
             tooltip: 'Yangilash',

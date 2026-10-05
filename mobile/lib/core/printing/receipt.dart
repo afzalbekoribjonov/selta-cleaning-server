@@ -49,6 +49,35 @@ class ReceiptGap extends ReceiptLine {
 class Receipt {
   final List<ReceiptLine> lines;
   const Receipt(this.lines);
+
+  /// Server (yoki admin panel) tayyorlagan bloklardan — masalan kunlik
+  /// hisobot cheki (server: lib/dailyReceipt.ts). Noma'lum blok tashlab
+  /// ketiladi; haddan ziyod uzun ro'yxat kesiladi (himoya).
+  factory Receipt.fromBlocks(List<dynamic> blocks) {
+    String str(Object? v) => v is String ? (v.length > 200 ? v.substring(0, 200) : v) : '';
+    final lines = <ReceiptLine>[];
+    for (final raw in blocks.take(600)) {
+      if (raw is! Map) continue;
+      final bold = raw['bold'] == true;
+      switch (raw['kind']) {
+        case 'logo':
+          lines.add(const ReceiptLogo());
+        case 'text':
+          lines.add(ReceiptText(
+            str(raw['text']),
+            align: raw['align'] == 'center' ? ReceiptAlign.center : ReceiptAlign.left,
+            bold: bold,
+            large: raw['large'] == true,
+          ));
+        case 'pair':
+          lines.add(ReceiptPair(str(raw['left']), str(raw['right']), bold: bold));
+        case 'divider':
+          final ch = str(raw['char']);
+          lines.add(ReceiptDivider(ch.isEmpty ? '-' : ch.substring(0, 1)));
+      }
+    }
+    return Receipt(lines);
+  }
 }
 
 /// Qog'oz eni.
