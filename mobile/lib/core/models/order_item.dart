@@ -131,10 +131,13 @@ class OrderItem {
     );
   }
 
-  factory OrderItem.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data()!;
+  factory OrderItem.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) => OrderItem.fromMap(doc.id, doc.data()!);
+
+  /// Mahsulot hujjati yoki buyurtmadagi nusxasi (`itemsMirror` yozuvi —
+  /// server: lib/orderSummary.ts) — ikkalasi bir xil shaklda.
+  factory OrderItem.fromMap(String id, Map<String, dynamic> data) {
     return OrderItem(
-      id: doc.id,
+      id: id,
       itemNumber: (data['itemNumber'] as num?)?.toInt() ?? 0,
       name: data['name']?.toString() ?? 'Mahsulot',
       area: (data['area'] as num?) ?? 0,

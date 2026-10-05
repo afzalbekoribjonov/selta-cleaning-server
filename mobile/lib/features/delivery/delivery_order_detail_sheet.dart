@@ -22,6 +22,7 @@ import '../shared/item_detail_row.dart';
 import 'zero_price_attention_sheet.dart';
 import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
+import '../../core/widgets/load_error_note.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -86,19 +87,19 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
   }
 
   Future<void> _advance() async {
-    final next = _nextStage[widget.order.status];
+    final next = _nextStage[_order.status];
     if (next == null) return;
 
     String? gpsCoords;
 
-    if (widget.order.status == 'new') {
+    if (_order.status == 'new') {
       // Talab: narxi 0 so'm bo'lib qolgan mahsulot bo'lsa, buyurtma
       // ishchilar navbatiga o'tmasligi kerak — avval e'tibor oynasi
       // ko'rsatiladi, tuzatilgach xodim "QABUL QILINDI"ni qayta bosadi.
-      final items = ref.read(orderItemsProvider(widget.order.id)).valueOrNull ?? const [];
+      final items = ref.read(orderItemsProvider(_order.id)).valueOrNull ?? const [];
       final hasZeroPriced = items.any((i) => i.price <= 0);
       if (hasZeroPriced) {
-        await openZeroPriceAttentionSheet(context, widget.order);
+        await openZeroPriceAttentionSheet(context, _order);
         return;
       }
 
@@ -120,7 +121,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
     try {
       final actorName = ref.read(currentEmployeeProvider).valueOrNull?['fullName'] as String?;
       await ref.read(ordersRepositoryProvider).changeOrderStatus(
-            orderId: widget.order.id,
+            orderId: _order.id,
             toStatus: next,
             gpsCoords: gpsCoords,
             actorName: actorName,
@@ -134,9 +135,12 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
     }
   }
 
+  /// Jonli holat — ochilgan paytdagi nusxa emas (liveOrderProvider).
+  Order get _order => ref.read(liveOrderProvider(widget.order.id)) ?? widget.order;
+
   @override
   Widget build(BuildContext context) {
-    final order = widget.order;
+    final order = ref.watch(liveOrderProvider(widget.order.id)) ?? widget.order;
     final status = statusOf(order.status);
     final actionLabel = _actionLabel[order.status];
     final itemsAsync = ref.watch(orderItemsProvider(order.id));
@@ -227,7 +231,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                       const SizedBox(height: 16),
                       itemsAsync.when(
                         loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
-                        error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
+                        error: (e, _) => LoadErrorNote(error: e),
                         data: (items) => _PickupItemsCard(order: order, items: items),
                       ),
                     ],
@@ -235,7 +239,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                       const SizedBox(height: 16),
                       itemsAsync.when(
                         loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
-                        error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
+                        error: (e, _) => LoadErrorNote(error: e),
                         data: (items) => _DeliverableItemsCard(order: order, items: items),
                       ),
                     ],

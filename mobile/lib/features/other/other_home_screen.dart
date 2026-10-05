@@ -130,7 +130,7 @@ class _SingleTaskCardState extends ConsumerState<_SingleTaskCard> {
   Future<void> _markDone() async {
     setState(() => _submitting = true);
     try {
-      await ref.read(tasksRepositoryProvider).markDone(widget.task.id);
+      ref.read(tasksRepositoryProvider).markDone(widget.task);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeApiError(e))));
@@ -148,7 +148,7 @@ class _SingleTaskCardState extends ConsumerState<_SingleTaskCard> {
     if (note == null) return;
     setState(() => _submitting = true);
     try {
-      await ref.read(tasksRepositoryProvider).markDelayed(widget.task.id, delayNote: note.isEmpty ? null : note);
+      ref.read(tasksRepositoryProvider).markDelayed(widget.task, delayNote: note.isEmpty ? null : note);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeApiError(e))));
@@ -257,7 +257,7 @@ class _MonthlyTaskRowState extends ConsumerState<_MonthlyTaskRow> {
   Future<void> _markDone() async {
     setState(() => _submitting = true);
     try {
-      await ref.read(tasksRepositoryProvider).markDone(widget.task.id);
+      ref.read(tasksRepositoryProvider).markDone(widget.task);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeApiError(e))));
     } finally {

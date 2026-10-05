@@ -1,4 +1,4 @@
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 /**
  * Buyurtma kartalari/ro'yxatlari uchun mahsulotlardan HOSILA qilingan
@@ -16,10 +16,16 @@ import { Timestamp } from "firebase-admin/firestore";
  * MUHIM: mahsulotlarni o'zgartiradigan HAR BIR yo'l shu summarini qayta
  * yozishi shart, aks holda ma'lumot eskirib qoladi. Hozircha bular:
  * createOrder, addOrderItems, updateOrderItem, deleteOrderItem,
- * changeItemStatus.
+ * changeItemStatus, deliverOrderItems.
  */
 
+/**
+ * Bitta mahsulot — `id` va hujjatdagi TO'LIQ ma'lumot (faqat hisob uchun
+ * kerakli maydonlar emas): undan buyurtmadagi mahsulotlar nusxasi
+ * (`itemsMirror`) ham quriladi.
+ */
 export interface SummaryItemInput {
+  id: string;
   status?: string | null;
   tariff?: string | null;
   dueDate?: Timestamp | Date | null;
@@ -27,6 +33,88 @@ export interface SummaryItemInput {
   category?: string | null;
   calcType?: string | null;
   qty?: number | null;
+  [field: string]: unknown;
+}
+
+/** Firestore hujjatidan — `{ id, ...data }`. */
+export function summaryItemOf(doc: FirebaseFirestore.DocumentSnapshot, patch: Record<string, unknown> = {}): SummaryItemInput {
+  return { ...(doc.data() ?? {}), ...patch, id: doc.id } as SummaryItemInput;
+}
+
+/**
+ * Buyurtmadagi mahsulotlar NUSXASI uchun olinadigan maydonlar — ilova va
+ * veb ekranlari mahsulot kartasida ko'rsatadiganlari.
+ */
+const MIRROR_FIELDS = [
+  "itemNumber",
+  "name",
+  "area",
+  "price",
+  "qcStatus",
+  "qcNote",
+  "productId",
+  "calcType",
+  "category",
+  "width",
+  "height",
+  "qty",
+  "sizeVariant",
+  "unitPrice",
+  "condition",
+  "conditionSurchargePercent",
+  "tariff",
+  "dueDate",
+  "createdAt",
+  "status",
+  "addedByDepartment",
+  "washedBy",
+  "washedAt",
+  "packedBy",
+  "packedAt",
+  "deliveredBy",
+  "deliveredAt",
+  "deliveredByName",
+  "collectedAmount",
+  "photos",
+] as const;
+
+/**
+ * Nusxaga yoziladigan qiymat. Massiv ichida Firestore belgilari
+ * (`serverTimestamp()` va h.k.) TAQIQLANGAN — vaqt belgisi shu paytga
+ * aylantiriladi, qolganlari tushirib qoldiriladi.
+ */
+function mirrorValue(value: unknown, now: Timestamp): unknown {
+  if (value === undefined) return undefined;
+  if (value instanceof FieldValue) return value.isEqual(FieldValue.serverTimestamp()) ? now : undefined;
+  if (value instanceof Date) return Timestamp.fromDate(value);
+  return value;
+}
+
+/**
+ * Buyurtma hujjatidagi mahsulotlar nusxasi (`itemsMirror`).
+ *
+ * NEGA: ilova buyurtmalar ro'yxatini qurilmada keshlaydi, lekin har bir
+ * buyurtmaning `items` pastki jamlanmasi alohida so'rov — xodim oldin
+ * ochmagan buyurtmaning mahsulotlari internetsiz umuman chiqmasdi va har
+ * bir ochilish qo'shimcha o'qish edi. Nusxa buyurtma bilan BIRGA keladi:
+ * mahsulotlar darhol, internetsiz ham ko'rinadi, qo'shimcha o'qishsiz.
+ *
+ * Mahsulotni o'zgartiradigan har bir yo'l summarini (demak nusxani ham)
+ * shu tranzaksiyada qayta yozadi, shuning uchun ikkalasi hech qachon
+ * bir-biridan farq qilmaydi.
+ */
+export function buildItemsMirror(items: SummaryItemInput[]): Record<string, unknown>[] {
+  const now = Timestamp.now();
+  return [...items]
+    .sort((a, b) => (Number(a.itemNumber) || 0) - (Number(b.itemNumber) || 0))
+    .map((item) => {
+      const entry: Record<string, unknown> = { id: item.id };
+      for (const field of MIRROR_FIELDS) {
+        const value = mirrorValue(item[field], now);
+        if (value !== undefined && value !== null) entry[field] = value;
+      }
+      return entry;
+    });
 }
 
 /**
@@ -75,6 +163,8 @@ export interface OrderItemsSummary {
    * bo'lardi.
    */
   itemStageCategories: Record<string, string[]>;
+  /** Mahsulotlar nusxasi — [buildItemsMirror]. */
+  itemsMirror: Record<string, unknown>[];
 }
 
 function toTimestamp(value: Timestamp | Date | null | undefined): Timestamp | null {
@@ -125,5 +215,6 @@ export function computeOrderItemsSummary(items: SummaryItemInput[]): OrderItemsS
     itemStageCategories: Object.fromEntries(
       Object.entries(stageCategories).map(([status, set]) => [status, [...set]]),
     ),
+    itemsMirror: buildItemsMirror(items),
   };
 }

@@ -5,6 +5,7 @@ import '../constants.dart';
 import '../models/order.dart';
 import '../models/order_item.dart';
 import '../sync/action_queue.dart';
+import '../sync/fast_get.dart';
 import '../sync/overlay.dart';
 import '../sync/pending_action.dart';
 import '../utils/money_utils.dart';
@@ -91,24 +92,41 @@ class OrdersRepository {
         .map((snap) => snap.docs.map(Order.fromFirestore).where((o) => !o.isDone).toList());
   }
 
-  Stream<List<OrderItem>> watchItems(String orderId) {
+  /// [fromCache] — javob qurilma keshidan: bo'sh ro'yxat "mahsulot yo'q"
+  /// emas, balki "hali yuklanmagan" bo'lishi mumkin (internetsiz).
+  Stream<({List<OrderItem> items, bool fromCache})> watchItems(String orderId) {
     return FirebaseFirestore.instance
         .collection('orders')
         .doc(orderId)
         .collection('items')
         .orderBy('itemNumber')
         .snapshots()
-        .map((snap) => snap.docs.map(OrderItem.fromFirestore).toList());
+        .map((snap) => (items: snap.docs.map(OrderItem.fromFirestore).toList(), fromCache: snap.metadata.isFromCache));
   }
 
-  Stream<List<Map<String, dynamic>>> watchComments(String orderId) {
+  /// Bitta buyurtma hujjati — ro'yxatlarda yo'q buyurtma ochilganda
+  /// (masalan qidiruvdan) uning jonli holati uchun.
+  Stream<Order?> watchOrder(String orderId) {
+    return FirebaseFirestore.instance
+        .collection('orders')
+        .doc(orderId)
+        .snapshots()
+        .map((doc) => doc.exists ? Order.fromFirestore(doc) : null);
+  }
+
+  /// [fromCache] — bo'sh ro'yxat "izoh yo'q" emas, "hali yuklanmagan"
+  /// bo'lishi mumkin (internetsiz, oldin ochilmagan buyurtma).
+  Stream<({List<Map<String, dynamic>> comments, bool fromCache})> watchComments(String orderId) {
     return FirebaseFirestore.instance
         .collection('orders')
         .doc(orderId)
         .collection('comments')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+        .map((snap) => (
+              comments: snap.docs.map((d) => {'id': d.id, ...d.data()}).toList(),
+              fromCache: snap.metadata.isFromCache,
+            ));
   }
 
   Stream<List<Map<String, dynamic>>> watchStatusHistory(String orderId) {
@@ -150,7 +168,7 @@ class OrdersRepository {
     final results = <String, Order>{};
     for (final query in queries) {
       try {
-        final snap = await query.get();
+        final snap = await getQueryFast(query);
         for (final doc in snap.docs) {
           results[doc.id] = Order.fromFirestore(doc);
         }

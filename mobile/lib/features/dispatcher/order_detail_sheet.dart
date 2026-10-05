@@ -21,6 +21,7 @@ import '../shared/sales_manager_notes_card.dart';
 import '../shared/team_assign_sheet.dart';
 import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
+import '../../core/widgets/load_error_note.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -44,20 +45,10 @@ class _OrderDetailSheet extends ConsumerWidget {
     // Ochilganda berilgan `order` faqat boshlang'ich hujjat — masalan
     // "Jamoa biriktirish" shu varaq ustida ochilgan pastki varaqda amalga
     // oshirilsa, u yopilgach shu yerdagi holat yangilanmay ("Jamoa
-    // biriktirish" tugmasi hamon ko'rinib) qolar edi. Endi joriy ro'yxatdan
-    // jonli holatni kuzatib boramiz — topilmasa (masalan sahifalanган eski
-    // buyurtma) boshlang'ich qiymatga qaytadi.
-    final recentOrders = ref.watch(ordersProvider).value;
-    Order? matched;
-    if (recentOrders != null) {
-      for (final o in recentOrders) {
-        if (o.id == order.id) {
-          matched = o;
-          break;
-        }
-      }
-    }
-    final liveOrder = matched ?? order;
+    // biriktirish" tugmasi hamon ko'rinib) qolar edi. Endi jonli holat
+    // kuzatiladi (ro'yxatdan, topilmasa hujjatning o'zidan); hali kelmagan
+    // bo'lsa boshlang'ich qiymat ko'rsatiladi.
+    final liveOrder = ref.watch(liveOrderProvider(order.id)) ?? order;
     final itemsAsync = ref.watch(orderItemsProvider(liveOrder.id));
 
     return DraggableScrollableSheet(
@@ -112,7 +103,7 @@ class _OrderDetailSheet extends ConsumerWidget {
                     const SizedBox(height: 20),
                     itemsAsync.when(
                       loading: () => const Padding(padding: EdgeInsets.all(6), child: LinearProgressIndicator()),
-                      error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
+                      error: (e, _) => LoadErrorNote(error: e),
                       data: (items) => _ItemsSummaryCard(order: liveOrder, items: items),
                     ),
                     const SizedBox(height: 20),

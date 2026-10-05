@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../core/services/auth_service.dart' show authStateProvider, employeeClaimsProvider;
+import '../../core/services/connectivity_service.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
+import '../../core/widgets/load_error_note.dart';
 
 /// Har bir buyurtma tafsilotida ishlatiladigan izohlar bo'limi (talab #10:
 /// "har bir xodim buyurtmaga izoh qoldirish imkoniyatiga ega bo'lishi
@@ -114,9 +116,24 @@ class _CommentsSectionState extends ConsumerState<CommentsSection> {
           const SizedBox(height: 12),
           commentsAsync.when(
             loading: () => const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator()),
-            error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
-            data: (comments) {
+            error: (e, _) => LoadErrorNote(error: e),
+            data: (result) {
+              final comments = result.comments;
               if (comments.isEmpty) {
+                // Keshdagi bo'sh ro'yxat — internet bo'lsa server javobi
+                // kutiladi, bo'lmasa "izoh yo'q" deb adashtirilmaydi.
+                if (result.fromCache) {
+                  final online = ref.watch(connectivityProvider).valueOrNull ?? true;
+                  return online
+                      ? const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator())
+                      : const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            "Internet yo'q — izohlar hali yuklanmagan",
+                            style: TextStyle(color: AppColors.gray, fontSize: 13),
+                          ),
+                        );
+                }
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Text('Hali izoh yo\'q', style: TextStyle(color: AppColors.gray, fontSize: 13)),
@@ -143,7 +160,8 @@ class _CommentsSectionState extends ConsumerState<CommentsSection> {
 /// `autoDispose` + qisqa ushlab turish — mahsulotlar provideri bilan bir
 /// xil sabab: avval bu `autoDispose`SIZ edi va xodim ochgan HAR BIR
 /// buyurtmaning izohlar obunasi ilova yopilguncha ochiq qolardi.
-final _commentsProvider = StreamProvider.autoDispose.family<List<Map<String, dynamic>>, String>((ref, orderId) {
+final _commentsProvider =
+    StreamProvider.autoDispose.family<({List<Map<String, dynamic>> comments, bool fromCache}), String>((ref, orderId) {
   ref.watch(authStateProvider);
   final link = ref.keepAlive();
   Timer? release;

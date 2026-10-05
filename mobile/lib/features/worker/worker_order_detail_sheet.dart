@@ -11,6 +11,7 @@ import '../shared/item_action_row.dart';
 import '../shared/order_copy.dart';
 import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
+import '../../core/widgets/load_error_note.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -29,12 +30,14 @@ const _itemStillEditableStatuses = {'pending', 'washing'};
 bool itemEditableFor(String? status) => status == null || _itemStillEditableStatuses.contains(status);
 
 class _WorkerOrderDetailSheet extends ConsumerWidget {
-  final Order order;
+  final Order initial;
   final bool focusComments;
-  const _WorkerOrderDetailSheet({required this.order, this.focusComments = false});
+  const _WorkerOrderDetailSheet({required Order order, this.focusComments = false}) : initial = order;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Jonli holat — ochilgan paytdagi nusxa emas (liveOrderProvider).
+    final order = ref.watch(liveOrderProvider(initial.id)) ?? initial;
     final itemsAsync = ref.watch(orderItemsProvider(order.id));
 
     return DraggableScrollableSheet(
@@ -77,7 +80,7 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
                     const SizedBox(height: 20),
                     itemsAsync.when(
                       loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
-                      error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
+                      error: (e, _) => LoadErrorNote(error: e),
                       data: (items) => _ItemsCard(order: order, items: items),
                     ),
                     PrepaymentSection(order: order),

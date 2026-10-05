@@ -7,7 +7,7 @@ import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from 
 import { notifyDepartment, notifyEmployee, notifyLater } from "../lib/notifications";
 import { isValidActionId } from "../lib/idempotency";
 import { computeItems, type ItemInput } from "../lib/pricing";
-import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
+import { computeOrderItemsSummary, summaryItemOf, type SummaryItemInput } from "../lib/orderSummary";
 import { logDailyActivity, itemActivityRefs } from "../lib/dailyActivity";
 import { prepaidCredit, prepaidToApply } from "../lib/prepayments";
 import { prepareCompletionBonus } from "../lib/bonus";
@@ -214,7 +214,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         // Ilova oflayn ko'rsatgan mahsulotlar aynan shu ID'larda — server
         // nusxasi kelganda ekranda dublikat paydo bo'lmaydi.
         const itemRef = proposedId ? orderRef.collection("items").doc(`${proposedId}-${index}`) : orderRef.collection("items").doc();
-        tx.set(itemRef, {
+        const itemData = {
           itemNumber: itemNumber++,
           ...item,
           status: "pending",
@@ -224,16 +224,9 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
           addedByDepartment: role,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-        });
-        summaryItems.push({
-          status: "pending",
-          tariff: item.tariff,
-          dueDate,
-          price: item.price,
-          category: item.category,
-          calcType: item.calcType,
-          qty: item.qty,
-        });
+        };
+        tx.set(itemRef, itemData);
+        summaryItems.push({ ...itemData, id: itemRef.id });
         totalArea += item.area;
         totalPrice += item.price;
       }
@@ -721,7 +714,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       // Ro'yxatlar uchun hosila ma'lumot — o'zgargan itemning YANGI
       // holati bilan qayta hisoblanadi.
       const summaryItems: SummaryItemInput[] = itemsSnap.docs.map((d) =>
-        d.id === itemId ? { ...(d.data() as SummaryItemInput), status: toStatus } : (d.data() as SummaryItemInput),
+        summaryItemOf(d, d.id === itemId ? itemUpdate : {}),
       );
       Object.assign(orderUpdate, computeOrderItemsSummary(summaryItems));
 
@@ -835,12 +828,13 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
 
       // Mavjud + yangi mahsulotlar — buyurtmadagi hosila ma'lumotni
       // (tarif/muddat/holat) qayta hisoblash uchun.
-      const summaryItems: SummaryItemInput[] = existingItemsSnap.docs.map((d) => d.data() as SummaryItemInput);
+      const summaryItems: SummaryItemInput[] = existingItemsSnap.docs.map((d) => summaryItemOf(d));
 
       for (const [index, item] of computed.entries()) {
         const dueDate = isPickup && item.tariff ? computeDueDate(now, tariffDays(tariffs, item.tariff)) : null;
         const status = isPickup ? "pending" : null;
-        tx.set(itemIdFor(index), {
+        const newItemRef = itemIdFor(index);
+        const itemData = {
           itemNumber: nextNumber,
           ...item,
           status,
@@ -850,16 +844,9 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
           addedByDepartment: role,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-        });
-        summaryItems.push({
-          status,
-          tariff: item.tariff,
-          dueDate,
-          price: item.price,
-          category: item.category,
-          calcType: item.calcType,
-          qty: item.qty,
-        });
+        };
+        tx.set(newItemRef, itemData);
+        summaryItems.push({ ...itemData, id: newItemRef.id });
         addedArea += item.area;
         addedPrice += item.price;
         nextNumber++;
@@ -939,17 +926,7 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
       });
 
       const summaryItems: SummaryItemInput[] = allItemsSnap.docs.map((d) =>
-        d.id === itemId
-          ? {
-              status: (d.data().status as string | null) ?? null,
-              tariff: computed.tariff,
-              dueDate,
-              price: computed.price,
-              category: computed.category,
-              calcType: computed.calcType,
-              qty: computed.qty,
-            }
-          : (d.data() as SummaryItemInput),
+        summaryItemOf(d, d.id === itemId ? { ...computed, dueDate } : {}),
       );
 
       tx.update(orderRef, {
@@ -1015,7 +992,7 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
 
       const summaryItems: SummaryItemInput[] = allItemsSnap.docs
         .filter((d) => d.id !== itemId)
-        .map((d) => d.data() as SummaryItemInput);
+        .map((d) => summaryItemOf(d));
 
       tx.update(orderRef, {
         totalArea: FieldValue.increment(-area),
@@ -1144,7 +1121,10 @@ ordersRouter.post("/adminDeleteOrder", withAuth, requireAdmin, async (req, res) 
  * To'ldirish versiyasi — buyurtma xulosasiga YANGI hosila maydon
  * qo'shilganda oshiriladi, shunda to'ldirish bir marta qayta ishlaydi.
  */
-const ORDER_SUMMARY_BACKFILL_VERSION = 1;
+const ORDER_SUMMARY_BACKFILL_VERSION = 2; // 2 — mahsulotlar nusxasi (itemsMirror)
+
+/** Yakunlanmagan buyurtmalarning barcha holatlari (joyida yuvish ham). */
+const BACKFILL_STATUSES = ["new", "picked_up", "brought_in", "washing", "packing", "qc_review", "ready", "team_assigned", "in_progress"];
 
 ordersRouter.post("/adminBackfillOrderSummary", withAuth, requireAdmin, async (req, res) => {
   try {
@@ -1157,18 +1137,22 @@ ordersRouter.post("/adminBackfillOrderSummary", withAuth, requireAdmin, async (r
     if (!force && (await marker.get()).data()?.version === ORDER_SUMMARY_BACKFILL_VERSION) {
       return res.json({ ok: true, skipped: true });
     }
-    const snap = await db
-      .collection("orders")
-      .where("serviceType", "==", "pickup")
-      .where("status", "in", ["new", "picked_up", "brought_in"])
-      .get();
+    // Barcha FAOL buyurtmalar (olib kelish ham, joyida yuvish ham):
+    // ilova ularning mahsulotlarini nusxadan ko'rsatadi. Yakunlanganlarda
+    // nusxa bo'lmasa ilova mahsulotlarni avvalgidek alohida o'qiydi.
+    const snap = await db.collection("orders").where("status", "in", BACKFILL_STATUSES).get();
 
     // Hosila maydonlarning BIRORTASI yetishmasa ham qayta hisoblanadi —
     // shu tufayli keyinchalik qo'shilgan maydon (masalan `itemUnitTotals`)
     // ham o'z-o'zidan to'ldiriladi, alohida migratsiya yozmasdan.
     const targets = force
       ? snap.docs
-      : snap.docs.filter((d) => d.data().itemStatusCounts === undefined || d.data().itemUnitTotals === undefined);
+      : snap.docs.filter(
+          (d) =>
+            d.data().itemStatusCounts === undefined ||
+            d.data().itemUnitTotals === undefined ||
+            !Array.isArray(d.data().itemsMirror),
+        );
 
     let updated = 0;
     // Ketma-ket, kichik to'plamlarda — bir vaqtda yuzlab so'rov
@@ -1179,7 +1163,7 @@ ordersRouter.post("/adminBackfillOrderSummary", withAuth, requireAdmin, async (r
       await Promise.all(
         chunk.map(async (doc) => {
           const itemsSnap = await doc.ref.collection("items").get();
-          const summary = computeOrderItemsSummary(itemsSnap.docs.map((d) => d.data() as SummaryItemInput));
+          const summary = computeOrderItemsSummary(itemsSnap.docs.map((d) => summaryItemOf(d)));
           batch.update(doc.ref, { ...summary });
           updated += 1;
         }),

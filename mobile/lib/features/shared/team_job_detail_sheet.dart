@@ -16,6 +16,7 @@ import 'order_copy.dart';
 import 'sales_manager_notes_card.dart';
 import 'bonus_section.dart';
 import 'prepayment_section.dart';
+import '../../core/widgets/load_error_note.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
 /// bo'limigacha o'zi aylanadi.
@@ -46,14 +47,14 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
   String? _error;
 
   Future<void> _advance() async {
-    final next = _nextStage[widget.order.status];
+    final next = _nextStage[_order.status];
     if (next == null) return;
     setState(() {
       _advancing = true;
       _error = null;
     });
     try {
-      await ref.read(ordersRepositoryProvider).changeOrderStatus(orderId: widget.order.id, toStatus: next);
+      await ref.read(ordersRepositoryProvider).changeOrderStatus(orderId: _order.id, toStatus: next);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       setState(() {
@@ -63,9 +64,12 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
     }
   }
 
+  /// Jonli holat — ochilgan paytdagi nusxa emas (liveOrderProvider).
+  Order get _order => ref.read(liveOrderProvider(widget.order.id)) ?? widget.order;
+
   @override
   Widget build(BuildContext context) {
-    final order = widget.order;
+    final order = ref.watch(liveOrderProvider(widget.order.id)) ?? widget.order;
     final status = statusOf(order.status);
     final actionLabel = _actionLabel[order.status];
     final itemsAsync = ref.watch(orderItemsProvider(order.id));
@@ -165,7 +169,7 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                     const SizedBox(height: 20),
                     itemsAsync.when(
                       loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
-                      error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
+                      error: (e, _) => LoadErrorNote(error: e),
                       data: (items) => _TeamItemsCard(order: order, items: items),
                     ),
                     if (actionLabel != null) ...[

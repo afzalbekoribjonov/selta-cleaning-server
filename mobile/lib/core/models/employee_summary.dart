@@ -29,6 +29,14 @@ class EmployeeSummary {
       canDoOnsiteWashing: map['canDoOnsiteWashing'] as bool? ?? false,
     );
   }
+
+  /// Qurilmada saqlash uchun (internetsiz ro'yxat) — [EmployeeSummary.fromMap] teskarisi.
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'fullName': fullName,
+        if (departmentLabel != null) 'departmentLabel': departmentLabel,
+        'canDoOnsiteWashing': canDoOnsiteWashing,
+      };
 }
 
 /// PIN tekshirilgach token orqali olinadigan custom-claims ma'lumoti.

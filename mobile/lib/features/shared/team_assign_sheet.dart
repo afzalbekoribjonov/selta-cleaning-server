@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/models/employee_summary.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/services/local_store.dart';
+import '../../core/sync/cached_fetch.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/widgets/selta_loader.dart';
 
@@ -27,15 +29,31 @@ class _TeamCandidate {
   const _TeamCandidate(this.employee, this.departmentLabel);
 }
 
+/// Internetsiz ham ochiladi: oxirgi muvaffaqiyatli ro'yxat qurilmada
+/// saqlanadi (xodimlar tarkibi kamdan-kam o'zgaradi, biriktirish esa
+/// navbat orqali keyin yuboriladi).
 final _teamCandidatesProvider = FutureProvider<List<_TeamCandidate>>((ref) async {
   final auth = ref.watch(authServiceProvider);
-  final results = await Future.wait([
-    auth.listEmployeesByDepartment('worker'),
-    auth.listEmployeesByDepartment('delivery'),
-  ]);
+  final raw = await fetchWithCache(
+    ref.read(localStoreProvider),
+    'cache.teamCandidates',
+    () async {
+      final results = await Future.wait([
+        auth.listEmployeesByDepartment('worker'),
+        auth.listEmployeesByDepartment('delivery'),
+      ]);
+      return {
+        'worker': [for (final e in results[0]) e.toMap()],
+        'delivery': [for (final e in results[1]) e.toMap()],
+      };
+    },
+    usable: (_) => true,
+  );
+  List<EmployeeSummary> list(Object? v) =>
+      v is List ? [for (final e in v) EmployeeSummary.fromMap(Map<Object?, Object?>.from(e as Map))] : const [];
   return [
-    for (final e in results[0]) _TeamCandidate(e, 'Ishchi'),
-    for (final e in results[1]) _TeamCandidate(e, 'Dastavchik'),
+    for (final e in list(raw['worker'])) _TeamCandidate(e, 'Ishchi'),
+    for (final e in list(raw['delivery'])) _TeamCandidate(e, 'Dastavchik'),
   ];
 });
 

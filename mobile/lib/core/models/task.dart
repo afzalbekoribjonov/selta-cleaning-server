@@ -50,4 +50,17 @@ class Task {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
+
+  Task copyWith({String? status, String? delayNote, DateTime? completedAt}) => Task(
+        id: id,
+        type: type,
+        title: title,
+        description: description,
+        dueDate: dueDate,
+        scheduledDate: scheduledDate,
+        status: status ?? this.status,
+        delayNote: delayNote ?? this.delayNote,
+        completedAt: completedAt ?? this.completedAt,
+        createdAt: createdAt,
+      );
 }

@@ -19,6 +19,7 @@ import '../shared/employee_app_bar.dart';
 import '../shared/team_jobs_section.dart';
 import 'delivery_buckets.dart';
 import 'delivery_order_detail_sheet.dart';
+import '../../core/sync/fast_get.dart';
 
 enum _Tab { fresh, almost, ready, delivered }
 
@@ -470,12 +471,9 @@ class _DeliveredTab extends ConsumerWidget {
   static Future<void> _open(BuildContext context, WidgetRef ref, String orderId, Order fallback) async {
     var order = fallback;
     if (fallback.phone.isEmpty) {
-      try {
-        final doc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
-        if (doc.exists) order = Order.fromFirestore(doc);
-      } catch (_) {
-        // Internetsiz va keshda yo'q — qisqa nusxa bilan ochiladi.
-      }
+      // Internetsiz va keshda yo'q bo'lsa — qisqa nusxa bilan ochiladi.
+      final doc = await getDocFast(FirebaseFirestore.instance.collection('orders').doc(orderId));
+      if (doc != null && doc.exists) order = Order.fromFirestore(doc);
     }
     if (context.mounted) openDeliveryOrderDetailSheet(context, order);
   }

@@ -11,6 +11,7 @@ import '../dispatcher/widgets/order_card.dart';
 import '../shared/employee_app_bar.dart';
 import '../shared/team_jobs_section.dart';
 import 'worker_order_detail_sheet.dart';
+import '../../core/widgets/load_error_note.dart';
 
 const _workerStages = ['pending', 'washing', 'packing', 'returned'];
 const _stageIcons = {
@@ -102,7 +103,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
           Expanded(
             child: ordersAsync.when(
               loading: () => const SeltaLoadingView(),
-              error: (err, _) => Center(child: Text('Xatolik: $err')),
+              error: (err, _) => LoadErrorNote(error: err, centered: true),
               data: (orders) {
                 final activeOrders = orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in').toList();
                 // Talab: bu bosqichda bitta buyurtma uchun BITTA karta —

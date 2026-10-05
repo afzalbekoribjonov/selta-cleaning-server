@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'order_item.dart';
+
 class Order {
   final String id;
   final int orderNumber;
@@ -78,6 +80,12 @@ class Order {
   /// Yakunlanganda mijozga berilgan keshbek; `null` — hali berilmagan.
   final num? bonusEarned;
 
+  /// Buyurtmadagi mahsulotlar NUSXASI (server: lib/orderSummary.ts) —
+  /// buyurtma bilan birga keladi va keshlanadi, shuning uchun mahsulotlar
+  /// darhol va internetsiz ham ko'rinadi, alohida o'qishsiz. `null` —
+  /// nusxa hali yozilmagan (eski buyurtma): mahsulotlar alohida o'qiladi.
+  final List<OrderItem>? itemsMirror;
+
   /// Bu buyurtmada serverga hali yetib bormagan (navbatdagi) o'zgarish bor.
   /// Firestore'da YO'Q maydon — faqat ilova ichida, oflayn navbat
   /// (core/sync) ekranga qo'yadi. Kartada kichik belgi bilan ko'rsatiladi.
@@ -128,6 +136,7 @@ class Order {
     this.bonusAmount = 0,
     this.bonusEntries = const [],
     this.bonusEarned,
+    this.itemsMirror,
     this.pendingSync = false,
   });
 
@@ -230,6 +239,7 @@ class Order {
       bonusAmount: bonusAmount ?? this.bonusAmount,
       bonusEntries: bonusEntries ?? this.bonusEntries,
       bonusEarned: bonusEarned,
+      itemsMirror: itemsMirror,
       pendingSync: pendingSync ?? this.pendingSync,
     );
   }
@@ -294,7 +304,17 @@ class Order {
               .toList() ??
           const [],
       bonusEarned: data['bonusEarned'] as num?,
+      itemsMirror: _itemsMirrorOf(data['itemsMirror']),
     );
+  }
+
+  static List<OrderItem>? _itemsMirrorOf(Object? raw) {
+    if (raw is! List) return null;
+    return [
+      for (final entry in raw)
+        if (entry is Map && entry['id'] != null)
+          OrderItem.fromMap(entry['id'].toString(), Map<String, dynamic>.from(entry)),
+    ];
   }
 
   bool get isDone => status == 'done';

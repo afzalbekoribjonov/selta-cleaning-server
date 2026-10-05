@@ -120,6 +120,9 @@ Order _syntheticOrder(Map<String, dynamic> j) {
     estimatedPrice: j['estimatedPrice'] as num?,
     source: j['source'] as String?,
     intakeMethod: j['intakeMethod'] as String?,
+    // Oflayn yaratilgan buyurtmaning mahsulotlari navbatdan qo'yiladi
+    // (applyToItems) — serverdagi ro'yxatni kutishga hojat yo'q.
+    itemsMirror: const [],
     pendingSync: true,
   );
 }

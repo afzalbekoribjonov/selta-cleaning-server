@@ -12,7 +12,7 @@ import {
   prepaymentsOf,
   type PrepaymentEntry,
 } from "../lib/prepayments";
-import { computeOrderItemsSummary, type SummaryItemInput } from "../lib/orderSummary";
+import { computeOrderItemsSummary, summaryItemOf, type SummaryItemInput } from "../lib/orderSummary";
 import { loadEmployeeNames } from "../lib/employeeNames";
 import { isPaymentKind, normalizePaymentSplit, splitPaidAmount, type PaymentKind } from "../lib/payments";
 import { phoneVariants } from "../lib/phone";
@@ -135,16 +135,21 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
         ? await prepareCompletionBonus(tx, orderId, order, Math.round(paidAmount), employeeId)
         : null;
 
+      // Har bir topshirilgan mahsulotning yangi holati — buyurtmadagi
+      // mahsulotlar nusxasi (itemsMirror) ham aynan shu bilan yangilanadi.
+      const itemUpdates = new Map<string, Record<string, unknown>>();
       targets.forEach((doc, i) => {
         const item = doc.data();
-        tx.update(doc.ref, {
+        const itemUpdate = {
           status: "done",
           deliveredBy: employeeId,
           deliveredAt: Timestamp.fromDate(now),
           collectedAmount: shares[i],
           updatedAt: FieldValue.serverTimestamp(),
           ...(typeof actorName === "string" && actorName.trim() ? { deliveredByName: actorName.trim() } : {}),
-        });
+        };
+        itemUpdates.set(doc.id, itemUpdate);
+        tx.update(doc.ref, itemUpdate);
 
         logDailyActivity(tx, now, {
           type: "delivered",
@@ -186,11 +191,7 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
         });
       }
 
-      const summaryItems: SummaryItemInput[] = itemsSnap.docs.map((d) =>
-        deliveredIds.has(d.id)
-          ? { ...(d.data() as SummaryItemInput), status: "done" }
-          : (d.data() as SummaryItemInput),
-      );
+      const summaryItems: SummaryItemInput[] = itemsSnap.docs.map((d) => summaryItemOf(d, itemUpdates.get(d.id) ?? {}));
       Object.assign(orderUpdate, computeOrderItemsSummary(summaryItems));
       tx.update(orderRef, orderUpdate);
 

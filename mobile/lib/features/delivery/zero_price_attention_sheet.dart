@@ -6,6 +6,7 @@ import '../../core/models/order.dart';
 import '../../core/services/order_items_provider.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/item_detail_row.dart';
+import '../../core/widgets/load_error_note.dart';
 
 
 /// Talab: narxi 0 so'm bo'lib qolgan mahsulotlar bo'lsa, dastavchik
@@ -65,7 +66,7 @@ class _ZeroPriceAttentionSheet extends ConsumerWidget {
               Expanded(
                 child: itemsAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('Xatolik: $e')),
+                  error: (e, _) => LoadErrorNote(error: e, centered: true),
                   data: (items) {
                     final zeroPriced = items.where((i) => i.price <= 0).toList();
                     if (zeroPriced.isEmpty) {

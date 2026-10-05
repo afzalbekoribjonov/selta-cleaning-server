@@ -10,6 +10,7 @@ import '../../core/services/auth_service.dart' show describeApiError;
 import '../../core/services/catalog_repository.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/widgets/load_error_note.dart';
 
 const _calcTypeIcons = {
   'sqm': Icons.crop_square_rounded,
@@ -366,7 +367,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                       const SizedBox(height: 8),
                       productsAsync.when(
                         loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
-                        error: (e, _) => Text('Xatolik: $e', style: const TextStyle(color: AppColors.danger)),
+                        error: (e, _) => LoadErrorNote(error: e),
                         data: (allProducts) {
                           final products = allProducts
                               .where((p) => p.appliesToTariff(_tariff) && p.matchesSpecializations(specializations))

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/order.dart';
 import '../sync/action_queue.dart';
+import '../sync/fast_get.dart';
 import '../sync/overlay.dart';
 import 'auth_service.dart' show apiClientProvider;
 import 'orders_repository.dart';
@@ -101,7 +102,7 @@ class CustomerSearch {
     final clean = digits.replaceAll(RegExp(r'\D'), '');
     if (clean.length < 9) return (customer: null, fromCache: false);
     final last9 = clean.substring(clean.length - 9);
-    final snap = await _orders.where('phone', whereIn: phoneVariants(clean)).limit(_maxOrders).get();
+    final snap = await getQueryFast(_orders.where('phone', whereIn: phoneVariants(clean)).limit(_maxOrders));
     // So'rovda orderBy yo'q (kompozit indeks talab qilmasligi uchun) —
     // shuning uchun "eng yangisi birinchi" tartib shu yerda beriladi.
     final orders = _withQueue(
@@ -123,7 +124,7 @@ class CustomerSearch {
       if (o.orderNumber == number) found = o;
     }
     if (found == null) {
-      final snap = await _orders.where('orderNumber', isEqualTo: number).limit(1).get();
+      final snap = await getQueryFast(_orders.where('orderNumber', isEqualTo: number).limit(1));
       if (snap.docs.isEmpty) return null;
       found = _withQueue([Order.fromFirestore(snap.docs.first)], (_) => true).firstOrNull;
       if (found == null) return null;

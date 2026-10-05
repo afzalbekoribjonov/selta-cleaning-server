@@ -8,6 +8,7 @@ import '../../core/utils/money_utils.dart';
 import '../../core/widgets/selta_loader.dart';
 import 'order_detail_sheet.dart';
 import 'widgets/order_card.dart';
+import '../../core/widgets/load_error_note.dart';
 
 /// Xizmat turi bo'yicha filtr — talab: tarif filtrlari (Express/Premium/...)
 /// va "Kechikkan" olib tashlanib, o'rniga buyurtma turlari chiqsin, har
@@ -89,7 +90,7 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
         Expanded(
           child: ordersAsync.when(
             loading: () => const SeltaLoadingView(),
-            error: (err, _) => Center(child: Text('Xatolik: $err')),
+            error: (err, _) => LoadErrorNote(error: err, centered: true),
             data: (allOrders) {
               // Bo'lim qidiruvi faqat shu bo'limdan — faol buyurtmalar.
               // Yakunlanganlarni topish endi yuqoridagi umumiy qidiruvda:

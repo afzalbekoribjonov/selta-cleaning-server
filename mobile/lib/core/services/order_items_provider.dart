@@ -7,46 +7,89 @@ import '../models/order_item.dart';
 import '../sync/action_queue.dart';
 import '../sync/overlay.dart';
 import 'auth_service.dart' show authStateProvider;
+import 'connectivity_service.dart';
 import 'orders_repository.dart';
 
-/// SERVERDAGI mahsulotlar — Firestore obunasi. Ekranlar buni to'g'ridan-
-/// to'g'ri emas, navbat qo'llangan [orderItemsProvider] orqali o'qiydi.
-///
-/// `autoDispose` MAJBURIY: ro'yxatda yuzlab karta bo'lishi mumkin va har
-/// biri o'z obunasini ochadi. Usiz karta ekrandan chiqib ketgach ham
-/// obuna abadiy ochiq qolib, sekin-asta yuzlab keraksiz Firestore
-/// listener to'planib qolardi.
-final _baseOrderItemsProvider = StreamProvider.autoDispose.family<List<OrderItem>, String>((ref, orderId) {
-  ref.watch(authStateProvider);
-
-  // Buyurtma yopilgandan keyin obuna yana bir necha daqiqa yashaydi: xodim
-  // ko'pincha bitta buyurtmani qayta-qayta ochadi va har safar Firestore'ga
-  // yangidan ulanish kechikish hamda qo'shimcha trafik berardi. Shu oraliqda
-  // qayta ochilsa — ro'yxat darhol, yangi ulanishsiz chiqadi.
+/// Obuna ekrandan chiqqandan keyin yana bir necha daqiqa yashaydi: xodim
+/// ko'pincha bitta buyurtmani qayta-qayta ochadi va har safar Firestore'ga
+/// yangidan ulanish kechikish hamda qo'shimcha trafik berardi.
+void _keepAliveBriefly(Ref ref) {
   final link = ref.keepAlive();
   Timer? release;
   ref.onCancel(() => release = Timer(const Duration(minutes: 3), link.close));
   ref.onResume(() => release?.cancel());
   ref.onDispose(() => release?.cancel());
+}
 
+/// Ro'yxatlarda yo'q buyurtmaning hujjati (masalan qidiruvdan ochilgan).
+final _orderDocProvider = StreamProvider.autoDispose.family<Order?, String>((ref, orderId) {
+  ref.watch(authStateProvider);
+  _keepAliveBriefly(ref);
+  // `read` — aylanma bog'liqlik bo'lmasligi uchun (orders_repository.dart'ga qarang).
+  return ref.read(ordersRepositoryProvider).watchOrder(orderId);
+});
+
+/// Bitta buyurtmaning JONLI holati (navbat qo'llangan) — tafsilot oynalari
+/// shuni kuzatadi: ochilgan paytdagi nusxa emas, har qanday o'zgarish
+/// (oldindan to'lov, bonus, holat, boshqa xodimning amali) darhol
+/// ko'rinadi. Avval ro'yxatdan qidiriladi (qo'shimcha o'qishsiz), topilmasa
+/// hujjatning o'ziga obuna bo'linadi.
+final liveOrderProvider = Provider.autoDispose.family<Order?, String>((ref, orderId) {
+  for (final o in ref.watch(ordersProvider).valueOrNull ?? const <Order>[]) {
+    if (o.id == orderId) return o;
+  }
+  final doc = ref.watch(_orderDocProvider(orderId)).valueOrNull;
+  if (doc == null) return null;
+  return applyToOrders([doc], ref.watch(actionQueueProvider)).firstOrNull;
+});
+
+/// Mahsulotlar internetsiz va qurilma keshida ham yo'q — "mahsulot yo'q"
+/// deb adashtirmaslik uchun alohida holat.
+class ItemsUnavailableOffline implements Exception {
+  const ItemsUnavailableOffline();
+
+  @override
+  String toString() => "Internet yo'q — mahsulotlar hali yuklanmagan";
+}
+
+/// SERVERDAGI mahsulotlar — Firestore obunasi. Faqat buyurtmada mahsulotlar
+/// nusxasi bo'lmaganda (eski buyurtma) ishlatiladi.
+///
+/// `autoDispose` MAJBURIY: aks holda ochilgan har bir buyurtmaning obunasi
+/// ilova yopilguncha ochiq qolib, keraksiz listener to'planardi.
+final _baseOrderItemsProvider =
+    StreamProvider.autoDispose.family<({List<OrderItem> items, bool fromCache}), String>((ref, orderId) {
+  ref.watch(authStateProvider);
+  _keepAliveBriefly(ref);
   // `read` — repozitoriy yozishda shu providerni o'qiydi (`_items`);
   // `watch` aylanma bog'liqlik hosil qilardi (orders_repository.dart'ga qarang).
   return ref.read(ordersRepositoryProvider).watchItems(orderId);
 });
 
 /// Bitta buyurtmaning mahsulotlari — barcha tafsilot oynalari shu YAGONA
-/// providerdan oladi: bir xil buyurtma uchun Firestore'ga bitta obuna,
-/// ustiga navbatdagi (hali serverga yetmagan) o'zgarishlar qo'yilgan.
+/// providerdan oladi, ustiga navbatdagi (hali serverga yetmagan)
+/// o'zgarishlar qo'yilgan.
 ///
-/// Avval har bir oyna o'z `StreamProvider.family`ini e'lon qilardi —
-/// `autoDispose`SIZ. Natijada xodim ochgan HAR BIR buyurtmaning obunasi
-/// ilova yopilguncha ochiq qolardi (kun oxiriga kelib o'nlab doimiy
-/// ulanish va ortiqcha trafik), bir xil buyurtma esa turli oynalardan
-/// ochilganda ikki-uch marta alohida obuna bo'lardi.
+/// Asosiy manba — buyurtmadagi mahsulotlar NUSXASI (`itemsMirror`): u
+/// buyurtmalar ro'yxati bilan birga keladi va keshlanadi, shuning uchun
+/// mahsulotlar oyna ochilishi bilan, internetsiz ham ko'rinadi va
+/// qo'shimcha Firestore o'qishi bo'lmaydi. Nusxa yo'q eski buyurtmada —
+/// avvalgidek `items` pastki jamlanmasiga obuna.
 final orderItemsProvider = Provider.autoDispose.family<AsyncValue<List<OrderItem>>, String>((ref, orderId) {
-  final base = ref.watch(_baseOrderItemsProvider(orderId));
   final actions = ref.watch(actionQueueProvider);
-  return base.whenData((items) => applyToItems(orderId, items, actions));
+  final mirror = ref.watch(liveOrderProvider(orderId))?.itemsMirror;
+  if (mirror != null) return AsyncData(applyToItems(orderId, mirror, actions));
+
+  final base = ref.watch(_baseOrderItemsProvider(orderId));
+  final value = base.valueOrNull;
+  if (value != null && value.fromCache && value.items.isEmpty) {
+    // Kesh bo'sh: internet bo'lsa server javobi kutiladi, bo'lmasa aytiladi.
+    final online = ref.watch(connectivityProvider).valueOrNull ?? true;
+    final pending = applyToItems(orderId, const [], actions);
+    if (pending.isNotEmpty) return AsyncData(pending);
+    return online ? const AsyncLoading() : const AsyncError(ItemsUnavailableOffline(), StackTrace.empty);
+  }
+  return base.whenData((v) => applyToItems(orderId, v.items, actions));
 });
 
 /// Buyurtmaning AMALDAGI muddati.
