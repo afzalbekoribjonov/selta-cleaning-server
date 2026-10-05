@@ -5,18 +5,25 @@ import '../../app/theme.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show describeApiError, employeeClaimsProvider;
 import '../../core/services/catalog_repository.dart';
+import '../../core/services/customer_search.dart';
 import '../../core/services/tariff_settings.dart';
+import '../../core/utils/date_utils.dart';
+import '../../core/utils/launch_utils.dart';
 import '../../core/utils/phone_format.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
+import '../search/global_search_screen.dart';
 import '../shared/catalog_item_sheet.dart';
 
-/// Sotuv menejerining "Yangi buyurtma" formasi (talab #3): Ism familiya,
-/// telefon (avtomat formatlangan), Manzil, Xizmat turi. Olib kelish
-/// (pickup) tanlanganda mahsulotlar SHU YERDA — inline, har biri o'z
-/// tarifi bilan — qo'shiladi (running ro'yxat, jami summa, "Yana
-/// qo'shish"). Joyida yuvish (onsite) uchun order-level tarif tanlanadi,
-/// mahsulotlar esa jamoa tashrifida keyinroq qo'shiladi (o'zgarishsiz).
+/// Sotuv menejerining "Yangi buyurtma" formasi (talab #3).
+///
+/// Telefon raqam BIRINCHI kiritiladi: to'liq raqam yozilishi bilan mijoz
+/// tekshiriladi va oldin buyurtma bergan bo'lsa ismi, manzili va GPS'i
+/// avtomatik to'ldiriladi ("Ko'rish" — uning barcha buyurtmalari). Keyin
+/// Manzil, Xizmat turi. Olib kelish (pickup) tanlanganda mahsulotlar SHU
+/// YERDA — inline, har biri o'z tarifi bilan — qo'shiladi. Joyida yuvish
+/// (onsite) uchun order-level tarif tanlanadi, mahsulotlar esa jamoa
+/// tashrifida keyinroq qo'shiladi.
 class NewOrderTab extends ConsumerStatefulWidget {
   final VoidCallback onSaved;
 
@@ -42,10 +49,115 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
   bool _saving = false;
   String? _error;
 
+  // --- Telefon bo'yicha mijozni tekshirish ---
+  _Lookup _lookup = _Lookup.idle;
+  CustomerResult? _customer;
+
+  /// Qaysi raqam uchun tekshirilgan (yoki tekshirilmoqda).
+  String? _customerDigits;
+
+  /// Javobi kelguncha raqam o'zgarsa eski javob tashlab yuboriladi.
+  int _lookupSeq = 0;
+
+  /// Avtomatik yozilgan qiymatlar — xodim ularni o'zgartirmagan bo'lsa,
+  /// raqam almashganda (boshqa mijoz) tozalanadi; o'zi yozganiga tegilmaydi.
+  String? _filledName;
+  String? _filledLocation;
+
+  /// Mijozning eng so'nggi GPS'i va u tegishli manzil.
+  ({String gps, String location})? _gps;
+
   bool get _isPickup => _serviceType == 'pickup' || _serviceType == 'walkin';
   bool get _isWalkIn => _serviceType == 'walkin';
 
   num get _draftTotal => _draftItems.fold<num>(0, (s, d) => s + (d.price ?? 0));
+
+  String get _phoneDigits => _phoneController.text.replaceAll(RegExp(r'\D'), '');
+
+  /// GPS faqat manzil u olingan buyurtmadagidek qolsa yuboriladi —
+  /// manzil o'zgartirilsa eski nuqta noto'g'ri joyga olib boradi.
+  String? get _effectiveGps {
+    final gps = _gps;
+    if (gps == null) return null;
+    return _sameAddress(_locationController.text, gps.location) ? gps.gps : null;
+  }
+
+  static bool _sameAddress(String a, String b) {
+    String norm(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    return norm(a) == norm(b);
+  }
+
+  void _onPhoneChanged(String value) {
+    final digits = _phoneDigits;
+    if (_lookup != _Lookup.idle && digits != _customerDigits) _resetLookup();
+    if (digits.length == 9) {
+      _phoneFocus.unfocus();
+      if (_lookup == _Lookup.idle) _lookUpCustomer(digits);
+    }
+  }
+
+  Future<void> _lookUpCustomer(String digits) async {
+    final seq = ++_lookupSeq;
+    setState(() {
+      _lookup = _Lookup.loading;
+      _customerDigits = digits;
+    });
+    _Lookup status;
+    CustomerResult? customer;
+    try {
+      final result = await ref.read(customerSearchProvider).lookupPhone(digits);
+      customer = result.customer;
+      status = customer != null
+          ? _Lookup.found
+          : result.fromCache
+              ? _Lookup.unchecked
+              : _Lookup.newCustomer;
+    } catch (_) {
+      status = _Lookup.unchecked;
+    }
+    if (!mounted || seq != _lookupSeq) return;
+    setState(() {
+      _lookup = status;
+      _customer = customer;
+      if (customer != null) _autofill(customer);
+    });
+  }
+
+  void _autofill(CustomerResult customer) {
+    bool untouched(TextEditingController c, String? filled) => c.text.trim().isEmpty || c.text == filled;
+
+    final name = customer.customerName.trim();
+    if (name.isNotEmpty && untouched(_nameController, _filledName)) {
+      _nameController.text = name;
+      _filledName = name;
+    }
+    final location = customer.latestLocation;
+    if (location != null && untouched(_locationController, _filledLocation)) {
+      _locationController.text = location;
+      _filledLocation = location;
+    }
+    _gps = customer.latestGps;
+  }
+
+  /// Raqam o'zgardi — avvalgi mijoz uchun yozilganlar olib tashlanadi.
+  void _resetLookup() {
+    setState(() {
+      if (_filledName != null && _nameController.text == _filledName) _nameController.clear();
+      if (_filledLocation != null && _locationController.text == _filledLocation) _locationController.clear();
+      _clearLookup();
+    });
+  }
+
+  /// Tekshiruv natijasini unutadi; kech kelgan javob ham e'tiborsiz qoladi.
+  void _clearLookup() {
+    _lookupSeq++;
+    _lookup = _Lookup.idle;
+    _customer = null;
+    _customerDigits = null;
+    _filledName = null;
+    _filledLocation = null;
+    _gps = null;
+  }
 
   @override
   void dispose() {
@@ -91,7 +203,10 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
 
     setState(() => _saving = true);
     try {
-      final digits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+      final digits = _phoneDigits;
+      // Mijoz tekshirilgan bo'lsa GPS haqida forma o'zi qaror qiladi;
+      // aks holda (internet yo'q edi) server eski GPS'ni o'zi topadi.
+      final gpsChecked = _customerDigits == digits && (_lookup == _Lookup.found || _lookup == _Lookup.newCustomer);
       final notedItems = _notedItemsController.text
           .split(',')
           .map((s) => s.trim())
@@ -105,6 +220,8 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
             location: _locationController.text.trim(),
             serviceType: _isPickup ? 'pickup' : 'onsite',
             tariff: _isPickup ? null : _onsiteTariff,
+            gpsCoords: gpsChecked ? _effectiveGps : null,
+            gpsChecked: gpsChecked,
             items: _isPickup ? _draftItems : null,
             notedItems: _isPickup ? null : notedItems,
             estimatedPrice: _isPickup ? null : estimatedPrice,
@@ -144,6 +261,7 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
       _notedItemsController.clear();
       _estimatedPriceController.clear();
       setState(() {
+        _clearLookup();
         _serviceType = null;
         _source = null;
         _onsiteTariff = 'standart';
@@ -160,6 +278,32 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
     }
   }
 
+  List<Widget> _lookupResult() {
+    final customer = _customer;
+    return switch (_lookup) {
+      _Lookup.found when customer != null => [
+          const SizedBox(height: 10),
+          _KnownCustomerBanner(
+            customer: customer,
+            onView: () => openGlobalSearch(context, initialPhone: _customerDigits),
+          ),
+        ],
+      _Lookup.newCustomer => const [
+          SizedBox(height: 8),
+          _LookupNote(icon: Icons.person_add_alt_1_rounded, text: 'Yangi mijoz — avval buyurtma bermagan'),
+        ],
+      _Lookup.unchecked => [
+          const SizedBox(height: 8),
+          _LookupNote(
+            icon: Icons.cloud_off_rounded,
+            text: "Internet yo'q — mijoz tekshirilmadi",
+            onRetry: () => _lookUpCustomer(_phoneDigits),
+          ),
+        ],
+      _ => const [],
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -171,30 +315,46 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
           children: [
             Text('Yangi buyurtma', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 4),
-            const Text('Mijoz ma\'lumotlarini kiriting', style: TextStyle(color: AppColors.grayDark)),
+            const Text(
+              "Telefon raqamdan boshlang — avval kelgan mijoz avtomatik aniqlanadi",
+              style: TextStyle(color: AppColors.grayDark),
+            ),
             const SizedBox(height: 24),
-            const _Label('Ism familiya'),
-            TextFormField(controller: _nameController, textCapitalization: TextCapitalization.words),
-            const SizedBox(height: 16),
             const _Label('Telefon raqam'),
             TextFormField(
               controller: _phoneController,
               focusNode: _phoneFocus,
               keyboardType: TextInputType.phone,
               inputFormatters: [UzPhoneFormatter()],
-              decoration: const InputDecoration(prefixText: '+998 '),
-              onChanged: (v) {
-                if (v.replaceAll(RegExp(r'\D'), '').length == 9) _phoneFocus.unfocus();
-              },
+              decoration: InputDecoration(
+                prefixText: '+998 ',
+                suffixIcon: _lookup == _Lookup.loading
+                    ? const Padding(
+                        padding: EdgeInsets.all(14),
+                        child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2)),
+                      )
+                    : null,
+              ),
+              onChanged: _onPhoneChanged,
               validator: (v) => (v == null || v.replaceAll(RegExp(r'\D'), '').length != 9) ? '9 xonali raqam kiriting' : null,
             ),
+            ..._lookupResult(),
+            const SizedBox(height: 16),
+            const _Label('Ism familiya'),
+            TextFormField(controller: _nameController, textCapitalization: TextCapitalization.words),
             const SizedBox(height: 16),
             const _Label('Manzil'),
             TextFormField(
               controller: _locationController,
               maxLines: 2,
+              // GPS belgisi manzil o'zgarishiga qarab yonadi/o'chadi.
+              onChanged: _gps == null ? null : (_) => setState(() {}),
               validator: (v) => (v == null || v.trim().isEmpty) ? "Manzil majburiy" : null,
             ),
+            if (_effectiveGps case final gps?) ...[
+              const SizedBox(height: 8),
+              _GpsRow(gps: gps, onRemove: () => setState(() => _gps = null)),
+            ],
             const SizedBox(height: 20),
             const _Label('Manba (ixtiyoriy)'),
             const SizedBox(height: 8),
@@ -368,6 +528,137 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Telefon bo'yicha mijoz tekshiruvi: [unchecked] — internet yo'q yoki
+/// xato, ya'ni mijoz yangi ekani ANIQ emas.
+enum _Lookup { idle, loading, found, newCustomer, unchecked }
+
+/// "Bu mijozga oldin ham xizmat ko'rsatilgan" — telefon maydoni ostida.
+class _KnownCustomerBanner extends StatelessWidget {
+  final CustomerResult customer;
+  final VoidCallback onView;
+
+  const _KnownCustomerBanner({required this.customer, required this.onView});
+
+  @override
+  Widget build(BuildContext context) {
+    final last = customer.orders.first.createdAt;
+    final lastLabel = last.year == DateTime.now().year ? formatDateUz(last) : '${formatDateUz(last)} ${last.year}';
+    final active = customer.active.length;
+    final details = [
+      '${customer.orders.length} ta buyurtma',
+      'oxirgisi $lastLabel',
+      if (active > 0) '$active tasi faol',
+    ].join(' · ');
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+      decoration: BoxDecoration(
+        color: AppColors.success.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.verified_user_rounded, size: 20, color: AppColors.success),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Bu mijozga oldin ham xizmat ko'rsatilgan",
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  details,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: AppColors.grayDark),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onView,
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10)),
+            child: const Text("Ko'rish", style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LookupNote extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback? onRetry;
+
+  const _LookupNote({required this.icon, required this.text, this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.grayDark),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.grayDark)),
+        ),
+        if (onRetry != null)
+          TextButton(
+            onPressed: onRetry,
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            child: const Text('Qayta tekshirish'),
+          ),
+      ],
+    );
+  }
+}
+
+/// Mijozning avvalgi buyurtmasidan olingan GPS — xaritada tekshirish yoki
+/// olib tashlash mumkin.
+class _GpsRow extends StatelessWidget {
+  final String gps;
+  final VoidCallback onRemove;
+
+  const _GpsRow({required this.gps, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 2, 2, 2),
+      decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          const Icon(Icons.location_on_rounded, size: 18, color: AppColors.info),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'GPS avvalgi buyurtmadan',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
+            ),
+          ),
+          TextButton(
+            onPressed: () => showGpsOnMap(gps),
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            child: const Text('Xaritada'),
+          ),
+          IconButton(
+            onPressed: onRemove,
+            tooltip: 'GPS ni olib tashlash',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.grayDark),
+          ),
+        ],
       ),
     );
   }

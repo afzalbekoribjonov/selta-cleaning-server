@@ -12,6 +12,7 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { phoneVariants } from './phone'
 
 export interface Order {
   id: string
@@ -164,8 +165,30 @@ export function subscribeComments(orderId: string, callback: (comments: Record<s
  * Firestore tenglik so'rovi. Faqat bitta tenglik filtri (`orderBy` yo'q) —
  * composite indeks shart emas; tartiblash natija olingach JS'da qilinadi.
  */
+/** Mijozning barcha buyurtmalari — eng yangisi birinchi. Raqam qanday yozilgan bo'lsa ham topadi. */
 export async function searchOrdersByPhone(phone: string): Promise<Order[]> {
-  const q = query(collection(db, 'orders'), where('phone', '==', phone))
+  const last9 = phone.replace(/\D/g, '').slice(-9)
+  const q = query(collection(db, 'orders'), where('phone', 'in', phoneVariants(phone)))
   const snap = await getDocs(q)
-  return snap.docs.map(toOrder).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+  return snap.docs
+    .map(toOrder)
+    .filter((o) => o.phone.replace(/\D/g, '').endsWith(last9))
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+}
+
+const GPS_PATTERN = /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/
+
+/**
+ * Yangi buyurtmani to'ldirish uchun mijozning eng so'nggi ma'lumotlari
+ * ([orders] eng yangisi birinchi). GPS o'zi olingan buyurtmadagi manzil
+ * bilan qaytadi: mijoz ko'chgan bo'lsa eski nuqta yangi manzilga
+ * yopishib qolmasligi kerak (mobil ilovadagi CustomerResult bilan bir xil).
+ */
+export function customerProfile(orders: Order[]) {
+  const withGps = orders.find((o) => GPS_PATTERN.test(o.gpsCoords?.trim() ?? ''))
+  return {
+    name: orders.map((o) => o.customerName.trim()).find(Boolean) ?? '',
+    location: orders.map((o) => o.location.trim()).find(Boolean) ?? '',
+    gps: withGps ? { gps: withGps.gpsCoords!.trim(), location: withGps.location.trim() } : null,
+  }
 }

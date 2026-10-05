@@ -7,6 +7,12 @@ export interface CreateOrderParams {
   location: string
   serviceType: 'pickup' | 'onsite'
   tariff?: string
+  /**
+   * Forma mijozni tekshirib GPS haqida qaror qilgan bo'lsa beriladi:
+   * `null` — server mijozning eski GPS'ini ko'chirmaydi (manzil o'zgargan).
+   * Berilmasa server eng so'nggi GPS'ni o'zi topadi.
+   */
+  gpsCoords?: string | null
   items?: CatalogItemDraft[]
   notedItems?: string[]
   estimatedPrice?: number
@@ -23,6 +29,7 @@ export async function createOrder(params: CreateOrderParams): Promise<{ orderId:
     serviceType: params.serviceType,
   }
   if (params.tariff) body.tariff = params.tariff
+  if (params.gpsCoords !== undefined) body.gpsCoords = params.gpsCoords
   if (params.items && params.items.length > 0) body.items = params.items
   if (params.notedItems && params.notedItems.length > 0) body.notedItems = params.notedItems
   if (params.estimatedPrice) body.estimatedPrice = params.estimatedPrice

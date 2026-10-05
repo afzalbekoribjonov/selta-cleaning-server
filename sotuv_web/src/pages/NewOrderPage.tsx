@@ -1,11 +1,31 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Phone, MapPin, Tag, Home, Truck, Store, Package, MessageSquare, Plus, X, ShieldCheck, ArrowRight } from 'lucide-react'
+import {
+  User,
+  UserCheck,
+  UserPlus,
+  Phone,
+  MapPin,
+  Tag,
+  Home,
+  Truck,
+  Store,
+  Package,
+  MessageSquare,
+  Plus,
+  X,
+  ShieldCheck,
+  ArrowRight,
+  Loader2,
+  RotateCw,
+} from 'lucide-react'
 import { TARIFF_CONFIG } from '@/lib/status-config'
 import { useOrderSources } from '@/hooks/useOrderSources'
 import { useAuth } from '@/lib/auth-context'
 import { formatUzPhoneInput, phoneDigits } from '@/lib/phone'
 import { createOrder } from '@/lib/orders-api'
+import { customerProfile, searchOrdersByPhone, type Order } from '@/lib/orders'
+import { formatDateUz } from '@/lib/date-utils'
 import { addComment } from '@/lib/order-items'
 import type { CatalogItemDraft } from '@/lib/order-items'
 import { describeApiError } from '@/lib/api'
@@ -30,6 +50,19 @@ const textareaClass =
 const fieldWrapClass =
   'flex h-11 items-center rounded-xl border border-border bg-bg pl-4 transition-colors focus-within:border-brand-primary focus-within:bg-surface'
 
+/** Telefon bo'yicha mijoz tekshiruvi; `failed` — mijoz yangi ekani ANIQ emas. */
+type Lookup =
+  | { status: 'idle' }
+  | { status: 'loading'; digits: string }
+  | { status: 'found'; digits: string; orders: Order[] }
+  | { status: 'new'; digits: string }
+  | { status: 'failed'; digits: string }
+
+const sameAddress = (a: string, b: string) => {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
+  return norm(a) === norm(b)
+}
+
 export default function NewOrderPage() {
   const navigate = useNavigate()
   const { claims, fullName } = useAuth()
@@ -50,6 +83,66 @@ export default function NewOrderPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // --- Telefon bo'yicha mijozni tekshirish ---
+  const [lookup, setLookup] = useState<Lookup>({ status: 'idle' })
+  // Avtomatik yozilgan qiymatlar: xodim ularni o'zgartirmagan bo'lsa raqam
+  // almashganda (boshqa mijoz) tozalanadi, o'zi yozganiga tegilmaydi.
+  const [filled, setFilled] = useState<{ name: string | null; location: string | null }>({ name: null, location: null })
+  const [gps, setGps] = useState<{ gps: string; location: string } | null>(null)
+  // Javobi kelguncha raqam o'zgarsa eski javob tashlab yuboriladi.
+  const lookupSeq = useRef(0)
+
+  // GPS faqat manzil u olingan buyurtmadagidek qolsa yuboriladi.
+  const effectiveGps = gps && sameAddress(location, gps.location) ? gps.gps : null
+
+  // Mijoz topilganda bo'sh (yoki avvalgi avtomatik) maydonlar to'ldiriladi.
+  useEffect(() => {
+    if (lookup.status !== 'found') return
+    const profile = customerProfile(lookup.orders)
+    const untouched = (current: string, prev: string | null) => current.trim() === '' || current === prev
+    const fillName = profile.name !== '' && untouched(name, filled.name)
+    const fillLocation = profile.location !== '' && untouched(location, filled.location)
+    if (fillName) setName(profile.name)
+    if (fillLocation) setLocation(profile.location)
+    setFilled({ name: fillName ? profile.name : null, location: fillLocation ? profile.location : null })
+    setGps(profile.gps)
+    // Faqat yangi natija kelganda — maydonlarni xodim keyin o'zi o'zgartiradi.
+  }, [lookup])
+
+  async function lookUpCustomer(digits: string) {
+    const seq = ++lookupSeq.current
+    setLookup({ status: 'loading', digits })
+    try {
+      const orders = await searchOrdersByPhone(digits)
+      if (seq !== lookupSeq.current) return
+      setLookup(orders.length > 0 ? { status: 'found', digits, orders } : { status: 'new', digits })
+    } catch {
+      if (seq === lookupSeq.current) setLookup({ status: 'failed', digits })
+    }
+  }
+
+  function clearLookup() {
+    lookupSeq.current++
+    setLookup({ status: 'idle' })
+    setFilled({ name: null, location: null })
+    setGps(null)
+  }
+
+  function handlePhoneChange(raw: string) {
+    const formatted = formatUzPhoneInput(raw)
+    setPhone(formatted)
+    const digits = phoneDigits(formatted)
+    const checkedDigits = lookup.status === 'idle' ? null : lookup.digits
+    if (checkedDigits === digits) return
+    if (checkedDigits !== null) {
+      // Boshqa raqam — avvalgi mijoz uchun yozilganlar olib tashlanadi.
+      if (filled.name !== null && name === filled.name) setName('')
+      if (filled.location !== null && location === filled.location) setLocation('')
+      clearLookup()
+    }
+    if (digits.length === 9) void lookUpCustomer(digits)
+  }
+
   const isPickup = serviceType === 'pickup' || serviceType === 'walkin'
   const isWalkIn = serviceType === 'walkin'
   const draftTotal = draftItems.reduce((s, d) => s + (d.price ?? 0), 0)
@@ -65,6 +158,7 @@ export default function NewOrderPage() {
     setSource(null)
     setOnsiteTariff('standart')
     setDraftItems([])
+    clearLookup()
   }
 
   function handleSubmit() {
@@ -91,6 +185,10 @@ export default function NewOrderPage() {
         .map((s) => s.trim())
         .filter(Boolean)
       const estPrice = parseFloat(estimatedPrice.replace(',', '.'))
+      // Mijoz tekshirilgan bo'lsa GPS haqida forma o'zi qaror qiladi;
+      // aks holda server eski GPS'ni o'zi topadi.
+      const digits = phoneDigits(phone)
+      const gpsChecked = (lookup.status === 'found' || lookup.status === 'new') && lookup.digits === digits
 
       const result = await createOrder({
         customerName: name.trim(),
@@ -98,6 +196,7 @@ export default function NewOrderPage() {
         location: location.trim(),
         serviceType: isPickup ? 'pickup' : 'onsite',
         tariff: isPickup ? undefined : onsiteTariff,
+        gpsCoords: gpsChecked ? effectiveGps : undefined,
         items: isPickup ? draftItems : undefined,
         notedItems: isPickup ? undefined : notedList,
         estimatedPrice: isPickup ? undefined : Number.isFinite(estPrice) ? estPrice : undefined,
@@ -123,13 +222,29 @@ export default function NewOrderPage() {
     <div className="mx-auto max-w-6xl px-10 py-10">
       <div className="mb-8">
         <h1 className="font-heading text-[28px] font-extrabold text-ink">Yangi buyurtma</h1>
-        <p className="mt-1.5 text-sm text-gray-dark">Mijoz ma'lumotlarini kiriting va buyurtmani rasmiylashtiring</p>
+        <p className="mt-1.5 text-sm text-gray-dark">
+          Telefon raqamdan boshlang — avval kelgan mijozning ma'lumotlari avtomatik to'ldiriladi
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           <Section icon={User} title="Mijoz ma'lumotlari">
             <div className="grid grid-cols-2 gap-4">
+              <Field label="Telefon raqam">
+                <div className={fieldWrapClass}>
+                  <span className="shrink-0 text-sm font-bold text-gray-dark">+998</span>
+                  <input
+                    value={phone}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
+                    inputMode="numeric"
+                    placeholder="90 123 45 67"
+                    autoFocus
+                    className="h-full w-full bg-transparent px-2.5 text-sm outline-none"
+                  />
+                  {lookup.status === 'loading' && <Loader2 size={16} className="mr-3 shrink-0 animate-spin text-gray-dark" />}
+                </div>
+              </Field>
               <Field label="Ism familiya">
                 <input
                   value={name}
@@ -138,19 +253,8 @@ export default function NewOrderPage() {
                   className={inputClass}
                 />
               </Field>
-              <Field label="Telefon raqam">
-                <div className={fieldWrapClass}>
-                  <span className="shrink-0 text-sm font-bold text-gray-dark">+998</span>
-                  <input
-                    value={phone}
-                    onChange={(e) => setPhone(formatUzPhoneInput(e.target.value))}
-                    inputMode="numeric"
-                    placeholder="90 123 45 67"
-                    className="h-full w-full bg-transparent px-2.5 text-sm outline-none"
-                  />
-                </div>
-              </Field>
             </div>
+            <LookupResult lookup={lookup} onRetry={(digits) => void lookUpCustomer(digits)} />
             <Field label="Manzil" icon={MapPin}>
               <textarea
                 value={location}
@@ -160,6 +264,27 @@ export default function NewOrderPage() {
                 className={textareaClass}
               />
             </Field>
+            {effectiveGps && (
+              <div className="mt-2 flex items-center gap-2.5 rounded-xl bg-info-bg py-1.5 pl-3.5 pr-1.5">
+                <MapPin size={15} className="shrink-0 text-info" />
+                <p className="min-w-0 flex-1 truncate text-xs font-bold text-ink">GPS avvalgi buyurtmadan olindi</p>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${effectiveGps}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-extrabold text-info hover:bg-info/10"
+                >
+                  Xaritada
+                </a>
+                <button
+                  onClick={() => setGps(null)}
+                  title="GPS ni olib tashlash"
+                  className="shrink-0 rounded-lg p-1.5 text-gray-dark hover:bg-surface"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
           </Section>
 
           {sources.length > 0 && (
@@ -439,6 +564,57 @@ export default function NewOrderPage() {
       )}
     </div>
   )
+}
+
+/** Telefon maydoni ostidagi natija: "Bu mijozga oldin ham xizmat ko'rsatilgan" va h.k. */
+function LookupResult({ lookup, onRetry }: { lookup: Lookup; onRetry: (digits: string) => void }) {
+  if (lookup.status === 'found') {
+    const { orders, digits } = lookup
+    const last = orders[0].createdAt
+    const lastLabel = last.getFullYear() === new Date().getFullYear() ? formatDateUz(last) : `${formatDateUz(last)} ${last.getFullYear()}`
+    const active = orders.filter((o) => o.status !== 'done').length
+    const details = [`${orders.length} ta buyurtma`, `oxirgisi ${lastLabel}`, ...(active > 0 ? [`${active} tasi faol`] : [])].join(' · ')
+    return (
+      <div className="mt-3 flex items-center gap-3 rounded-xl border border-success/35 bg-success-bg px-4 py-3">
+        <UserCheck size={18} className="shrink-0 text-success" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-extrabold text-ink">Bu mijozga oldin ham xizmat ko'rsatilgan</p>
+          <p className="truncate text-xs font-semibold text-gray-dark">{details}</p>
+        </div>
+        <a
+          href={`/qidiruv?tel=${digits}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-extrabold text-brand-primary hover:bg-brand-primary/10"
+        >
+          Ko'rish
+        </a>
+      </div>
+    )
+  }
+  if (lookup.status === 'new') {
+    return (
+      <p className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-gray-dark">
+        <UserPlus size={14} className="shrink-0" />
+        Yangi mijoz — avval buyurtma bermagan
+      </p>
+    )
+  }
+  if (lookup.status === 'failed') {
+    return (
+      <p className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-gray-dark">
+        Mijozni tekshirib bo'lmadi
+        <button
+          onClick={() => onRetry(lookup.digits)}
+          className="inline-flex items-center gap-1 font-extrabold text-brand-primary hover:underline"
+        >
+          <RotateCw size={12} />
+          Qayta tekshirish
+        </button>
+      </p>
+    )
+  }
+  return null
 }
 
 function Section({

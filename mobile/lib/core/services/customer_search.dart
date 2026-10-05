@@ -57,6 +57,22 @@ class CustomerResult {
   List<Order> get active => orders.where((o) => !o.isDone).toList();
   List<Order> get completed => orders.where((o) => o.isDone).toList();
   num get totalSpent => completed.fold<num>(0, (s, o) => s + o.totalPrice);
+
+  /// Yangi buyurtmani to'ldirish uchun — eng so'nggi buyurtmadagi manzil.
+  String? get latestLocation => orders.map((o) => o.location.trim()).where((l) => l.isNotEmpty).firstOrNull;
+
+  /// Eng so'nggi saqlangan GPS ("lat,lng") va u olingan buyurtmadagi
+  /// manzil: GPS faqat SHU manzilga tegishli — mijoz ko'chgan bo'lsa,
+  /// eski nuqta yangi manzilga yopishib qolmasligi kerak.
+  ({String gps, String location})? get latestGps {
+    for (final o in orders) {
+      final gps = o.gpsCoords?.trim() ?? '';
+      if (_gpsPattern.hasMatch(gps)) return (gps: gps, location: o.location.trim());
+    }
+    return null;
+  }
+
+  static final _gpsPattern = RegExp(r'^-?\d+(\.\d+)?,-?\d+(\.\d+)?$');
 }
 
 /// Butun bazadan qidirish (barcha bo'limlar uchun umumiy).
@@ -76,17 +92,28 @@ class CustomerSearch {
   List<Order> _withQueue(List<Order> base, bool Function(Order) keep) =>
       applyToOrders(base, _ref.read(actionQueueProvider)).where(keep).toList();
 
-  Future<CustomerResult?> byPhone(String digits) async {
+  Future<CustomerResult?> byPhone(String digits) async => (await lookupPhone(digits)).customer;
+
+  /// [byPhone] bilan bir xil, lekin javob faqat qurilma keshidan
+  /// kelganini ham aytadi ([fromCache]) — internet yo'qligida mijozni
+  /// "yangi" deb adashtirmaslik uchun.
+  Future<({CustomerResult? customer, bool fromCache})> lookupPhone(String digits) async {
     final clean = digits.replaceAll(RegExp(r'\D'), '');
-    if (clean.length < 9) return null;
+    if (clean.length < 9) return (customer: null, fromCache: false);
     final last9 = clean.substring(clean.length - 9);
     final snap = await _orders.where('phone', whereIn: phoneVariants(clean)).limit(_maxOrders).get();
+    // So'rovda orderBy yo'q (kompozit indeks talab qilmasligi uchun) —
+    // shuning uchun "eng yangisi birinchi" tartib shu yerda beriladi.
     final orders = _withQueue(
       snap.docs.map(Order.fromFirestore).toList(),
       (o) => o.phone.replaceAll(RegExp(r'\D'), '').endsWith(last9),
+    )..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    if (orders.isEmpty) return (customer: null, fromCache: snap.metadata.isFromCache);
+    final name = orders.map((o) => o.customerName.trim()).where((n) => n.isNotEmpty).firstOrNull ?? '';
+    return (
+      customer: CustomerResult(phone: orders.first.phone, customerName: name, orders: orders),
+      fromCache: snap.metadata.isFromCache,
     );
-    if (orders.isEmpty) return null;
-    return CustomerResult(phone: orders.first.phone, customerName: orders.first.customerName, orders: orders);
   }
 
   Future<CustomerResult?> byNumber(int number) async {

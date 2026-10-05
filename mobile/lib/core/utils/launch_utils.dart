@@ -6,6 +6,12 @@ Future<void> callPhone(String phone) async {
   await launchUrl(uri);
 }
 
+/// Saqlangan GPS ("lat,lng") nuqtasini xaritada ko'rsatadi (marshrutsiz).
+Future<void> showGpsOnMap(String gpsCoords) async {
+  final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$gpsCoords');
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
 /// Saqlangan GPS ("lat,lng") ga Google Xaritalar orqali marshrut ochadi.
 Future<void> navigateToGps(String gpsCoords) async {
   final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$gpsCoords&travelmode=driving');

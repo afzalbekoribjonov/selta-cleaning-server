@@ -283,6 +283,10 @@ class OrdersRepository {
   /// qaytadi va raqam ulanish tiklanganda o'zi paydo bo'ladi. Buyurtma
   /// serverda AYNAN SHU ID bilan yaratiladi, shuning uchun unga oflayn
   /// qilingan keyingi amallar ham to'g'ri bog'lanadi.
+  ///
+  /// [gpsChecked] — forma mijozni o'zi tekshirib GPS haqida qaror qilgan:
+  /// [gpsCoords] `null` bo'lsa ham yuboriladi va server mijozning eski
+  /// GPS'ini ko'chirmaydi (masalan manzil o'zgargan).
   Future<({String orderId, int orderNumber})> createOrder({
     required String customerName,
     required String phone,
@@ -290,6 +294,7 @@ class OrdersRepository {
     required String serviceType,
     String? tariff,
     String? gpsCoords,
+    bool gpsChecked = false,
     List<CatalogItemDraft>? items,
     List<String>? notedItems,
     num? estimatedPrice,
@@ -322,7 +327,7 @@ class OrdersRepository {
         'location': location,
         'serviceType': serviceType,
         if (tariff != null) 'tariff': tariff,
-        if (gpsCoords != null) 'gpsCoords': gpsCoords,
+        if (gpsCoords != null || gpsChecked) 'gpsCoords': gpsCoords,
         if (drafts.isNotEmpty) 'items': drafts.map((e) => e.toJson()).toList(),
         if (notedItems != null && notedItems.isNotEmpty) 'notedItems': notedItems,
         if (estimatedPrice != null) 'estimatedPrice': estimatedPrice,

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search as SearchIcon } from 'lucide-react'
 import { searchOrdersByPhone, type Order } from '@/lib/orders'
 import { formatUzPhoneInput, phoneDigits } from '@/lib/phone'
@@ -13,11 +14,18 @@ function formatMoney(v: number): string {
 }
 
 export default function SearchPage() {
-  const [phone, setPhone] = useState('')
+  // "?tel=901234567" — yangi buyurtma formasidagi "Ko'rish" shu mijoz bilan ochadi.
+  const [params] = useSearchParams()
+  const [phone, setPhone] = useState(() => formatUzPhoneInput(params.get('tel') ?? ''))
   const [results, setResults] = useState<Order[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [openOrderId, setOpenOrderId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (phoneDigits(phone).length === 9) void handleSearch()
+    // Faqat ochilganda: keyingi qidiruvlarni foydalanuvchi o'zi boshlaydi.
+  }, [])
 
   async function handleSearch() {
     const digits = phoneDigits(phone)

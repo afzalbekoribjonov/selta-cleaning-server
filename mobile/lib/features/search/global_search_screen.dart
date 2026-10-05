@@ -16,8 +16,10 @@ import '../dispatcher/widgets/order_card.dart';
 import '../shared/team_job_detail_sheet.dart';
 import '../worker/worker_order_detail_sheet.dart';
 
-void openGlobalSearch(BuildContext context) {
-  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GlobalSearchScreen()));
+/// [initialPhone] berilsa (9 raqam) ekran shu mijoz bilan darhol ochiladi —
+/// masalan yangi buyurtma formasidagi "Ko'rish" tugmasidan.
+void openGlobalSearch(BuildContext context, {String? initialPhone}) {
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => GlobalSearchScreen(initialPhone: initialPhone)));
 }
 
 enum _Mode { phone, number }
@@ -31,7 +33,9 @@ enum _Mode { phone, number }
 ///
 /// Bo'limlardagi qidiruv maydonlari esa faqat o'z bo'limidan izlaydi.
 class GlobalSearchScreen extends ConsumerStatefulWidget {
-  const GlobalSearchScreen({super.key});
+  final String? initialPhone;
+
+  const GlobalSearchScreen({super.key, this.initialPhone});
 
   @override
   ConsumerState<GlobalSearchScreen> createState() => _GlobalSearchScreenState();
@@ -48,6 +52,18 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
   CustomerResult? _result;
 
   AsyncValue<CustomerFinance>? _finance;
+
+  @override
+  void initState() {
+    super.initState();
+    final digits = widget.initialPhone?.replaceAll(RegExp(r'\D'), '') ?? '';
+    if (digits.length >= 9) {
+      _controller.text = UzPhoneFormatter()
+          .formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: digits.substring(digits.length - 9)))
+          .text;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _search());
+    }
+  }
 
   @override
   void dispose() {
@@ -156,7 +172,7 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
                   child: TextField(
                     controller: _controller,
                     focusNode: _focus,
-                    autofocus: true,
+                    autofocus: widget.initialPhone == null,
                     keyboardType: _mode == _Mode.phone ? TextInputType.phone : TextInputType.number,
                     textInputAction: TextInputAction.search,
                     inputFormatters: _mode == _Mode.phone

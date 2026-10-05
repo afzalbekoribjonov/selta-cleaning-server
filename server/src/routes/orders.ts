@@ -126,8 +126,12 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
     // uchun) — eng oxirgi GPS'li buyurtma tanlanadi. Faqat teng qiymat
     // filtri (orderBy'siz) qo'shimcha kompozit indeks talab qilmasligi
     // uchun; kichik ro'yxat xotirada saralanadi.
+    //
+    // Mobil ilova mijozni o'zi aniqlab GPS'ni aniq yuboradi: `null` —
+    // "eski GPS kerak emas" (masalan mijoz manzili o'zgargan). Kalit
+    // umuman bo'lmasa (veb, eski ilova) avvalgidek ko'chiriladi.
     let resolvedGpsCoords: string | null = typeof gpsCoords === "string" && gpsCoords.trim() ? gpsCoords.trim() : null;
-    if (!resolvedGpsCoords) {
+    if (!resolvedGpsCoords && gpsCoords !== null) {
       const priorSnap = await db.collection("orders").where("phone", "==", phone.trim()).limit(20).get();
       const withGps = priorSnap.docs
         .map((d) => d.data())

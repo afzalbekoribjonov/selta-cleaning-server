@@ -9,6 +9,16 @@ export function phoneDigits(formatted: string): string {
   return formatted.replace(/\D/g, '')
 }
 
+/**
+ * Raqamning bazada uchrashi mumkin bo'lgan barcha yozilishlari ("+998...",
+ * "998...", faqat 9 raqam) — server/src/lib/phone.ts bilan bir xil.
+ */
+export function phoneVariants(raw: string): string[] {
+  const digits = raw.replace(/\D/g, '')
+  const last9 = digits.length >= 9 ? digits.slice(-9) : digits
+  return [...new Set([digits, last9, `+998${last9}`, `998${last9}`])]
+}
+
 export function formatPhoneDisplay(phone: string): string {
   const digits = phone.replace(/\D/g, '').replace(/^998/, '')
   if (digits.length !== 9) return phone
