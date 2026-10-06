@@ -1,21 +1,12 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Printer, Smartphone, X } from 'lucide-react'
+import { Printer, Settings2, Smartphone, X } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { Spinner } from '@/components/ui/Spinner'
 import { layoutReceipt, type ReceiptBlock } from '@/lib/receipt'
-
-/** Ilova (admin APK) ichidagi WebView beradigan kanal — chekni Bluetooth printerga yuboradi. */
-interface SeltaPrinterChannel {
-  postMessage: (message: string) => void
-}
-
-function appPrinter(): SeltaPrinterChannel | null {
-  const channel = (window as unknown as { SeltaPrinter?: SeltaPrinterChannel }).SeltaPrinter
-  return channel && typeof channel.postMessage === 'function' ? channel : null
-}
+import { printInApp, useAppPrinter } from '@/lib/app-printer'
 
 /**
  * "Kunlik hisobot cheki" — server bazadan hisoblagan tayyor bloklar
@@ -25,20 +16,21 @@ function appPrinter(): SeltaPrinterChannel | null {
  */
 export function DailyReceiptDialog({ date, onClose }: { date: string; onClose: () => void }) {
   useEscapeClose(onClose)
-  const [paper, setPaper] = useState<58 | 80>(80)
+  const [chosenPaper, setPaper] = useState<58 | 80>(80)
   const [sent, setSent] = useState(false)
+  const app = useAppPrinter()
+  // Ilovada — printerning o'z qog'oz eni (oldindan ko'rish qog'ozdagidek bo'lsin).
+  const paper = app.inApp && app.status ? app.status.paperMm : chosenPaper
   const query = useQuery({
     queryKey: ['dailyReceipt', date],
     queryFn: () => apiPost<{ blocks: ReceiptBlock[] }>('/dailyReceiptReport', { date }),
     staleTime: 0,
   })
-  const printer = appPrinter()
   const lines = query.data ? layoutReceipt(query.data.blocks, paper === 58 ? 32 : 48) : []
 
   function sendToApp() {
-    if (!printer || !query.data) return
-    printer.postMessage(JSON.stringify({ title: `Kunlik hisobot · ${date}`, blocks: query.data.blocks }))
-    setSent(true)
+    if (!query.data) return
+    setSent(printInApp(`Kunlik hisobot · ${date}`, query.data.blocks))
   }
 
   return (
@@ -57,20 +49,40 @@ export function DailyReceiptDialog({ date, onClose }: { date: string; onClose: (
           </button>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 pt-3">
-          <span className="text-xs font-semibold text-gray-dark">Qog'oz:</span>
-          <div className="flex rounded-lg border border-border p-0.5 text-xs font-bold">
-            {([58, 80] as const).map((w) => (
-              <button
-                key={w}
-                onClick={() => setPaper(w)}
-                className={`rounded-md px-2.5 py-1 ${paper === w ? 'bg-brand-primary text-white' : 'text-gray-dark'}`}
-              >
-                {w} mm
-              </button>
-            ))}
+        {app.inApp ? (
+          <div className="mx-5 mt-3 flex items-center gap-2 rounded-xl border border-border px-3 py-2">
+            <Printer size={16} className={`shrink-0 ${app.status?.selected ? 'text-brand-primary' : 'text-gray'}`} />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
+              {app.status === null
+                ? 'Printer tekshirilmoqda…'
+                : app.status.selected
+                  ? `${app.status.name} · ${app.status.paperMm} mm`
+                  : 'Printer tanlanmagan'}
+            </span>
+            <button
+              onClick={app.openSettings}
+              className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-brand-primary hover:bg-bg"
+            >
+              <Settings2 size={14} />
+              O'zgartirish
+            </button>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-end gap-2 px-5 pt-3">
+            <span className="text-xs font-semibold text-gray-dark">Qog'oz:</span>
+            <div className="flex rounded-lg border border-border p-0.5 text-xs font-bold">
+              {([58, 80] as const).map((w) => (
+                <button
+                  key={w}
+                  onClick={() => setPaper(w)}
+                  className={`rounded-md px-2.5 py-1 ${paper === w ? 'bg-brand-primary text-white' : 'text-gray-dark'}`}
+                >
+                  {w} mm
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-auto px-5 py-3">
           {query.isLoading ? (
@@ -85,7 +97,7 @@ export function DailyReceiptDialog({ date, onClose }: { date: string; onClose: (
         </div>
 
         <div className="flex flex-wrap gap-2 border-t border-border px-5 py-4">
-          {printer ? (
+          {app.inApp ? (
             <button
               onClick={sendToApp}
               disabled={!query.data}
