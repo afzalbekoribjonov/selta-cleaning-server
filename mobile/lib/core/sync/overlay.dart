@@ -1,3 +1,4 @@
+import '../models/item_photo.dart';
 import '../models/order.dart';
 import '../models/order_item.dart';
 import 'pending_action.dart';
@@ -280,6 +281,7 @@ Map<String, dynamic> itemToJson(OrderItem i) => {
       if (i.deliveredBy != null) 'deliveredBy': i.deliveredBy,
       if (i.deliveredAt != null) 'deliveredAt': i.deliveredAt!.millisecondsSinceEpoch,
       if (i.collectedAmount != null) 'collectedAmount': i.collectedAmount,
+      if (!i.photos.isEmpty) 'photos': i.photos.toJson(),
     };
 
 OrderItem itemFromJson(Map<String, dynamic> j) {
@@ -306,5 +308,6 @@ OrderItem itemFromJson(Map<String, dynamic> j) {
     deliveredBy: j['deliveredBy'] as String?,
     deliveredAt: ms(j['deliveredAt']),
     collectedAmount: j['collectedAmount'] as num?,
+    photos: ItemPhotos.fromRaw(j['photos']),
   );
 }

@@ -278,6 +278,7 @@ class _TeamItemsCard extends StatelessWidget {
           else
             for (final item in items)
               ItemDetailRow(
+                orderId: order.id,
                 item: item,
                 subId: item.subId(order.orderNumber),
                 editable: editable,

@@ -345,6 +345,7 @@ class _PickupItemsCard extends StatelessWidget {
           else
             for (final item in items)
               ItemDetailRow(
+                orderId: order.id,
                 item: item,
                 subId: item.subId(order.orderNumber),
                 editable: true,

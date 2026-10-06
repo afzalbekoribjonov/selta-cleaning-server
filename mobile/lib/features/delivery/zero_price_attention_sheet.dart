@@ -107,6 +107,7 @@ class _ZeroPriceAttentionSheet extends ConsumerWidget {
                               border: Border.all(color: AppColors.danger.withValues(alpha: 0.4)),
                             ),
                             child: ItemDetailRow(
+                              orderId: order.id,
                               item: item,
                               subId: item.subId(order.orderNumber),
                               editable: true,

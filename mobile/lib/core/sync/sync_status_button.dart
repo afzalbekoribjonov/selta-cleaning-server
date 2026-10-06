@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../photos/photo_queue.dart';
 import '../services/connectivity_service.dart';
 import '../utils/date_utils.dart';
 import 'action_queue.dart';
@@ -21,8 +22,10 @@ class SyncStatusButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final online = ref.watch(connectivityProvider).valueOrNull ?? true;
-    final pending = ref.watch(pendingActionCountProvider);
-    final failed = ref.watch(failedActionsProvider).length;
+    // Rasm yuklamalari ham shu yerda — xodim ular yetib borganini bilsin.
+    final int pendingPhotos = ref.watch(pendingPhotoCountProvider);
+    final pending = ref.watch(pendingActionCountProvider) + pendingPhotos;
+    final failed = ref.watch(failedActionsProvider).length + ref.watch(failedPhotoOpsProvider).length;
     if (online && pending == 0 && failed == 0) return const SizedBox.shrink();
 
     final (IconData icon, Color color, int count, String tooltip) = failed > 0
@@ -65,12 +68,14 @@ class _SyncSheet extends ConsumerWidget {
     final actions = ref.watch(actionQueueProvider);
     final failed = actions.where((a) => a.failed).toList();
     final waiting = actions.where((a) => !a.failed && !a.acked).toList();
+    final photos = ref.watch(photoQueueProvider).where((o) => !o.done).toList();
+    final failedPhotos = photos.where((o) => o.failed).toList();
 
     final status = !online
         ? "Internet yo'q. O'zgarishlar telefonda saqlangan va ulanish tiklanishi bilan avtomatik yuboriladi."
-        : waiting.isNotEmpty
+        : waiting.isNotEmpty || photos.length > failedPhotos.length
             ? 'Serverga yuborilmoqda…'
-            : failed.isNotEmpty
+            : failed.isNotEmpty || failedPhotos.isNotEmpty
                 ? "Quyidagi amallarni server qabul qilmadi. Qayta urinib ko'ring yoki bekor qiling."
                 : 'Hammasi saqlandi.';
 
@@ -111,13 +116,89 @@ class _SyncSheet extends ConsumerWidget {
               _SectionTitle('Navbatda · ${waiting.length}'),
               for (final a in waiting) _ActionTile(action: a),
             ],
-            if (failed.isEmpty && waiting.isEmpty)
+            if (photos.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              _SectionTitle('Rasmlar · ${photos.length}'),
+              for (final o in photos) _PhotoOpTile(op: o),
+            ],
+            if (failed.isEmpty && waiting.isEmpty && photos.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 32),
                 child: Icon(Icons.cloud_done_rounded, size: 44, color: AppColors.success),
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PhotoOpTile extends ConsumerWidget {
+  final PhotoOp op;
+  const _PhotoOpTile({required this.op});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queue = ref.read(photoQueueProvider.notifier);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: op.failed ? AppColors.danger.withValues(alpha: 0.35) : AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                op.failed
+                    ? Icons.error_outline_rounded
+                    : op.isUpload
+                        ? Icons.add_a_photo_outlined
+                        : Icons.delete_outline_rounded,
+                size: 16,
+                color: op.failed ? AppColors.danger : AppColors.gray,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  op.label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (op.sending)
+                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                Text(formatTimeHm(op.createdAt), style: const TextStyle(fontSize: 11.5, color: AppColors.gray)),
+            ],
+          ),
+          if (op.failed) ...[
+            if (op.error != null) ...[
+              const SizedBox(height: 6),
+              Text(op.error!, style: const TextStyle(fontSize: 12.5, color: AppColors.danger, height: 1.35)),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => queue.cancel(op.id),
+                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                    child: const Text('Bekor qilish'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: FilledButton(onPressed: () => queue.retry(op.id), child: const Text('Qayta urinish'))),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -6,6 +6,7 @@ import '../../core/constants.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/tariff_settings.dart';
 import '../../core/utils/money_utils.dart';
+import '../photos/item_photos_chip.dart';
 
 const _conditionLabels = {
   'average': "O'rtacha",
@@ -52,12 +53,16 @@ class ItemDetailRow extends ConsumerWidget {
   final bool editable;
   final VoidCallback? onTap;
 
+  /// Berilsa — mahsulot rasmlari belgisi ko'rsatiladi (vakolat bo'lsa).
+  final String? orderId;
+
   const ItemDetailRow({
     super.key,
     required this.item,
     required this.subId,
     this.editable = false,
     this.onTap,
+    this.orderId,
   });
 
   @override
@@ -106,6 +111,7 @@ class ItemDetailRow extends ConsumerWidget {
           color: AppColors.danger,
           background: AppColors.danger.withValues(alpha: 0.12),
         ),
+      if (orderId != null) ItemPhotosChip(orderId: orderId!, item: item, subId: subId),
     ];
 
     return InkWell(

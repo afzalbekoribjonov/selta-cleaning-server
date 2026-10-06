@@ -124,6 +124,7 @@ class _ItemActionRowState extends ConsumerState<ItemActionRow> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ItemDetailRow(
+          orderId: widget.order.id,
           item: widget.item,
           subId: widget.item.subId(widget.order.orderNumber),
           editable: widget.editable,

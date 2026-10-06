@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'item_photo.dart';
+
 /// Buyurtmadagi bitta jismoniy mahsulot (masalan bitta gilam). `itemNumber`
 /// buyurtma raqami bilan birga "1/3" kabi sub-ID hosil qiladi (talab #3/#6).
 ///
@@ -40,6 +42,9 @@ class OrderItem {
   final String? deliveredByName;
   final num? collectedAmount;
 
+  /// "Eski" va "tayyor" holat rasmlari (ImageKit; server: routes/photos.ts).
+  final ItemPhotos photos;
+
   /// Serverga hali yetmagan o'zgarish bor (oflayn navbat) — Firestore'da
   /// yo'q, faqat ilova ichida.
   final bool pendingSync;
@@ -73,6 +78,7 @@ class OrderItem {
     this.deliveredAt,
     this.deliveredByName,
     this.collectedAmount,
+    this.photos = ItemPhotos.empty,
     this.pendingSync = false,
   });
 
@@ -96,6 +102,7 @@ class OrderItem {
     String? deliveredBy,
     DateTime? deliveredAt,
     num? collectedAmount,
+    ItemPhotos? photos,
     bool? pendingSync,
   }) {
     return OrderItem(
@@ -127,6 +134,7 @@ class OrderItem {
       deliveredAt: deliveredAt ?? this.deliveredAt,
       deliveredByName: deliveredByName,
       collectedAmount: collectedAmount ?? this.collectedAmount,
+      photos: photos ?? this.photos,
       pendingSync: pendingSync ?? this.pendingSync,
     );
   }
@@ -165,6 +173,7 @@ class OrderItem {
       deliveredAt: (data['deliveredAt'] as Timestamp?)?.toDate(),
       deliveredByName: data['deliveredByName']?.toString(),
       collectedAmount: data['collectedAmount'] as num?,
+      photos: ItemPhotos.fromRaw(data['photos']),
     );
   }
 

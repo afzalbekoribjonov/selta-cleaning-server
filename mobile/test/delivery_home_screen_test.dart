@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:selta_cleaning/core/models/employee_summary.dart';
 import 'package:selta_cleaning/core/models/order.dart';
+import 'package:selta_cleaning/core/photos/photo_queue.dart';
 import 'package:selta_cleaning/core/services/auth_service.dart';
 import 'package:selta_cleaning/core/services/connectivity_service.dart';
 import 'package:selta_cleaning/core/services/employee_repository.dart';
@@ -58,6 +59,7 @@ void main() {
           ),
           myTeamOrdersProvider.overrideWith((ref, id) => const AsyncData(<Order>[])),
           actionQueueProvider.overrideWith(_EmptyQueue.new),
+          photoQueueProvider.overrideWith(_NoPhotos.new),
           connectivityProvider.overrideWith((ref) => Stream.value(true)),
           myDailyActivityProvider.overrideWith((ref) async => MyDailyActivity.fromJson({
                 'date': '2026-10-05',
@@ -134,4 +136,9 @@ void main() {
     expect(find.textContaining('Mijoz ready1'), findsNothing);
     expect(find.text("Bu bo'limda buyurtma yo'q"), findsOneWidget);
   });
+}
+
+class _NoPhotos extends PhotoQueue {
+  @override
+  List<PhotoOp> build() => const [];
 }

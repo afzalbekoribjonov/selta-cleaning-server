@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Mahsulotning eski va tayyor holatini rasmga olish uchun.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Mahsulot rasmini galereyadan tanlash uchun.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Chekni Bluetooth printerda chop etish uchun.</string>
 </dict>
 </plist>

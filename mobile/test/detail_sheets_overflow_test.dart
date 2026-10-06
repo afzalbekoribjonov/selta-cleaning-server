@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:selta_cleaning/core/models/employee_summary.dart';
+import 'package:selta_cleaning/core/models/item_photo.dart';
 import 'package:selta_cleaning/core/models/order.dart';
 import 'package:selta_cleaning/core/models/order_item.dart';
 import 'package:selta_cleaning/core/services/auth_service.dart';
@@ -9,6 +10,7 @@ import 'package:selta_cleaning/core/services/bonus_service.dart';
 import 'package:selta_cleaning/core/services/catalog_repository.dart';
 import 'package:selta_cleaning/core/services/connectivity_service.dart';
 import 'package:selta_cleaning/core/services/employee_repository.dart';
+import 'package:selta_cleaning/core/services/local_store.dart';
 import 'package:selta_cleaning/core/services/orders_repository.dart';
 import 'package:selta_cleaning/core/services/tariff_settings.dart';
 import 'package:selta_cleaning/core/sync/action_queue.dart';
@@ -19,6 +21,7 @@ import 'package:selta_cleaning/features/dispatcher/order_detail_sheet.dart';
 import 'package:selta_cleaning/features/shared/item_detail_row.dart';
 import 'package:selta_cleaning/features/shared/team_job_detail_sheet.dart';
 import 'package:selta_cleaning/features/worker/worker_order_detail_sheet.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Ichki kartalar ENG OG'IR ma'lumot bilan — uzun nomlar, katta summalar,
 /// o'lchanmagan/rad etilgan mahsulotlar, holat va tarif belgilari — tor
@@ -76,6 +79,11 @@ List<OrderItem> nastyItems() => [
         category: 'gilam',
         createdAt: DateTime(2026, 9, 1),
         dueDate: DateTime(2026, 9, 5),
+        // Rasmlar belgisi ham sig'ishi kerak ("Eski 2 · Tayyor 2").
+        photos: const ItemPhotos(
+          before: [ItemPhoto(fileId: 'a', url: 'https://ik.imagekit.io/s/a.jpg'), ItemPhoto(fileId: 'b', url: 'https://ik.imagekit.io/s/b.jpg')],
+          ready: [ItemPhoto(fileId: 'c', url: 'https://ik.imagekit.io/s/c.jpg'), ItemPhoto(fileId: 'd', url: 'https://ik.imagekit.io/s/d.jpg')],
+        ),
       ),
       OrderItem(
         id: 'i2',
@@ -186,6 +194,8 @@ Future<void> pumpSheet(
     original?.call(details);
   };
   addTearDown(() => FlutterError.onError = original);
+  SharedPreferences.setMockInitialValues({});
+  final prefs = await SharedPreferences.getInstance();
   tester.view.physicalSize = Size(width * 3, 760 * 3);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
@@ -201,6 +211,7 @@ Future<void> pumpSheet(
         tariffSettingsProvider.overrideWith((ref) => Stream.value(kDefaultTariffs)),
         orderSourcesProvider.overrideWith((ref) => Stream.value(const [])),
         bonusServiceProvider.overrideWithValue(_Bonus()),
+        localStoreProvider.overrideWithValue(LocalStore(prefs)),
         currentEmployeeProvider.overrideWith(
           (ref) => Stream.value({
             'department': department,
@@ -209,6 +220,8 @@ Future<void> pumpSheet(
             'canPack': true,
             'canTakePrepayment': true,
             'canPrintReceipts': true,
+            'canViewPhotos': true,
+            'canUploadPhotos': true,
           }),
         ),
         employeeClaimsProvider.overrideWith(
@@ -288,6 +301,8 @@ void main() {
       testWidgets('Dastavchik ichki kartasi', (tester) async {
         await pumpSheet(tester, (c) => openDeliveryOrderDetailSheet(c, nastyOrder()),
             order: nastyOrder(), department: 'delivery', width: width, scale: scale);
+        expectNoLayoutError(tester);
+        await tester.scrollUntilVisible(find.text('Eski 2 · Tayyor 2'), 300, scrollable: find.byType(Scrollable).last);
         expectNoLayoutError(tester);
         await scrollThrough(tester);
         expectNoLayoutError(tester);

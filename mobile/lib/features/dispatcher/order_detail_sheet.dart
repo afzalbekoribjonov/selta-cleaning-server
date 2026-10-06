@@ -287,6 +287,7 @@ class _ItemsSummaryCard extends StatelessWidget {
           else
             for (final item in items)
               ItemDetailRow(
+                orderId: order.id,
                 item: item,
                 subId: item.subId(order.orderNumber),
                 onTap: editable ? () => openCatalogItemSheet(context, order, existingItem: item) : null,
