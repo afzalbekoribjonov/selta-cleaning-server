@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Check, Printer, RotateCcw } from 'lucide-react'
 import { ApiError } from '@/lib/api'
@@ -58,7 +58,8 @@ export function ReceiptSettingsCard() {
 
   const effective: ReceiptSettings | null = draft && { ...draft, headerLines: toLines(headerText), footerLines: toLines(footerText) }
 
-  const problem = useMemo(() => {
+  // Arzon tekshiruv — har renderda qayta hisoblanadi.
+  const problem = (() => {
     if (!effective) return null
     if (effective.title.trim().length > RECEIPT_LIMITS.title) return `Sarlavha ${RECEIPT_LIMITS.title} belgidan oshmasin`
     if (effective.headerLines.length > RECEIPT_LIMITS.headerLines) return `Yuqori qatorlar ${RECEIPT_LIMITS.headerLines} tadan oshmasin`
@@ -67,7 +68,7 @@ export function ReceiptSettingsCard() {
       return `Har bir qator ${RECEIPT_LIMITS.line} belgidan oshmasin`
     }
     return null
-  }, [effective])
+  })()
 
   const dirty = !!current && !!effective && JSON.stringify(current) !== JSON.stringify({ ...effective, title: effective.title.trim() })
 

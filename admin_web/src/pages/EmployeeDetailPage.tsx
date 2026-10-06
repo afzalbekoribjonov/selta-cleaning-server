@@ -21,6 +21,9 @@ import {
   PiggyBank,
   Printer,
   FileSpreadsheet,
+  Images,
+  ImagePlus,
+  ImageMinus,
   ArrowRight,
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
@@ -322,6 +325,33 @@ export default function EmployeeDetailPage() {
         description="Xodimlar bo'yicha kunlik hisobotni chekda chop etish"
         grantText="kunlik hisobot chekini (barcha xodimlar ishi, qo'ldagi pullar) ko'rib, chop eta oladi."
         revokeText="endi kunlik hisobot chekini ko'ra olmaydi."
+      />
+      <PermissionToggleSection
+        employee={employee}
+        permission="canViewPhotos"
+        icon={Images}
+        title="Mahsulot rasmlarini ko'rish"
+        description="Buyurtmadagi mahsulotlarning eski va tayyor holat rasmlarini ko'rish"
+        grantText="mahsulotlarning eski va tayyor holat rasmlarini ko'ra oladi."
+        revokeText="endi mahsulot rasmlarini ko'ra olmaydi."
+      />
+      <PermissionToggleSection
+        employee={employee}
+        permission="canUploadPhotos"
+        icon={ImagePlus}
+        title="Mahsulot rasmini saqlash"
+        description="Kamera yoki galereyadan rasm qo'shish (har holatga 2 tagacha)"
+        grantText="mahsulotlarga eski va tayyor holat rasmlarini qo'sha oladi."
+        revokeText="endi mahsulotlarga rasm qo'sha olmaydi."
+      />
+      <PermissionToggleSection
+        employee={employee}
+        permission="canDeletePhotos"
+        icon={ImageMinus}
+        title="Mahsulot rasmini o'chirish"
+        description="Saqlangan rasmlarni butunlay o'chirish"
+        grantText="mahsulotlarning saqlangan rasmlarini o'chira oladi."
+        revokeText="endi mahsulot rasmlarini o'chira olmaydi."
       />
       {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
 

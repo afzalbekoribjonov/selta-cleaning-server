@@ -14,6 +14,8 @@ import { Spinner } from '@/components/ui/Spinner'
 import { DeleteOrderDialog } from './DeleteOrderDialog'
 import { PrepaymentsSection } from './PrepaymentsSection'
 import { BonusSection } from './BonusSection'
+import { ItemPhotoStrip } from './ItemPhotos'
+import { photosOf, type ItemPhotos } from '@/lib/item-photos'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -32,6 +34,7 @@ interface OrderItem {
   tariff: string | null
   createdAt: Date | null
   deliveredByName: string | null
+  photos: ItemPhotos
 }
 
 interface StatusEvent {
@@ -70,6 +73,7 @@ function mapOrderItem(id: string, d: Record<string, unknown>): OrderItem {
     tariff: (d.tariff as string | undefined) ?? null,
     createdAt: (d.createdAt as Timestamp | undefined)?.toDate() ?? null,
     deliveredByName: (d.deliveredByName as string | undefined) ?? null,
+    photos: photosOf(d.photos),
   }
 }
 
@@ -321,6 +325,7 @@ export function OrderDetailDrawer({
                       {done && item.deliveredByName && (
                         <p className="mt-1 text-xs font-semibold text-gray-dark">Yetkazdi: {item.deliveredByName}</p>
                       )}
+                      <ItemPhotoStrip orderId={order.id} itemId={item.id} photos={item.photos} />
                     </li>
                   )
                 })}

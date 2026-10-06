@@ -6,7 +6,14 @@ import { useEscapeClose } from '@/hooks/useEscapeClose'
 import { type Employee } from '@/lib/employees'
 
 /** Server ro'yxatidagi (routes/employeeAdmin.ts: TOGGLE_PERMISSIONS) vakolatlar. */
-export type TogglePermission = 'canAddExpenses' | 'canTakePrepayment' | 'canPrintReceipts' | 'canPrintDailyReport'
+export type TogglePermission =
+  | 'canAddExpenses'
+  | 'canTakePrepayment'
+  | 'canPrintReceipts'
+  | 'canPrintDailyReport'
+  | 'canViewPhotos'
+  | 'canUploadPhotos'
+  | 'canDeletePhotos'
 
 interface Props {
   employee: Employee
