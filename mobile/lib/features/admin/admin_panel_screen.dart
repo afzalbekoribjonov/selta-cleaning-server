@@ -1,13 +1,17 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../app/theme.dart';
 import '../../core/config.dart';
+import '../../core/printing/printer_service.dart';
 import '../../core/printing/receipt.dart';
+import '../../core/printing/receipt_settings.dart';
 import '../../core/widgets/selta_loader.dart';
+import '../printing/print_flow.dart' show showPrintOutcome;
+import '../printing/printer_settings_screen.dart';
 import '../printing/receipt_preview_sheet.dart';
+import 'printer_bridge.dart';
 
 /// Admin panelni (admin.seltacleaning.uz) ilova ichida ochadi.
 ///
@@ -19,14 +23,14 @@ import '../printing/receipt_preview_sheet.dart';
 ///
 /// Bu ekran faqat `--dart-define=ADMIN_PANEL=true` bilan yig'ilgan
 /// buildda mavjud (core/config.dart: `kAdminPanelEnabled`).
-class AdminPanelScreen extends StatefulWidget {
+class AdminPanelScreen extends ConsumerStatefulWidget {
   const AdminPanelScreen({super.key});
 
   @override
-  State<AdminPanelScreen> createState() => _AdminPanelScreenState();
+  ConsumerState<AdminPanelScreen> createState() => _AdminPanelScreenState();
 }
 
-class _AdminPanelScreenState extends State<AdminPanelScreen> {
+class _AdminPanelScreenState extends ConsumerState<AdminPanelScreen> {
   late final WebViewController _controller;
   int _progress = 0;
   String? _error;
@@ -37,10 +41,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(AppColors.bg)
-      // Admin panel "Chop etish"ni bossa, chek bloklari shu kanal orqali
-      // keladi va ilovaning Bluetooth printeridan chiqadi (brauzerdan
-      // Bluetooth printerga to'g'ridan-to'g'ri chop etib bo'lmaydi).
-      ..addJavaScriptChannel('SeltaPrinter', onMessageReceived: _onPrintRequest)
+      // Admin panel chek chiqarsa yoki printerni o'zgartirmoqchi bo'lsa,
+      // so'rov shu kanal orqali keladi va ilovaning Bluetooth printeri
+      // ishlatiladi (brauzerdan Bluetooth printerga ulanib bo'lmaydi).
+      ..addJavaScriptChannel('SeltaPrinter', onMessageReceived: _onPrinterMessage)
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) => setState(() => _progress = progress),
@@ -63,17 +67,49 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   /// Faqat admin panel sahifasidan kelgan so'rov qabul qilinadi.
-  Future<void> _onPrintRequest(JavaScriptMessage message) async {
+  Future<void> _onPrinterMessage(JavaScriptMessage message) async {
     final current = Uri.tryParse(await _controller.currentUrl() ?? '');
     if (current == null || current.host != Uri.parse(kAdminPanelUrl).host) return;
+    final request = parsePrinterBridgeMessage(message.message);
+    if (request == null || !mounted) return;
+    switch (request) {
+      case BridgePrint(:final title, :final receipt):
+        await openReceiptPreview(context, receipt: receipt, title: title);
+      case BridgeStatus():
+        break;
+      case BridgeOpenSettings():
+        await Navigator.of(context).push(MaterialPageRoute<bool>(builder: (_) => const PrinterSettingsScreen()));
+      case BridgeTestPrint():
+        await _testPrint();
+    }
+    // Har qanday so'rovdan keyin sahifa printer holatini yangilab oladi.
+    if (!mounted) return;
+    await _sendToPage(printerStatusDetail(ref.read(printerConfigProvider)));
+  }
+
+  Future<void> _testPrint() async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!ref.read(printerConfigProvider).isSelected) {
+      // Avval printer tanlanadi, keyin sinov cheki o'zi chiqadi.
+      final picked = await Navigator.of(context).push(
+        MaterialPageRoute<bool>(builder: (_) => const PrinterSettingsScreen(pickForPrint: true)),
+      );
+      if (picked != true || !mounted) return;
+    }
+    final config = ref.read(printerConfigProvider);
+    final settings = ref.read(receiptSettingsProvider).valueOrNull ?? const ReceiptSettings();
+    final outcome = await ref
+        .read(printerServiceProvider)
+        .printLines(layoutReceipt(testReceipt(settings, config.paper, DateTime.now()), config.paper));
+    showPrintOutcome(messenger, outcome);
+    await _sendToPage(printerResultDetail(outcome));
+  }
+
+  Future<void> _sendToPage(Map<String, Object?> detail) async {
     try {
-      final data = jsonDecode(message.message);
-      if (data is! Map || data['blocks'] is! List) return;
-      final receipt = Receipt.fromBlocks(data['blocks'] as List);
-      final title = data['title'] is String ? data['title'] as String : 'Chek';
-      if (mounted) await openReceiptPreview(context, receipt: receipt, title: title);
-    } on FormatException {
-      // Buzilgan xabar — e'tiborsiz.
+      await _controller.runJavaScript(printerEventScript(detail));
+    } catch (_) {
+      // Sahifa yangilanayotgan bo'lsa — keyingi so'rovda yana yuboriladi.
     }
   }
 

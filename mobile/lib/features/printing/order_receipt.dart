@@ -109,7 +109,8 @@ Receipt buildOrderReceipt({
   if (p.discount > 0) lines.add(ReceiptPair('Chegirma:', formatMoneyUz(p.discount)));
   if (p.bonus > 0) lines.add(ReceiptPair('Bonusdan:', formatMoneyUz(p.bonus)));
   if (p.debt > 0) lines.add(ReceiptPair('Qarzdorlik:', formatMoneyUz(p.debt)));
-  lines.add(ReceiptPair("To'landi:", formatMoneyUz(p.paid), bold: true));
+  // Eng muhim qator — baland harfda (eni o'zgarmaydi, summa sig'adi).
+  lines.add(ReceiptPair("To'landi:", formatMoneyUz(p.paid), bold: true, tall: true));
   if (p.prepaid > 0) lines.add(ReceiptPair("  shundan oldindan to'lov:", formatMoneyUz(p.prepaid)));
   final remaining = p.remaining;
   if (remaining > 0 && !order.isDone) {

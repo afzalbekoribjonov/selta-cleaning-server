@@ -13,6 +13,13 @@
          (talab: "Olib ketildi"ga o'tishdan oldin majburiy GPS). -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Chek printeriga Bluetooth orqali ulanish (BluetoothPrinterChannel.kt).
+         Android 12+ da faqat "Yaqin-atrofdagi qurilmalar" (CONNECT) kerak;
+         eskilarida — oddiy BLUETOOTH ruxsatlari. Qidiruv (SCAN) kerak emas:
+         printer telefon sozlamasida oldindan juftlanadi. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <application
         android:label="Selta Cleaning"
         android:name="${applicationName}"

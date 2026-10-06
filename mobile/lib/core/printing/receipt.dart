@@ -24,7 +24,10 @@ class ReceiptText extends ReceiptLine {
   /// Ikki barobar katta (eni ham, bo'yi ham) — sarlavha uchun.
   final bool large;
 
-  const ReceiptText(this.text, {this.align = ReceiptAlign.left, this.bold = false, this.large = false});
+  /// Faqat bo'yi ikki barobar — qatorga sig'adigan belgilar o'zgarmaydi.
+  final bool tall;
+
+  const ReceiptText(this.text, {this.align = ReceiptAlign.left, this.bold = false, this.large = false, this.tall = false});
 }
 
 /// Chapda nom, o'ngda qiymat ("Buyurtma jami ......... 440 000 so'm").
@@ -33,7 +36,11 @@ class ReceiptPair extends ReceiptLine {
   final String right;
   final bool bold;
 
-  const ReceiptPair(this.left, this.right, {this.bold = false});
+  /// Faqat bo'yi ikki barobar (masalan "To'landi") — nom va summa baribir
+  /// bitta qatorda qoladi.
+  final bool tall;
+
+  const ReceiptPair(this.left, this.right, {this.bold = false, this.tall = false});
 }
 
 class ReceiptDivider extends ReceiptLine {
@@ -68,9 +75,10 @@ class Receipt {
             align: raw['align'] == 'center' ? ReceiptAlign.center : ReceiptAlign.left,
             bold: bold,
             large: raw['large'] == true,
+            tall: raw['tall'] == true,
           ));
         case 'pair':
-          lines.add(ReceiptPair(str(raw['left']), str(raw['right']), bold: bold));
+          lines.add(ReceiptPair(str(raw['left']), str(raw['right']), bold: bold, tall: raw['tall'] == true));
         case 'divider':
           final ch = str(raw['char']);
           lines.add(ReceiptDivider(ch.isEmpty ? '-' : ch.substring(0, 1)));
@@ -101,14 +109,20 @@ enum PaperWidth {
 class PrintedLine {
   final String text;
   final bool bold;
+
+  /// Eni va bo'yi ikki barobar (qatorga yarim belgi sig'adi).
   final bool large;
+
+  /// Faqat bo'yi ikki barobar.
+  final bool tall;
   final bool isLogo;
 
-  const PrintedLine(this.text, {this.bold = false, this.large = false}) : isLogo = false;
+  const PrintedLine(this.text, {this.bold = false, this.large = false, this.tall = false}) : isLogo = false;
   const PrintedLine.logo()
       : text = '',
         bold = false,
         large = false,
+        tall = false,
         isLogo = true;
 
   @override
@@ -189,29 +203,29 @@ List<PrintedLine> layoutReceipt(Receipt receipt, PaperWidth paper) {
     switch (line) {
       case ReceiptLogo():
         out.add(const PrintedLine.logo());
-      case ReceiptText(:final text, :final align, :final bold, :final large):
+      case ReceiptText(:final text, :final align, :final bold, :final large, :final tall):
         final w = large ? width ~/ 2 : width;
         for (final part in wrapText(receiptAscii(text), w)) {
-          out.add(PrintedLine(_align(part, w, align), bold: bold, large: large));
+          out.add(PrintedLine(_align(part, w, align), bold: bold, large: large, tall: tall && !large));
         }
-      case ReceiptPair(:final left, :final right, :final bold):
+      case ReceiptPair(:final left, :final right, :final bold, :final tall):
         final l = receiptAscii(left).trim();
         final r = receiptAscii(right).trim();
         if (l.length + 1 + r.length <= width) {
-          out.add(PrintedLine('$l${' ' * (width - l.length - r.length)}$r', bold: bold));
+          out.add(PrintedLine('$l${' ' * (width - l.length - r.length)}$r', bold: bold, tall: tall));
         } else {
           // Nom uzun: u o'z qatorlariga bo'linadi, qiymat oxirgi qatorga
           // sig'sa o'sha yerda, aks holda alohida qatorda o'ng tomonda.
           final parts = wrapText(l, width);
           final last = parts.removeLast();
           for (final p in parts) {
-            out.add(PrintedLine(p, bold: bold));
+            out.add(PrintedLine(p, bold: bold, tall: tall));
           }
           if (last.length + 1 + r.length <= width) {
-            out.add(PrintedLine('$last${' ' * (width - last.length - r.length)}$r', bold: bold));
+            out.add(PrintedLine('$last${' ' * (width - last.length - r.length)}$r', bold: bold, tall: tall));
           } else {
-            out.add(PrintedLine(last, bold: bold));
-            out.add(PrintedLine(_align(r.length > width ? r.substring(0, width) : r, width, ReceiptAlign.right), bold: bold));
+            out.add(PrintedLine(last, bold: bold, tall: tall));
+            out.add(PrintedLine(_align(r.length > width ? r.substring(0, width) : r, width, ReceiptAlign.right), bold: bold, tall: tall));
           }
         }
       case ReceiptDivider(:final char):

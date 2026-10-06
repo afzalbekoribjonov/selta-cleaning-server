@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart' show openAppSettings;
 
 import '../../app/theme.dart';
+import '../../core/printing/escpos_encoder.dart' show kReceiptLogoAsset;
 import '../../core/printing/printer_service.dart';
 import '../../core/printing/receipt.dart';
+import 'print_flow.dart';
+import 'printer_settings_screen.dart';
 
 /// Chekni oldindan ko'rish va chop etish. Ekrandagi qatorlar printerga
 /// ketadiganlarning AYNAN o'zi (bir xil joylashuv), shuning uchun xodim
@@ -32,22 +33,11 @@ class ReceiptPreviewSheet extends ConsumerStatefulWidget {
 class _ReceiptPreviewSheetState extends ConsumerState<ReceiptPreviewSheet> {
   bool _printing = false;
 
-  Future<void> _print(List<PrintedLine> lines) async {
+  Future<void> _print() async {
     setState(() => _printing = true);
-    final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(printerServiceProvider).printLines(lines);
-      if (mounted) Navigator.pop(context);
-      messenger.showSnackBar(const SnackBar(content: Text('✅ Chek chop etildi')));
-    } on PrintException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          action: e.openSettings ? const SnackBarAction(label: 'Sozlamalar', onPressed: openAppSettings) : null,
-        ),
-      );
-    } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text("Chop etib bo'lmadi — qayta urinib ko'ring")));
+      final outcome = await printReceiptFlow(context, ref, widget.receipt);
+      if (outcome?.isOk == true && mounted) Navigator.pop(context);
     } finally {
       if (mounted) setState(() => _printing = false);
     }
@@ -95,16 +85,13 @@ class _ReceiptPreviewSheetState extends ConsumerState<ReceiptPreviewSheet> {
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: _printing
-                        ? null
-                        : config.isSelected
-                            ? () => _print(lines)
-                            : () => context.push('/printer'),
+                    // Printer tanlanmagan bo'lsa — avval tanlash, keyin o'zi chop etadi.
+                    onPressed: _printing ? null : _print,
                     icon: _printing
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Icon(config.isSelected ? Icons.print_rounded : Icons.bluetooth_searching_rounded),
+                        : const Icon(Icons.print_rounded),
                     label: Text(
-                      config.isSelected ? 'CHOP ETISH' : 'PRINTERNI TANLASH',
+                      _printing ? 'CHOP ETILMOQDA...' : 'CHOP ETISH',
                       style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.4),
                     ),
                     style: FilledButton.styleFrom(
@@ -135,7 +122,7 @@ class _PrinterRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () => context.push('/printer'),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<bool>(builder: (_) => const PrinterSettingsScreen())),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
             child: Row(
@@ -161,6 +148,36 @@ class _PrinterRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Chekdagi bitta qator: katta (eni va bo'yi ×2) yoki baland (faqat bo'yi ×2).
+class _PaperLine extends StatelessWidget {
+  final PrintedLine line;
+  final double fontSize;
+  const _PaperLine({required this.line, required this.fontSize});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Text(
+      line.text,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.clip,
+      style: TextStyle(
+        fontFamily: 'monospace',
+        fontSize: line.large ? fontSize * 2 : fontSize,
+        height: 1.25,
+        fontWeight: line.bold ? FontWeight.w800 : FontWeight.w400,
+        color: Colors.black,
+      ),
+    );
+    if (!line.tall) return text;
+    // Baland qator: harflar bo'yiga cho'ziladi, eni o'zgarmaydi.
+    return SizedBox(
+      height: fontSize * 1.25 * 2,
+      child: Transform.scale(scaleX: 1, scaleY: 2, alignment: Alignment.topLeft, child: text),
     );
   }
 }
@@ -198,29 +215,19 @@ class ReceiptPaper extends StatelessWidget {
                   children: [
                     for (final line in lines)
                       if (line.isLogo)
+                        // Printerga ketadigan logoning o'zi (384 nuqta: 58 mm da
+                        // to'liq en, 80 mm da markazda).
                         Padding(
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Center(
                             child: FractionallySizedBox(
-                              widthFactor: 0.75,
-                              child: Image.asset('assets/brand/lockup_purple.png', color: Colors.black),
+                              widthFactor: 384 / paper.dots,
+                              child: Image.asset(kReceiptLogoAsset, filterQuality: FilterQuality.medium),
                             ),
                           ),
                         )
                       else
-                        Text(
-                          line.text,
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.clip,
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: line.large ? fontSize * 2 : fontSize,
-                            height: 1.25,
-                            fontWeight: line.bold ? FontWeight.w800 : FontWeight.w400,
-                            color: Colors.black,
-                          ),
-                        ),
+                        _PaperLine(line: line, fontSize: fontSize),
                   ],
                 ),
               );

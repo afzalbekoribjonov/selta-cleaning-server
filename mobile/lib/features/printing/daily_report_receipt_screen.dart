@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart' show openAppSettings;
 
 import '../../app/theme.dart';
 import '../../core/printing/printer_service.dart';
@@ -12,6 +11,7 @@ import '../../core/services/stats_repository.dart' show dateKeyOf;
 import '../../core/sync/action_queue.dart' show idTokenProvider;
 import '../../core/sync/cached_fetch.dart';
 import '../stats/daily_stats_screen.dart' show DayPickerBar;
+import 'print_flow.dart';
 import 'receipt_preview_sheet.dart' show ReceiptPaper;
 
 /// Kunlik hisobot cheki huquqi: admin yoki "Kunlik hisobot cheki" vakolati.
@@ -50,19 +50,10 @@ class _DailyReportReceiptScreenState extends ConsumerState<DailyReportReceiptScr
   DateTime _day = DateUtils.dateOnly(DateTime.now());
   bool _printing = false;
 
-  Future<void> _print(List<PrintedLine> lines) async {
+  Future<void> _print(Receipt receipt) async {
     setState(() => _printing = true);
-    final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref.read(printerServiceProvider).printLines(lines);
-      messenger.showSnackBar(const SnackBar(content: Text('✅ Kunlik hisobot chop etildi')));
-    } on PrintException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          action: e.openSettings ? const SnackBarAction(label: 'Sozlamalar', onPressed: openAppSettings) : null,
-        ),
-      );
+      await printReceiptFlow(context, ref, receipt);
     } finally {
       if (mounted) setState(() => _printing = false);
     }
@@ -123,16 +114,13 @@ class _DailyReportReceiptScreenState extends ConsumerState<DailyReportReceiptScr
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: lines == null || _printing
-                      ? null
-                      : config.isSelected
-                          ? () => _print(lines)
-                          : () => context.push('/printer'),
+                  // Printer tanlanmagan bo'lsa — avval tanlash, keyin o'zi chop etadi.
+                  onPressed: lines == null || _printing ? null : () => _print(receiptAsync.value!),
                   icon: _printing
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Icon(config.isSelected ? Icons.print_rounded : Icons.bluetooth_searching_rounded),
+                      : const Icon(Icons.print_rounded),
                   label: Text(
-                    config.isSelected ? 'CHOP ETISH' : 'PRINTERNI TANLASH',
+                    _printing ? 'CHOP ETILMOQDA...' : 'CHOP ETISH',
                     style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.4),
                   ),
                   style: FilledButton.styleFrom(

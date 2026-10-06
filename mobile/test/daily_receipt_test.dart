@@ -100,7 +100,7 @@ void main() {
       expect(api.requests.single, {'path': '/dailyReceiptReport', 'date': dateKeyOf(DateTime.now())});
       expect(find.textContaining('KUNLIK HISOBOT'), findsOneWidget);
       expect(find.textContaining('Topshirilishi kerak:'), findsOneWidget);
-      expect(find.text('PRINTERNI TANLASH'), findsOneWidget);
+      expect(find.text('CHOP ETISH'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Oldingi kun'));
       await tester.pumpAndSettle();
