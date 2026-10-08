@@ -94,13 +94,20 @@ class OrdersRepository {
 
   /// [fromCache] — javob qurilma keshidan: bo'sh ro'yxat "mahsulot yo'q"
   /// emas, balki "hali yuklanmagan" bo'lishi mumkin (internetsiz).
+  ///
+  /// `includeMetadataChanges` MAJBURIY: keshdan bo'sh ro'yxat kelgach server
+  /// uni "haqiqatan bo'sh" deb tasdiqlaganda hujjatlar o'zgarmaydi — faqat
+  /// `fromCache` belgisi. Bu belgisiz Firestore bunday hodisani UMUMAN
+  /// yubormaydi va ilova server javobini abadiy kutib qolardi (mahsulotsiz
+  /// yangi buyurtmada "Qo'shish" chiqmay qolgan xato). Qo'shimcha o'qish
+  /// hisoblanmaydi — faqat holat belgisi.
   Stream<({List<OrderItem> items, bool fromCache})> watchItems(String orderId) {
     return FirebaseFirestore.instance
         .collection('orders')
         .doc(orderId)
         .collection('items')
         .orderBy('itemNumber')
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .map((snap) => (items: snap.docs.map(OrderItem.fromFirestore).toList(), fromCache: snap.metadata.isFromCache));
   }
 
@@ -116,13 +123,15 @@ class OrdersRepository {
 
   /// [fromCache] — bo'sh ro'yxat "izoh yo'q" emas, "hali yuklanmagan"
   /// bo'lishi mumkin (internetsiz, oldin ochilmagan buyurtma).
+  /// `includeMetadataChanges` — [watchItems]dagi sabab bilan: izohsiz
+  /// buyurtmada server tasdig'i yetib kelsin, aks holda chiziq abadiy aylanardi.
   Stream<({List<Map<String, dynamic>> comments, bool fromCache})> watchComments(String orderId) {
     return FirebaseFirestore.instance
         .collection('orders')
         .doc(orderId)
         .collection('comments')
         .orderBy('createdAt', descending: true)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .map((snap) => (
               comments: snap.docs.map((d) => {'id': d.id, ...d.data()}).toList(),
               fromCache: snap.metadata.isFromCache,

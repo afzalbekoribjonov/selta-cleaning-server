@@ -13,6 +13,7 @@ import '../../core/services/catalog_repository.dart' show orderSourcesProvider;
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/money_utils.dart';
 import '../../core/utils/phone_format.dart';
+import '../shared/items_pending_note.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_detail_row.dart';
@@ -21,7 +22,6 @@ import '../shared/sales_manager_notes_card.dart';
 import '../shared/team_assign_sheet.dart';
 import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
-import '../../core/widgets/load_error_note.dart';
 import '../printing/print_receipt_button.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
@@ -102,11 +102,7 @@ class _OrderDetailSheet extends ConsumerWidget {
                       ),
                     ],
                     const SizedBox(height: 20),
-                    itemsAsync.when(
-                      loading: () => const Padding(padding: EdgeInsets.all(6), child: LinearProgressIndicator()),
-                      error: (e, _) => LoadErrorNote(error: e),
-                      data: (items) => _ItemsSummaryCard(order: liveOrder, items: items),
-                    ),
+                    _ItemsSummaryCard(order: liveOrder, itemsAsync: itemsAsync),
                     const SizedBox(height: 20),
                     _ProgressChecklist(order: liveOrder),
                     PrepaymentSection(order: liveOrder),
@@ -233,13 +229,15 @@ class _InfoCard extends StatelessWidget {
 /// sexda va faqat ko'rish uchun.
 class _ItemsSummaryCard extends StatelessWidget {
   final Order order;
-  final List<OrderItem> items;
-  const _ItemsSummaryCard({required this.order, required this.items});
+  final AsyncValue<List<OrderItem>> itemsAsync;
+  const _ItemsSummaryCard({required this.order, required this.itemsAsync});
 
   bool get editable => order.serviceType == 'pickup' && order.status == 'new';
 
   @override
   Widget build(BuildContext context) {
+    final items = itemsAsync.valueOrNull ?? const <OrderItem>[];
+    final pending = itemsPendingNote(itemsAsync);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
@@ -279,7 +277,9 @@ class _ItemsSummaryCard extends StatelessWidget {
               ],
             ],
           ),
-          if (items.isEmpty)
+          if (pending != null)
+            pending
+          else if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text('Hali mahsulot belgilanmagan', style: TextStyle(color: AppColors.gray, fontSize: 13)),

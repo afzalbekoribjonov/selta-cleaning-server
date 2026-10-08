@@ -12,11 +12,11 @@ import '../../core/utils/date_utils.dart';
 import 'catalog_item_sheet.dart';
 import 'comments_section.dart';
 import 'item_detail_row.dart';
+import 'items_pending_note.dart';
 import 'order_copy.dart';
 import 'sales_manager_notes_card.dart';
 import 'bonus_section.dart';
 import 'prepayment_section.dart';
-import '../../core/widgets/load_error_note.dart';
 import '../printing/print_receipt_button.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
@@ -169,11 +169,7 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                       SalesManagerNotesCard(order: order),
                     ],
                     const SizedBox(height: 20),
-                    itemsAsync.when(
-                      loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
-                      error: (e, _) => LoadErrorNote(error: e),
-                      data: (items) => _TeamItemsCard(order: order, items: items),
-                    ),
+                    _TeamItemsCard(order: order, itemsAsync: itemsAsync),
                     if (actionLabel != null) ...[
                       const SizedBox(height: 16),
                       if (_error != null) ...[
@@ -236,11 +232,13 @@ class _DeadlineStat extends StatelessWidget {
 
 class _TeamItemsCard extends StatelessWidget {
   final Order order;
-  final List<OrderItem> items;
-  const _TeamItemsCard({required this.order, required this.items});
+  final AsyncValue<List<OrderItem>> itemsAsync;
+  const _TeamItemsCard({required this.order, required this.itemsAsync});
 
   @override
   Widget build(BuildContext context) {
+    final items = itemsAsync.valueOrNull ?? const <OrderItem>[];
+    final pending = itemsPendingNote(itemsAsync);
     // Onsite buyurtmalarda item-level pipeline yo'q — faqat buyurtma
     // yakunlanmagunicha (done) tahrirlanadi.
     final editable = order.status != 'done';
@@ -270,7 +268,9 @@ class _TeamItemsCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (items.isEmpty)
+          if (pending != null)
+            pending
+          else if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text('Hali mahsulot qo\'shilmagan', style: TextStyle(color: AppColors.gray, fontSize: 13)),

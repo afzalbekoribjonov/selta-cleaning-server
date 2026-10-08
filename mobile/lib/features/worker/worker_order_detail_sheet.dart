@@ -5,13 +5,13 @@ import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/order_items_provider.dart';
+import '../shared/items_pending_note.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_action_row.dart';
 import '../shared/order_copy.dart';
 import '../shared/bonus_section.dart';
 import '../shared/prepayment_section.dart';
-import '../../core/widgets/load_error_note.dart';
 import '../printing/print_receipt_button.dart';
 
 /// [focusComments] — kartadagi izoh bosilganda: ochilgach izohlar
@@ -80,11 +80,7 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(order.customerName, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.grayDark)),
                     const SizedBox(height: 20),
-                    itemsAsync.when(
-                      loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
-                      error: (e, _) => LoadErrorNote(error: e),
-                      data: (items) => _ItemsCard(order: order, items: items),
-                    ),
+                    _ItemsCard(order: order, itemsAsync: itemsAsync),
                     PrepaymentSection(order: order),
                     BonusSection(order: order),
                     const SizedBox(height: 20),
@@ -103,11 +99,13 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
 
 class _ItemsCard extends StatelessWidget {
   final Order order;
-  final List<OrderItem> items;
-  const _ItemsCard({required this.order, required this.items});
+  final AsyncValue<List<OrderItem>> itemsAsync;
+  const _ItemsCard({required this.order, required this.itemsAsync});
 
   @override
   Widget build(BuildContext context) {
+    final items = itemsAsync.valueOrNull ?? const <OrderItem>[];
+    final pending = itemsPendingNote(itemsAsync);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
@@ -133,7 +131,9 @@ class _ItemsCard extends StatelessWidget {
               ),
             ],
           ),
-          if (items.isEmpty)
+          if (pending != null)
+            pending
+          else if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text('Hali mahsulot belgilanmagan', style: TextStyle(color: AppColors.gray, fontSize: 13)),

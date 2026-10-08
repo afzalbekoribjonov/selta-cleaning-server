@@ -13,6 +13,7 @@ import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/launch_utils.dart';
 import '../dispatcher/widgets/order_card.dart';
+import '../shared/items_pending_note.dart';
 import '../shared/order_copy.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
@@ -244,11 +245,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                     ),
                     if (order.status == 'new' || order.status == 'picked_up') ...[
                       const SizedBox(height: 16),
-                      itemsAsync.when(
-                        loading: () => const Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator()),
-                        error: (e, _) => LoadErrorNote(error: e),
-                        data: (items) => _PickupItemsCard(order: order, items: items),
-                      ),
+                      _PickupItemsCard(order: order, itemsAsync: itemsAsync),
                     ],
                     if (order.status == 'brought_in') ...[
                       const SizedBox(height: 16),
@@ -307,11 +304,13 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
 /// o'tish majburiy.
 class _PickupItemsCard extends StatelessWidget {
   final Order order;
-  final List<OrderItem> items;
-  const _PickupItemsCard({required this.order, required this.items});
+  final AsyncValue<List<OrderItem>> itemsAsync;
+  const _PickupItemsCard({required this.order, required this.itemsAsync});
 
   @override
   Widget build(BuildContext context) {
+    final items = itemsAsync.valueOrNull ?? const <OrderItem>[];
+    final pending = itemsPendingNote(itemsAsync);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
@@ -337,7 +336,9 @@ class _PickupItemsCard extends StatelessWidget {
               ),
             ],
           ),
-          if (items.isEmpty)
+          if (pending != null)
+            pending
+          else if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text("Mijoz oldida mahsulot belgilashingiz mumkin, yoki keyinroq ishchi belgilaydi", style: TextStyle(color: AppColors.gray, fontSize: 12.5)),
