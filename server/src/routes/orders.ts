@@ -233,9 +233,11 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
         totalArea += item.area;
         totalPrice += item.price;
       }
-      if (computedItems.length > 0) {
-        tx.update(orderRef, { totalArea, totalPrice, ...computeOrderItemsSummary(summaryItems) });
-      }
+      // Mahsulotsiz buyurtmada ham — bo'sh nusxa (itemsMirror: []) bilan.
+      // Avval faqat mahsulot bo'lganda yozilardi: nusxasiz buyurtmada ilova
+      // mahsulotlarni alohida kuzatib, keshdagi bo'sh natijadan keyin server
+      // tasdig'ini abadiy kutib qolardi va "Qo'shish" tugmasi chiqmasdi.
+      tx.update(orderRef, { totalArea, totalPrice, ...computeOrderItemsSummary(summaryItems) });
 
       return next;
     });
@@ -1134,7 +1136,10 @@ ordersRouter.post("/adminDeleteOrder", withAuth, requireAdmin, async (req, res) 
  * To'ldirish versiyasi — buyurtma xulosasiga YANGI hosila maydon
  * qo'shilganda oshiriladi, shunda to'ldirish bir marta qayta ishlaydi.
  */
-const ORDER_SUMMARY_BACKFILL_VERSION = 2; // 2 — mahsulotlar nusxasi (itemsMirror)
+// 2 — mahsulotlar nusxasi (itemsMirror);
+// 3 — v2 dan keyin MAHSULOTSIZ yaratilib nusxasiz qolgan buyurtmalar
+//     (createOrder nusxani faqat mahsulot bo'lganda yozardi).
+const ORDER_SUMMARY_BACKFILL_VERSION = 3;
 
 /** Yakunlanmagan buyurtmalarning barcha holatlari (joyida yuvish ham). */
 const BACKFILL_STATUSES = ["new", "picked_up", "brought_in", "washing", "packing", "qc_review", "ready", "team_assigned", "in_progress"];
