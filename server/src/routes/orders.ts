@@ -12,6 +12,7 @@ import { logDailyActivity, itemActivityRefs } from "../lib/dailyActivity";
 import { prepaidCredit, prepaidToApply } from "../lib/prepayments";
 import { prepareCompletionBonus } from "../lib/bonus";
 import { paymentSummaryIncrements } from "../lib/paymentSummary";
+import { diffItem, itemSnapshot, recordItemEvent } from "../lib/itemHistory";
 import { deleteImageKitFiles } from "../lib/imagekit";
 import { photoFileIdsOf } from "../lib/itemPhotos";
 
@@ -229,6 +230,15 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
           updatedAt: FieldValue.serverTimestamp(),
         };
         tx.set(itemRef, itemData);
+        recordItemEvent(tx, orderRef, {
+          type: "created",
+          itemId: itemRef.id,
+          itemNumber: itemData.itemNumber,
+          itemName: item.name,
+          employeeId,
+          role,
+          snapshot: itemSnapshot(itemData as unknown as Record<string, unknown>),
+        });
         summaryItems.push({ ...itemData, id: itemRef.id });
         totalArea += item.area;
         totalPrice += item.price;
@@ -706,6 +716,23 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       }
 
       tx.update(itemRef, itemUpdate);
+      recordItemEvent(tx, orderRef, {
+        type: "status",
+        itemId,
+        itemNumber: (item.itemNumber as number | undefined) ?? null,
+        itemName,
+        employeeId,
+        role,
+        fromStatus,
+        toStatus,
+        note: toStatus === "returned" && typeof qcNote === "string" ? qcNote : null,
+        amount:
+          toStatus === "done"
+            ? typeof itemUpdate.collectedAmount === "number"
+              ? itemUpdate.collectedAmount
+              : ((item.price as number | undefined) ?? null)
+            : null,
+      });
 
       if (toStatus === "done" && order.status !== "done") {
         const allDone = itemsSnap.docs.every((d) => (d.id === itemId ? true : d.data().status === "done"));
@@ -856,6 +883,15 @@ ordersRouter.post("/addOrderItems", withAuth, async (req: AuthedRequest, res) =>
           updatedAt: FieldValue.serverTimestamp(),
         };
         tx.set(newItemRef, itemData);
+        recordItemEvent(tx, orderRef, {
+          type: "created",
+          itemId: newItemRef.id,
+          itemNumber: nextNumber,
+          itemName: item.name,
+          employeeId,
+          role,
+          snapshot: itemSnapshot(itemData as unknown as Record<string, unknown>),
+        });
         summaryItems.push({ ...itemData, id: newItemRef.id });
         addedArea += item.area;
         addedPrice += item.price;
@@ -934,6 +970,18 @@ ordersRouter.post("/updateOrderItem", withAuth, async (req: AuthedRequest, res) 
         dueDate,
         updatedAt: FieldValue.serverTimestamp(),
       });
+      const changes = diffItem(itemSnap.data()!, computed as unknown as Record<string, unknown>);
+      if (changes.length > 0) {
+        recordItemEvent(tx, orderRef, {
+          type: "updated",
+          itemId,
+          itemNumber: (itemSnap.data()!.itemNumber as number | undefined) ?? null,
+          itemName: computed.name ?? (itemSnap.data()!.name as string) ?? "Mahsulot",
+          employeeId,
+          role,
+          changes,
+        });
+      }
 
       const summaryItems: SummaryItemInput[] = allItemsSnap.docs.map((d) =>
         summaryItemOf(d, d.id === itemId ? { ...computed, dueDate } : {}),
@@ -995,6 +1043,15 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
       photoFileIds = photoFileIdsOf(itemSnap.data());
 
       tx.delete(itemRef);
+      recordItemEvent(tx, orderRef, {
+        type: "deleted",
+        itemId,
+        itemNumber: (itemSnap.data()!.itemNumber as number | undefined) ?? null,
+        itemName: (itemSnap.data()!.name as string) ?? "Mahsulot",
+        employeeId,
+        role,
+        snapshot: itemSnapshot(itemSnap.data()!),
+      });
       // Mahsulot o'chirilsa, u haqidagi kunlik hisobot yozuvlari ham
       // qolmasligi kerak: aks holda o'chirilgan mahsulot hisobotda
       // sanalib turaverardi.

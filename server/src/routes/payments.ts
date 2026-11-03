@@ -17,6 +17,7 @@ import { loadEmployeeNames } from "../lib/employeeNames";
 import { isPaymentKind, normalizePaymentSplit, splitPaidAmount, type PaymentKind } from "../lib/payments";
 import { phoneVariants } from "../lib/phone";
 import { bonusFor, customerKey, loadBonusPercent, prepareCompletionBonus, writeBonus } from "../lib/bonus";
+import { recordItemEvent } from "../lib/itemHistory";
 import { paymentSummaryIncrements, settlementIncrements, summarizePayments } from "../lib/paymentSummary";
 
 export const paymentsRouter = Router();
@@ -151,6 +152,22 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
         };
         itemUpdates.set(doc.id, itemUpdate);
         tx.update(doc.ref, itemUpdate);
+        recordItemEvent(
+          tx,
+          orderRef,
+          {
+            type: "status",
+            itemId: doc.id,
+            itemNumber: (item.itemNumber as number | undefined) ?? null,
+            itemName: (item.name as string) ?? "Mahsulot",
+            employeeId,
+            role: req.auth!.role ?? null,
+            fromStatus: "ready",
+            toStatus: "done",
+            amount: shares[i],
+          },
+          now,
+        );
 
         logDailyActivity(tx, now, {
           type: "delivered",

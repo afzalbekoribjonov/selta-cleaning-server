@@ -13,6 +13,7 @@ import {
   type DailyActivityInput,
 } from "../lib/dailyActivity";
 import { loadEmployeeExpenses } from "../lib/expenses";
+import { loadDayStatsRange } from "../lib/dailyStats";
 
 /**
  * Admin panelining "Kunlik ko'rsatkichlar" bo'limi — istalgan kun uchun:
@@ -395,6 +396,23 @@ dailyReportRouter.post("/adminDailyReport", withAuth, requireAdmin, async (req: 
       },
       drivers,
     });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Boshqaruv panelidagi grafiklar: oxirgi N kunning har biri uchun qisqa
+ * ko'rsatkichlar (sexga keldi, yuvildi, upakovka, yetkazildi — birlik
+ * bo'yicha hajm bilan; kassaga tushgan pul). O'tgan kunlar keshdan
+ * (lib/dailyStats.ts), shuning uchun har ochilishda o'qish kam.
+ */
+dailyReportRouter.post("/adminDailyTrend", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  try {
+    const endKey = resolveDateKey(req.body?.end);
+    const rawDays = Number(req.body?.days ?? 14);
+    const days = Number.isInteger(rawDays) ? Math.min(Math.max(rawDays, 7), 62) : 14;
+    res.json({ days: await loadDayStatsRange(endKey, days) });
   } catch (err) {
     sendError(res, err);
   }

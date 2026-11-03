@@ -24,6 +24,7 @@ import {
   type PhotoState,
 } from "../lib/itemPhotos";
 import { computeOrderItemsSummary, summaryItemOf } from "../lib/orderSummary";
+import { recordItemEvent } from "../lib/itemHistory";
 
 export const photosRouter = Router();
 
@@ -169,6 +170,15 @@ photosRouter.post("/addItemPhoto", withAuth, async (req: AuthedRequest, res) => 
         if (photos[state!].length >= MAX_PHOTOS_PER_STATE) throw limitError(state!);
         saved = photo;
         writePhotos(tx, orderRef, itemId, allItems, { ...photos, [state!]: [...photos[state!], photo] });
+        recordItemEvent(tx, orderRef, {
+          type: "photo_added",
+          itemId,
+          itemNumber: (itemSnap.data()!.itemNumber as number | undefined) ?? null,
+          itemName: (itemSnap.data()!.name as string) ?? "Mahsulot",
+          employeeId: access.employeeId,
+          role: req.auth!.role ?? null,
+          photoState: state!,
+        });
       });
     } catch (err) {
       // Biriktirilmagan fayl ImageKit'da egasiz qolmasin.
@@ -218,6 +228,15 @@ photosRouter.post("/deleteItemPhoto", withAuth, async (req: AuthedRequest, res) 
       writePhotos(tx, orderRef, itemId, allItems, {
         ...photos,
         [state]: photos[state].filter((p) => p.fileId !== fileId),
+      });
+      recordItemEvent(tx, orderRef, {
+        type: "photo_removed",
+        itemId,
+        itemNumber: (itemSnap.data()!.itemNumber as number | undefined) ?? null,
+        itemName: (itemSnap.data()!.name as string) ?? "Mahsulot",
+        employeeId: access.employeeId,
+        role: req.auth!.role ?? null,
+        photoState: state,
       });
     });
 

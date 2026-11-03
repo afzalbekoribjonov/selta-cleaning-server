@@ -16,6 +16,31 @@ export const attendanceRouter = Router();
 /** Standart ish kunlari — Dushanbadan Shanbagacha (0=Yakshanba). */
 const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5, 6];
 
+/**
+ * Bundan yomon aniqlikdagi joylashuv qabul qilinmaydi: bu GPS emas, Wi-Fi/IP
+ * taxmini yoki iPhone'da "Aniq joylashuv" (Precise Location) o'chiq —
+ * xato 1-9 km bo'ladi va xodim ishxonadami-yo'qmi aniqlab bo'lmaydi.
+ */
+const MAX_ACCURACY_METERS = 500;
+
+/** GPS xatosi uchun chegaradagi bardosh — aniqlikka qarab, lekin ko'pi bilan shuncha. */
+const MAX_EDGE_SLACK_METERS = 100;
+
+/** Joylashuv bundan eski bo'lsa (brauzer keshidan) — yangisi so'raladi. */
+const MAX_FIX_AGE_MS = 2 * 60_000;
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/** Admin "kelmagan" bilan "GPS o'chiq / boshqa joyda"ni farqlashi uchun. */
+async function logAttendanceIssue(employeeId: string, dateStr: string, issue: string, extra: Record<string, unknown> = {}) {
+  await db
+    .collection("attendanceIssues")
+    .doc(`${employeeId}_${dateStr}`)
+    .set({ employeeId, date: dateStr, issue, ...extra, reportedAt: FieldValue.serverTimestamp() }, { merge: true });
+}
+
 interface AttendanceConfig {
   enabled: boolean;
   arrivalTime: string; // "08:00"
@@ -60,6 +85,12 @@ attendanceRouter.post("/submitAttendanceCheckin", withAuth, async (req: AuthedRe
   try {
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
     const { lat, lng, issue } = req.body ?? {};
+    // Qo'shimcha (ixtiyoriy) — eski ilova versiyalari yubormaydi.
+    const accuracy = finiteNumber(req.body?.accuracy);
+    const fixAgeMs = finiteNumber(req.body?.fixAgeMs);
+    const source = req.body?.source === "web" || req.body?.source === "app" ? (req.body.source as string) : null;
+    const platform = typeof req.body?.platform === "string" ? (req.body.platform as string).slice(0, 40) : null;
+    const device = { ...(source ? { source } : {}), ...(platform ? { platform } : {}) };
 
     const config = await getAttendanceConfig();
     if (!config.enabled || !config.location) {
@@ -92,13 +123,7 @@ attendanceRouter.post("/submitAttendanceCheckin", withAuth, async (req: AuthedRe
     // bu davomat yozuvi EMAS, faqat admin uchun izoh (keyinroq haqiqiy
     // belgilash kelsa, u baribir yoziladi).
     if (typeof issue === "string" && issue.length > 0 && issue.length <= 40) {
-      await db
-        .collection("attendanceIssues")
-        .doc(`${employeeId}_${dateStr}`)
-        .set(
-          { employeeId, date: dateStr, issue, reportedAt: FieldValue.serverTimestamp() },
-          { merge: true },
-        );
+      await logAttendanceIssue(employeeId, dateStr, issue, device);
       return res.json({ ok: true, recorded: false, reason: "issue_logged" });
     }
 
@@ -106,9 +131,24 @@ attendanceRouter.post("/submitAttendanceCheckin", withAuth, async (req: AuthedRe
       throw new ApiError(400, "invalid-argument", "lat/lng majburiy");
     }
 
+    // Brauzer keshidagi eski joylashuv — xodim hozir qayerdaligini aytmaydi.
+    if (fixAgeMs !== null && fixAgeMs > MAX_FIX_AGE_MS) {
+      return res.json({ ok: true, recorded: false, reason: "stale" });
+    }
+    if (accuracy !== null && accuracy > MAX_ACCURACY_METERS) {
+      await logAttendanceIssue(employeeId, dateStr, "imprecise", { accuracyMeters: Math.round(accuracy), ...device });
+      return res.json({ ok: true, recorded: false, reason: "imprecise" });
+    }
+
     const distance = distanceMeters(config.location.lat, config.location.lng, lat, lng);
-    if (distance > config.radiusMeters) {
-      return res.json({ ok: true, recorded: false, reason: "out_of_range" });
+    const slack = Math.min(accuracy ?? 0, config.radiusMeters / 2, MAX_EDGE_SLACK_METERS);
+    if (distance > config.radiusMeters + slack) {
+      await logAttendanceIssue(employeeId, dateStr, "out_of_range", {
+        distanceMeters: Math.round(distance),
+        ...(accuracy !== null ? { accuracyMeters: Math.round(accuracy) } : {}),
+        ...device,
+      });
+      return res.json({ ok: true, recorded: false, reason: "out_of_range", distanceMeters: Math.round(distance) });
     }
 
     const nowMinutes = businessMinutesSinceMidnight(now);
@@ -127,6 +167,8 @@ attendanceRouter.post("/submitAttendanceCheckin", withAuth, async (req: AuthedRe
       isWorkDay: config.workDays.includes(businessWeekday(now)),
       gpsCoords: `${lat},${lng}`,
       distanceMeters: Math.round(distance),
+      ...(accuracy !== null ? { accuracyMeters: Math.round(accuracy) } : {}),
+      ...device,
       createdAt: FieldValue.serverTimestamp(),
     });
 
