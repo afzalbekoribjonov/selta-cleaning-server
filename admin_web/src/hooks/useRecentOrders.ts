@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { subscribeRecentOrders, subscribeActiveOrders, subscribeTodayOrders, type Order } from '@/lib/orders'
+import { subscribeRecentOrders, subscribeActiveOrders, type Order } from '@/lib/orders'
 
 /**
  * Bitta Firestore obunasini bir nechta komponent BO'LISHIB ishlatishi.
@@ -55,9 +55,3 @@ export const useRecentOrders = createSharedOrders(subscribeRecentOrders)
  * shuning uchun eski faol buyurtmalar ham hech qachon tushib qolmaydi.
  */
 export const useActiveOrders = createSharedOrders(subscribeActiveOrders)
-
-/**
- * Faqat BUGUN yaratilgan buyurtmalar — boshqaruv panelidagi kunlik
- * ikki ko'rsatkich uchun. Odatda o'nlab hujjat, 150 emas.
- */
-export const useTodayOrders = createSharedOrders(subscribeTodayOrders)

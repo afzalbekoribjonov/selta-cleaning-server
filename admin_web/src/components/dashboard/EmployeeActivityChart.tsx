@@ -2,30 +2,28 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Activity, ArrowRight } from 'lucide-react'
-import { Spinner } from '@/components/ui/Spinner'
 import { businessDateKey } from '@/lib/business-time'
 import {
   DEPT_TABS,
   fetchEmployeeActivity,
+  primaryMetric,
   sortedForDept,
   type ActivityRow,
   type DeptKey,
 } from '@/lib/employee-activity'
-
-function formatMoney(value: number): string {
-  return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
-}
+import { formatMoney } from '@/lib/units'
+import { cn } from '@/lib/utils'
+import { Panel, Segmented } from '@/components/ui/Panel'
 
 /**
  * "Eng faol xodimlar" — Dashboard'da faqat BUGUNGI faollik, bo'lim
  * bo'yicha tab. Haftalik/oylik ko'rinish "Maosh va statistika"
  * sahifasida.
  *
- * Sarlavha va tablar ATAYLAB alohida qatorlarda: avval ular bitta
- * `justify-between` qatorda edi va tablar torayishga qarshilik
- * qilgani uchun telefonda butun sahifani gorizontal cho'zib yuborardi.
+ * Ro'yxat balandligi cheklangan: uzun ro'yxat yonidagi kartani cho'zib,
+ * sahifani keraksiz uzaytirmasin — ro'yxatning o'zi aylanadi.
  */
-export function EmployeeActivityChart() {
+export function EmployeeActivityChart({ className }: { className?: string }) {
   const [tab, setTab] = useState<DeptKey>('delivery')
   const today = businessDateKey(new Date())
 
@@ -36,61 +34,56 @@ export function EmployeeActivityChart() {
   })
 
   const rows = useMemo(() => sortedForDept(activity.data?.rows ?? [], tab), [activity.data, tab])
+  const top = rows.length ? primaryMetric(tab, rows[0]) : 0
 
   return (
-    <section className="flex flex-col rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
-      <div className="flex items-center gap-2">
-        <Activity size={18} className="shrink-0 text-brand-primary" />
-        <h2 className="min-w-0 truncate font-heading font-bold text-ink">Eng faol xodimlar — bugun</h2>
-      </div>
-      <p className="mt-0.5 text-xs text-gray-dark">Bugungi kun bo'yicha</p>
+    <Panel
+      className={cn('flex flex-col', className)}
+      icon={Activity}
+      title="Eng faol xodimlar"
+      subtitle="Bugun, bo'limlar bo'yicha"
+      bodyClassName="flex flex-1 flex-col"
+    >
+      <Segmented value={tab} onChange={setTab} options={DEPT_TABS.map((t) => ({ value: t.key, label: t.label }))} />
 
-      <div className="mt-3 flex rounded-xl border border-border bg-bg p-1">
-        {DEPT_TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`min-w-0 flex-1 truncate rounded-lg px-2 py-2 text-xs font-bold transition-colors ${
-              tab === t.key ? 'bg-brand-primary text-white' : 'text-ink/70 hover:text-ink'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Balandligi cheklangan: ro'yxat uzayganda karta o'z qatoridagi
-          boshqa kartani ham cho'zib yuborardi va sahifa keraksiz uzayardi.
-          Endi ro'yxatning o'zi aylanadi. */}
-      <div className="mt-3 max-h-72 flex-1 overflow-y-auto">
+      <div className="mt-3 max-h-80 flex-1 overflow-y-auto">
         {activity.isLoading ? (
-          <Spinner className="py-12" />
+          <div className="space-y-2">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="h-12 animate-pulse rounded-xl bg-bg" />
+            ))}
+          </div>
         ) : activity.isError ? (
-          <p className="py-8 text-center text-sm text-danger">Faollikni yuklab bo'lmadi</p>
+          <div className="flex flex-col items-center gap-2 py-8 text-center">
+            <p className="text-sm font-semibold text-danger">Faollikni yuklab bo'lmadi</p>
+            <button onClick={() => activity.refetch()} className="text-xs font-bold text-brand-primary hover:underline">
+              Qayta urinish
+            </button>
+          </div>
         ) : rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-dark">Bugun hali faollik yo'q</p>
         ) : (
-          <ul className="divide-y divide-border">
-            {rows.map((r) => (
-              <ActivityListRow key={r.employeeId} row={r} dept={tab} />
+          <ol className="divide-y divide-border">
+            {rows.map((r, i) => (
+              <ActivityListRow key={r.employeeId} row={r} dept={tab} rank={i + 1} share={top > 0 ? primaryMetric(tab, r) / top : 0} />
             ))}
-          </ul>
+          </ol>
         )}
       </div>
 
       <Link
         to="/payroll"
-        className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold text-brand-primary hover:underline"
+        className="mt-3 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold text-brand-primary hover:bg-brand-primary/5"
       >
         Haftalik/oylik statistikani ko'rish
         <ArrowRight size={13} />
       </Link>
-    </section>
+    </Panel>
   )
 }
 
-/** Bitta xodim qatori — ism chapda, ko'rsatkichlar o'ngda, nomlangan. */
-function ActivityListRow({ row, dept }: { row: ActivityRow; dept: DeptKey }) {
+/** Bitta xodim qatori — o'rni, ismi, nomlangan ko'rsatkichlar va eng faolga nisbatan chiziq. */
+function ActivityListRow({ row, dept, rank, share }: { row: ActivityRow; dept: DeptKey; rank: number; share: number }) {
   const metrics: { label: string; value: string; note?: string }[] =
     dept === 'delivery'
       ? [
@@ -105,17 +98,30 @@ function ActivityListRow({ row, dept }: { row: ActivityRow; dept: DeptKey }) {
         : [{ label: 'Buyurtma', value: `${row.ordersCreated} ta`, note: formatMoney(row.ordersCreatedTotal) }]
 
   return (
-    <li className="py-2.5 first:pt-0">
-      <div className="truncate text-sm font-bold text-ink">{row.name}</div>
-      <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-        {metrics.map((m) => (
-          <div key={m.label} className="flex items-baseline gap-1">
-            <dt className="text-gray">{m.label}:</dt>
-            <dd className="font-bold text-ink">{m.value}</dd>
-            {m.note && <dd className="text-gray-dark">({m.note})</dd>}
-          </div>
-        ))}
-      </dl>
+    <li className="flex gap-3 py-2.5 first:pt-0.5">
+      <span
+        className={cn(
+          'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold tabular-nums',
+          rank === 1 ? 'bg-brand-accent text-ink' : 'bg-bg text-gray-dark',
+        )}
+      >
+        {rank}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-bold leading-snug text-ink [overflow-wrap:anywhere]">{row.name}</div>
+        <dl className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+          {metrics.map((m) => (
+            <div key={m.label} className="flex flex-wrap items-baseline gap-x-1">
+              <dt className="text-gray">{m.label}:</dt>
+              <dd className="font-bold text-ink">{m.value}</dd>
+              {m.note && <dd className="text-gray-dark">({m.note})</dd>}
+            </div>
+          ))}
+        </dl>
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-bg">
+          <div className="h-full rounded-full bg-brand-primary/70" style={{ width: `${Math.max(4, share * 100)}%` }} />
+        </div>
+      </div>
     </li>
   )
 }

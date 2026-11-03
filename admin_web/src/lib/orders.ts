@@ -15,9 +15,11 @@ import {
   type Query,
   type DocumentData,
   Timestamp,
+  getAggregateFromServer,
+  count,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import { businessDayStart } from './business-time'
+import { businessDayRange } from './business-time'
 
 export interface Order {
   id: string
@@ -239,24 +241,6 @@ export function subscribeRecentOrders(callback: (orders: Order[]) => void): () =
 }
 
 /**
- * BUGUNGI buyurtmalar — boshqaruv panelidagi "Bugungi buyurtmalar" va
- * "Bugungi tushum" uchun.
- *
- * Avval bu ikki son `subscribeRecentOrders`dan (oxirgi 150 ta hujjat)
- * hisoblanardi, ya'ni panel har ochilganda 150 ta hujjat o'qilib,
- * ulardan atigi bugungilari ishlatilardi. Kun chegarasi biznes vaqti
- * (UTC+5) bo'yicha, brauzer zonasidan mustaqil.
- */
-export function subscribeTodayOrders(callback: (orders: Order[]) => void): () => void {
-  const q = query(
-    collection(db, 'orders'),
-    where('createdAt', '>=', Timestamp.fromDate(businessDayStart())),
-    orderBy('createdAt', 'desc'),
-  )
-  return onSnapshot(q, (snap) => callback(snap.docs.map(toOrder)))
-}
-
-/**
  * Buyurtmani TO'G'RIDAN-TO'G'RI Firestore'dan qidiradi.
  *
  * Avval qidiruv faqat allaqachon yuklangan ro'yxat ustidan ishlardi:
@@ -338,3 +322,19 @@ export async function fetchOrdersPage(
 }
 
 export type { QueryDocumentSnapshot }
+
+/**
+ * Berilgan biznes-kunda YARATILGAN buyurtmalar soni — boshqaruv panelidagi
+ * "Qabul qilindi" ko'rsatkichi. Hujjatlar yuklanmaydi, faqat sanash
+ * (jamlanma so'rovi — arzon).
+ */
+export async function countOrdersCreatedOn(dateKey: string): Promise<number> {
+  const { start, end } = businessDayRange(dateKey)
+  const q = query(
+    collection(db, 'orders'),
+    where('createdAt', '>=', Timestamp.fromDate(start)),
+    where('createdAt', '<', Timestamp.fromDate(end)),
+  )
+  const snap = await getAggregateFromServer(q, { n: count() })
+  return snap.data().n ?? 0
+}

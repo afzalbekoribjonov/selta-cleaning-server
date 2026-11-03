@@ -4,30 +4,52 @@
     {
       "name": "selta_mobile_web",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "cd mobile && flutter run -d web-server --web-port 5678 --web-hostname 127.0.0.1 --dart-define=SERVER_BASE_URL=https://selta-cleaning-server.onrender.com"],
+      "runtimeArgs": [
+        "/c",
+        "cd mobile && flutter run -d web-server --web-port 5678 --web-hostname 127.0.0.1 --dart-define=SERVER_BASE_URL=https://selta-cleaning-server.onrender.com"
+      ],
       "port": 5678,
       "url": "http://127.0.0.1:5678"
     },
     {
       "name": "selta_admin_web",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "cd admin_web && npm run dev -- --port 5679 --host 127.0.0.1"],
+      "runtimeArgs": [
+        "/c",
+        "cd admin_web && npm run dev -- --port 5679 --host 127.0.0.1"
+      ],
       "port": 5679,
       "url": "http://127.0.0.1:5679"
     },
     {
       "name": "selta_sotuv_web",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "cd sotuv_web && npm run dev -- --port 5680 --host 127.0.0.1"],
+      "runtimeArgs": [
+        "/c",
+        "cd sotuv_web && npm run dev -- --port 5680 --host 127.0.0.1"
+      ],
       "port": 5680,
       "url": "http://127.0.0.1:5680"
     },
     {
       "name": "selta_workers_web",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "cd workers_web && npm run dev -- --port 5681 --host 127.0.0.1"],
+      "runtimeArgs": [
+        "/c",
+        "cd workers_web && npm run dev -- --port 5681 --host 127.0.0.1"
+      ],
       "port": 5681,
       "url": "http://127.0.0.1:5681"
+    },
+    {
+      "name": "selta_admin_demo",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd admin_web && npm run dev -- --mode demo --port 5690 --host 127.0.0.1"
+      ],
+      "port": 5690,
+      "url": "http://127.0.0.1:5690"
     }
   ]
 }

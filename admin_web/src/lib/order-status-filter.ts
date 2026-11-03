@@ -61,3 +61,25 @@ export function matchedItemCount(order: Order, filter: { scope: FilterScope; sta
 export function statusLabel(status: string): string {
   return STATUS_CONFIG[status]?.label ?? status
 }
+
+/**
+ * Olib kelish buyurtmasi mahsulotlari qayerda — "2/4 tayyor · 1 yuvilmoqda".
+ *
+ * Buyurtmaning o'zi butun umri "Sexga keldi"da turadi, shuning uchun
+ * ro'yxatlarda u hech narsa aytmaydi; haqiqiy holat mahsulotlarda
+ * (`itemStatusCounts` — qo'shimcha o'qishsiz). Mahsuloti yo'q yoki joyida
+ * yuvish buyurtmasida `null` (buyurtma holati ko'rsatiladi).
+ */
+export function itemProgressLabel(order: Order): string | null {
+  if (order.serviceType !== 'pickup') return null
+  const c = order.itemStatusCounts
+  const total = Object.values(c).reduce((s, n) => s + n, 0)
+  if (total === 0) return null
+  const ready = (c.ready ?? 0) + (c.done ?? 0)
+  const parts = [`${ready}/${total} tayyor`]
+  if (c.washing) parts.push(`${c.washing} yuvilmoqda`)
+  if (c.packing) parts.push(`${c.packing} upakovkada`)
+  if (c.returned) parts.push(`${c.returned} qayta ishlovda`)
+  if (c.pending) parts.push(`${c.pending} navbatda`)
+  return parts.join(' · ')
+}

@@ -37,3 +37,10 @@ export function businessDayStart(date: Date = new Date()): Date {
   const localMidnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate())
   return new Date(localMidnight - BUSINESS_UTC_OFFSET_MINUTES * 60_000)
 }
+
+/** "2026-11-03" biznes-kunining [boshi, oxiri) — haqiqiy UTC paytlari. */
+export function businessDayRange(dateKey: string): { start: Date; end: Date } {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const start = new Date(Date.UTC(y, m - 1, d) - BUSINESS_UTC_OFFSET_MINUTES * 60_000)
+  return { start, end: new Date(start.getTime() + 86_400_000) }
+}
