@@ -23,6 +23,7 @@ import { STATUS_CONFIG } from '@/lib/status-config'
 import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
 import { formatQty, unitList } from '@/lib/units'
 import { cn } from '@/lib/utils'
+import { externalLinksSupported } from '@/lib/embedded'
 import { useTariffs } from '@/hooks/useTariffs'
 import { useEmployeesMap } from '@/hooks/useEmployeesMap'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -403,12 +404,7 @@ function OverviewTab({
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-bold leading-snug text-ink [overflow-wrap:anywhere]">{order.customerName || "Noma'lum mijoz"}</div>
-            {order.phone && (
-              <a href={`tel:${order.phone.replace(/[^\d+]/g, '')}`} className="mt-0.5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-primary">
-                <Phone size={13} />
-                {order.phone}
-              </a>
-            )}
+            {order.phone && <PhoneLine phone={order.phone} />}
           </div>
         </div>
         {order.location && (
@@ -416,7 +412,7 @@ function OverviewTab({
             <MapPin size={15} className="mt-0.5 shrink-0 text-gray" />
             <div className="min-w-0 flex-1">
               <p className="text-sm text-ink [overflow-wrap:anywhere]">{order.location}</p>
-              {order.gpsCoords && (
+              {order.gpsCoords && externalLinksSupported() && (
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.gpsCoords)}&travelmode=driving`}
                   target="_blank"
@@ -505,6 +501,41 @@ function OverviewTab({
         </section>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * Mijoz telefoni — brauzerda bosilsa qo'ng'iroq. Ilovaning eski
+ * versiyasida `tel:` havola WebView o'rnida xato ochardi, u yerda raqam
+ * nusxalanadi.
+ */
+function PhoneLine({ phone }: { phone: string }) {
+  const [copied, setCopied] = useState(false)
+  if (externalLinksSupported()) {
+    return (
+      <a href={`tel:${phone.replace(/[^\d+]/g, '')}`} className="mt-0.5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-primary">
+        <Phone size={13} />
+        {phone}
+      </a>
+    )
+  }
+  return (
+    <button
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(phone)
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        } catch {
+          /* nusxalab bo'lmasa raqam baribir ko'rinib turibdi */
+        }
+      }}
+      className="mt-0.5 inline-flex select-all items-center gap-1.5 text-sm font-semibold text-brand-primary"
+    >
+      <Phone size={13} />
+      {phone}
+      <span className="rounded bg-brand-primary/10 px-1.5 text-[10px] font-bold">{copied ? 'Nusxalandi' : 'Nusxalash'}</span>
+    </button>
   )
 }
 

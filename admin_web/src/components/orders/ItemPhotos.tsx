@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
+import { useConfirm } from '@/hooks/useConfirm'
 import { formatDateTimeUz } from '@/lib/date-utils'
 import { PHOTO_STATE_LABELS as STATE_LABELS, type ItemPhoto, type ItemPhotos, type PhotoState } from '@/lib/item-photos'
 
@@ -81,6 +82,7 @@ function PhotoLightbox({
 }) {
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDialog, confirm] = useConfirm()
   const current = entries[index]
 
   useEffect(() => {
@@ -94,7 +96,13 @@ function PhotoLightbox({
   }, [index, entries.length, onClose, onIndex])
 
   async function remove() {
-    if (!window.confirm("Rasmni o'chirasizmi? U barcha xodimlar uchun o'chadi.")) return
+    const ok = await confirm({
+      title: "Rasm o'chirilsinmi?",
+      message: "U barcha xodimlar uchun o'chadi.",
+      confirmLabel: "O'chirish",
+      danger: true,
+    })
+    if (!ok) return
     setDeleting(true)
     setError(null)
     try {
@@ -165,6 +173,7 @@ function PhotoLightbox({
           </button>
         )}
       </div>
+      {confirmDialog}
     </div>
   )
 }

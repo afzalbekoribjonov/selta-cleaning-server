@@ -169,12 +169,12 @@ export default function FinancePage() {
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-lg px-2 py-2 text-xs font-bold transition-colors ${
+                className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 py-1.5 text-center text-[11px] font-bold leading-tight transition-colors sm:flex-row sm:gap-1.5 sm:px-2 sm:py-2 sm:text-xs ${
                   tab === t.key ? 'bg-brand-primary text-white' : 'text-ink/70'
                 }`}
               >
                 <t.icon size={14} className="shrink-0" />
-                <span className="truncate">{t.label}</span>
+                <span>{t.label}</span>
               </button>
             ))}
           </div>

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../app/theme.dart';
@@ -45,8 +46,13 @@ class _AdminPanelScreenState extends ConsumerState<AdminPanelScreen> {
       // so'rov shu kanal orqali keladi va ilovaning Bluetooth printeri
       // ishlatiladi (brauzerdan Bluetooth printerga ulanib bo'lmaydi).
       ..addJavaScriptChannel('SeltaPrinter', onMessageReceived: _onPrinterMessage)
+      // Bor-yo'qligi sahifaga 'tashqi havolalar (tel:, xarita) ilova orqali
+      // ochiladi' degan belgi — eski ilova versiyalarida panel raqamni
+      // havola o'rniga nusxalanadigan matn qilib ko'rsatadi.
+      ..addJavaScriptChannel('SeltaLinks', onMessageReceived: (_) {})
       ..setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: _onNavigationRequest,
           onProgress: (progress) => setState(() => _progress = progress),
           onPageStarted: (_) => setState(() {
             _progress = 0;
@@ -64,6 +70,23 @@ class _AdminPanelScreenState extends ConsumerState<AdminPanelScreen> {
         ),
       )
       ..loadRequest(Uri.parse(kAdminPanelUrl));
+  }
+
+  /// Admin panelning o'z sahifalari WebView ichida qoladi; telefon raqami
+  /// (`tel:`), xarita va boshqa tashqi havolalar telefonning tegishli
+  /// ilovasida ochiladi. Busiz WebView `tel:` ni sahifa sifatida ochmoqchi
+  /// bo'lib, butun panel o'rnida "sahifani ochib bo'lmadi" xatosi chiqardi.
+  NavigationDecision _onNavigationRequest(NavigationRequest request) {
+    if (!request.isMainFrame) return NavigationDecision.navigate;
+    final uri = Uri.tryParse(request.url);
+    if (uri == null) return NavigationDecision.prevent;
+    final adminHost = Uri.parse(kAdminPanelUrl).host;
+    final isWeb = uri.scheme == 'https' || uri.scheme == 'http';
+    if (isWeb && (uri.host == adminHost || uri.host.endsWith('.firebaseapp.com'))) {
+      return NavigationDecision.navigate;
+    }
+    launchUrl(uri, mode: LaunchMode.externalApplication).catchError((_) => false);
+    return NavigationDecision.prevent;
   }
 
   /// Faqat admin panel sahifasidan kelgan so'rov qabul qilinadi.

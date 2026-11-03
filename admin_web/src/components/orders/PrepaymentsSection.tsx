@@ -3,6 +3,7 @@ import { PiggyBank, Undo2 } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { prepaidCredit, type Order, type Prepayment } from '@/lib/orders'
 import { formatDateTimeUz } from '@/lib/date-utils'
+import { useConfirm } from '@/hooks/useConfirm'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -22,15 +23,21 @@ function methodLabel(p: Prepayment): string {
 export function PrepaymentsSection({ order }: { order: Order }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDialog, confirm] = useConfirm()
 
   if (order.prepaidAmount <= 0 && order.prepayments.length === 0) return null
   const credit = prepaidCredit(order)
   const done = order.status === 'done'
 
   async function cancel(p: Prepayment) {
-    if (!window.confirm(`${formatMoney(p.amount)} oldindan to'lov bekor qilinsinmi? O'sha kunning kassa hisobidan ham chiqadi.`)) {
-      return
-    }
+    const ok = await confirm({
+      title: `${formatMoney(p.amount)} oldindan to'lov bekor qilinsinmi?`,
+      message: "O'sha kunning kassa hisobidan ham chiqadi.",
+      confirmLabel: 'Bekor qilish',
+      cancelLabel: 'Qoldirish',
+      danger: true,
+    })
+    if (!ok) return
     setBusyId(p.id)
     setError(null)
     try {
@@ -80,6 +87,7 @@ export function PrepaymentsSection({ order }: { order: Order }) {
         ))}
       </ul>
       {error && <p className="mt-2 text-xs font-semibold text-danger">{error}</p>}
+      {confirmDialog}
     </section>
   )
 }

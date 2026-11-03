@@ -19,6 +19,7 @@ import { useEscapeClose } from '@/hooks/useEscapeClose'
 export default function EmployeesPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
+  const [deptFilter, setDeptFilter] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Employee | null>(null)
   const [salaryTarget, setSalaryTarget] = useState<Employee | null>(null)
@@ -46,10 +47,12 @@ export default function EmployeesPage() {
   }, [query.data, departments, search])
 
   const total = query.data?.employees.length ?? 0
-  const statDepartments = departments.filter((d) => d.includeInStats)
+  const shownTotal = Object.values(byDepartment).reduce((s, list) => s + list.length, 0)
+  const filterDepartments = departments.filter((d) => (byDepartment[d.key]?.length ?? 0) > 0 || d.includeInStats)
+  const visibleDepartments = deptFilter ? departments.filter((d) => d.key === deptFilter) : departments
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-ink">Xodimlar</h1>
@@ -93,19 +96,24 @@ export default function EmployeesPage() {
 
       {query.data && total > 0 && (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 [&>*]:min-w-0">
-            {statDepartments.map((dept) => (
-              <div key={dept.key} className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
-                  <dept.icon size={20} />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-heading text-xl font-extrabold leading-tight text-ink">
-                    {byDepartment[dept.key]?.length ?? 0}
-                  </div>
-                  <div className="truncate text-xs font-semibold text-gray-dark">{dept.label}</div>
-                </div>
-              </div>
+          {/* Bo'lim filtri — avvalgi son plitkalari pastdagi bo'lim
+              sarlavhalarini takrorlardi; endi ular ro'yxatni ham filtrlaydi. */}
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+            {[{ key: '', label: 'Hammasi', icon: User, count: shownTotal }, ...filterDepartments.map((d) => ({ key: d.key, label: d.label, icon: d.icon, count: byDepartment[d.key]?.length ?? 0 }))].map((chip) => (
+              <button
+                key={chip.key || 'all'}
+                onClick={() => setDeptFilter(chip.key)}
+                aria-pressed={deptFilter === chip.key}
+                className={`flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3 text-sm font-bold transition-colors ${
+                  deptFilter === chip.key
+                    ? 'border-brand-primary bg-brand-primary text-white'
+                    : 'border-border bg-surface text-ink hover:border-brand-primary/40'
+                }`}
+              >
+                <chip.icon size={15} />
+                {chip.label}
+                <span className={`rounded-full px-1.5 text-xs ${deptFilter === chip.key ? 'bg-white/20' : 'bg-bg text-gray-dark'}`}>{chip.count}</span>
+              </button>
             ))}
           </div>
 
@@ -114,7 +122,7 @@ export default function EmployeesPage() {
           )}
 
           <div className="space-y-8">
-            {departments.map((dept) => {
+            {visibleDepartments.map((dept) => {
               const employees = byDepartment[dept.key] ?? []
               if (employees.length === 0) return null
               return (

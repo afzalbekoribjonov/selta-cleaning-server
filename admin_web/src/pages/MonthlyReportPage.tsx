@@ -4,18 +4,15 @@ import { useExpenses } from '@/hooks/useExpenses'
 import { useYearlyReport, type MonthReport } from '@/hooks/useYearlyReport'
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber'
 import { Spinner } from '@/components/ui/Spinner'
+import { formatMoney as formatMoneyAbs, formatMoneyShort } from '@/lib/units'
 
 function formatMoney(value: number): string {
-  const sign = value < 0 ? '-' : ''
-  return `${sign}${Math.round(Math.abs(value)).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
+  return `${value < 0 ? '−' : ''}${formatMoneyAbs(Math.abs(value))}`
 }
 
+/** Kartalarda: "1,7 mln" / "85 ming" (avval inglizcha "1.7M"/"85k" edi). */
 function formatCompact(value: number): string {
-  const sign = value < 0 ? '-' : ''
-  const abs = Math.abs(value)
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`
-  if (abs >= 1_000) return `${sign}${Math.round(abs / 1000)}k`
-  return `${sign}${abs}`
+  return `${value < 0 ? '−' : ''}${formatMoneyShort(Math.abs(value))}`
 }
 
 export default function MonthlyReportPage() {
@@ -50,7 +47,9 @@ export default function MonthlyReportPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-ink">Oylik hisobot</h1>
-          <p className="mt-1 text-sm text-gray-dark">Har oy bo'yicha buyurtmalar, tushum va foyda — yil kesimida</p>
+          <p className="mt-1 text-sm text-gray-dark">
+            Har oy qabul qilingan buyurtmalar summasi, maosh va chiqimlar. Kassaga haqiqatda tushgan pul — Boshqaruv panelida.
+          </p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-border bg-surface p-1.5">
           <button onClick={() => setYear((y) => y - 1)} className="rounded-lg p-1.5 text-gray-dark hover:bg-bg hover:text-ink" aria-label="Oldingi yil">
@@ -81,9 +80,9 @@ export default function MonthlyReportPage() {
         </div>
         <div className="relative mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4 [&>*]:min-w-0">
           <HeroStat label="Buyurtmalar" value={yearTotals?.orders ?? 0} loading={loading} />
-          <HeroStat label="Tushum" value={yearTotals?.revenue ?? 0} loading={loading} money />
-          <HeroStat label="Chiqimlar" value={yearTotals?.expenses ?? 0} loading={loading} money />
-          <HeroStat label="Sof foyda" value={yearTotals?.profit ?? 0} loading={loading} money highlight />
+          <HeroStat label="Buyurtmalar summasi" value={yearTotals?.revenue ?? 0} loading={loading} money />
+          <HeroStat label="Maosh va chiqimlar" value={yearTotals?.expenses ?? 0} loading={loading} money />
+          <HeroStat label="Foyda" value={yearTotals?.profit ?? 0} loading={loading} money highlight />
         </div>
       </section>
 
@@ -110,7 +109,7 @@ function HeroStat({ label, value, loading, money, highlight }: { label: string; 
   return (
     <div>
       <div className="text-xs font-semibold text-white/70">{label}</div>
-      <div className={`mt-1 font-heading text-xl font-extrabold sm:text-2xl ${highlight ? (value >= 0 ? 'text-brand-accent' : 'text-red-300') : 'text-white'}`}>
+      <div className={`mt-1 font-heading text-lg font-extrabold [overflow-wrap:anywhere] sm:text-2xl ${highlight ? (value >= 0 ? 'text-brand-accent' : 'text-red-300') : 'text-white'}`}>
         {loading ? '—' : <AnimatedNumber value={value} format={money ? formatMoney : (n) => String(n)} />}
       </div>
     </div>
@@ -141,12 +140,12 @@ function MonthCard({ report, delay, isCurrent, isFuture }: { report: MonthReport
       ) : (
         <div className="space-y-2.5">
           <Row icon={ClipboardList} label="Buyurtmalar" value={<AnimatedNumber value={report.orderCount} />} />
-          <Row icon={TrendingUp} label="Tushum" value={<AnimatedNumber value={report.revenue} format={formatCompact} />} tone="success" />
+          <Row icon={TrendingUp} label="Buyurtmalar summasi" value={<AnimatedNumber value={report.revenue} format={formatCompact} />} tone="success" />
           <Row icon={Wallet} label="Chiqim (maosh + boshqa)" value={<AnimatedNumber value={report.payroll + report.expenses} format={formatCompact} />} tone="danger" />
           <div className="mt-1 flex items-center justify-between border-t border-border pt-2.5">
             <span className="flex items-center gap-1.5 text-xs font-bold text-ink">
               {profitable ? <TrendingUp size={13} className="text-success" /> : <TrendingDown size={13} className="text-danger" />}
-              Sof foyda
+              Foyda
             </span>
             <span className={`text-sm font-extrabold ${profitable ? 'text-success' : 'text-danger'}`}>
               {profitable ? '+' : ''}

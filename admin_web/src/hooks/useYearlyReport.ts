@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, collectionGroup, getAggregateFromServer, getDocs, query, sum, count, where, Timestamp } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { businessMonthRange } from '@/lib/business-time'
 import { UZ_MONTHS_FULL } from '@/lib/date-utils'
 import { computeMonthlyExpenses, type Expense } from '@/lib/expenses'
 
@@ -35,8 +36,8 @@ export function useYearlyReport(year: number, expenses: Expense[] | null) {
       try {
         const revenueByMonth = await Promise.all(
           Array.from({ length: 12 }, async (_, month) => {
-            const start = new Date(year, month, 1)
-            const end = new Date(year, month + 1, 1)
+            // Oy chegarasi biznes vaqti (UTC+5) bo'yicha — brauzer zonasi boshqa bo'lsa ham.
+            const { start, end } = businessMonthRange(`${year}-${String(month + 1).padStart(2, '0')}`)
             const q = query(
               collection(db, 'orders'),
               where('createdAt', '>=', Timestamp.fromDate(start)),
