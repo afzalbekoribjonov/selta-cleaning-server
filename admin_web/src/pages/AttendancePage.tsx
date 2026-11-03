@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarCheck, Users, Settings2, CircleSlash, Clock, AlertTriangle, Check } from 'lucide-react'
+import { CalendarCheck, Users, Settings2, CircleSlash, Clock, AlertTriangle, Check, MapPinOff } from 'lucide-react'
 import { apiPost } from '@/lib/api'
 import { type Employee } from '@/lib/employees'
 import { useAttendanceConfig } from '@/hooks/useAttendanceConfig'
@@ -15,7 +15,8 @@ import {
   daysInMonth,
   UZ_WEEKDAY_SHORT,
   UZ_WEEKDAY_FULL,
-  ISSUE_LABELS,
+  issueText,
+  formatMeters,
   type AttendanceRecord,
   type AttendanceIssue,
   type AttendanceConfig,
@@ -25,7 +26,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { UZ_MONTHS_FULL } from '@/lib/date-utils'
 
 type RangeMode = 'day' | 'week' | 'month'
-type CellStatus = 'on_time' | 'late' | 'absent' | 'pending' | 'day_off' | 'gps_issue' | 'not_tracked' | 'future'
+type CellStatus = 'on_time' | 'late' | 'absent' | 'pending' | 'day_off' | 'gps_issue' | 'away' | 'not_tracked' | 'future'
 
 const CELL_CONFIG: Record<CellStatus, { label: string; short: string; className: string }> = {
   on_time: { label: 'Vaqtida', short: 'Vaqtida', className: 'bg-success-bg text-success' },
@@ -34,6 +35,7 @@ const CELL_CONFIG: Record<CellStatus, { label: string; short: string; className:
   pending: { label: 'Kutilmoqda', short: 'Kutilmoqda', className: 'bg-bg text-gray-dark' },
   day_off: { label: 'Dam olish', short: '·', className: 'text-gray' },
   gps_issue: { label: "GPS yo'q", short: "GPS yo'q", className: 'bg-info-bg text-info' },
+  away: { label: 'Uzoqda', short: 'Uzoqda', className: 'bg-[#f1e9f8] text-brand-secondary' },
   not_tracked: { label: 'Kuzatilmagan', short: '', className: '' },
   future: { label: '', short: '', className: '' },
 }
@@ -44,6 +46,7 @@ const LEGEND_DOT: Record<string, string> = {
   absent: 'bg-danger',
   pending: 'bg-gray',
   gps_issue: 'bg-info',
+  away: 'bg-brand-secondary',
   day_off: 'bg-border',
 }
 
@@ -61,11 +64,11 @@ function computeCellStatus(args: {
   dateKey: string
   weekday: number
   record: AttendanceRecord | undefined
-  hasIssue: boolean
+  issue: AttendanceIssue | undefined
   config: AttendanceConfig
   todayKey: string
 }): CellStatus {
-  const { employee, dateKey, weekday, record, hasIssue, config, todayKey } = args
+  const { employee, dateKey, weekday, record, issue, config, todayKey } = args
 
   // Haqiqiy yozuv har doim ustun — nazorat keyinchalik o'chirilgan bo'lsa ham.
   if (record) return record.status
@@ -84,7 +87,8 @@ function computeCellStatus(args: {
   if (!config.enabled) return 'not_tracked'
 
   if (!config.workDays.includes(weekday)) return 'day_off'
-  if (hasIssue) return 'gps_issue'
+  // GPS ishlagan, lekin xodim ishxonadan uzoqda bo'lgan — bu "GPS yo'q" emas.
+  if (issue) return issue.issue === 'out_of_range' ? 'away' : 'gps_issue'
 
   if (dateKey === todayKey) {
     const [h, m] = config.arrivalTime.split(':').map(Number)
@@ -150,7 +154,11 @@ export default function AttendancePage() {
     return map
   }, [records])
 
-  const issueKeys = useMemo(() => new Set(issues.map((i) => `${i.employeeId}_${i.date}`)), [issues])
+  const issuesByKey = useMemo(() => {
+    const map: Record<string, AttendanceIssue> = {}
+    for (const i of issues) map[`${i.employeeId}_${i.date}`] = i
+    return map
+  }, [issues])
 
   const todayKey = businessDateKey(new Date())
 
@@ -162,7 +170,7 @@ export default function AttendancePage() {
       dateKey,
       weekday: day.getDay(),
       record: recordsByKey[`${emp.id}_${dateKey}`],
-      hasIssue: issueKeys.has(`${emp.id}_${dateKey}`),
+      issue: issuesByKey[`${emp.id}_${dateKey}`],
       config,
       todayKey,
     })
@@ -171,7 +179,7 @@ export default function AttendancePage() {
   // Bugungi xulosa — sahifaning eng tepasida, admin bir qarashda holatni
   // tushunishi uchun.
   const todaySummary = useMemo(() => {
-    const counts = { on_time: 0, late: 0, absent: 0, pending: 0, gps_issue: 0 }
+    const counts = { on_time: 0, late: 0, absent: 0, pending: 0, gps_issue: 0, away: 0 }
     if (!config.enabled) return counts
     const today = new Date()
     for (const emp of enrolledEmployees) {
@@ -180,7 +188,7 @@ export default function AttendancePage() {
     }
     return counts
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enrolledEmployees, recordsByKey, issueKeys, config, todayKey])
+  }, [enrolledEmployees, recordsByKey, issuesByKey, config, todayKey])
 
   const rangeLabel =
     rangeMode === 'day'
@@ -217,11 +225,18 @@ export default function AttendancePage() {
       </div>
 
       {config.enabled && enrolledEmployees.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 [&>*]:min-w-0">
-          <SummaryTile icon={Check} label="Vaqtida" value={todaySummary.on_time} tone="success" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 [&>*]:min-w-0">
+          <SummaryTile icon={Check} label="Bugun vaqtida" value={todaySummary.on_time} tone="success" />
           <SummaryTile icon={Clock} label="Kechikkan" value={todaySummary.late} tone="warning" />
           <SummaryTile icon={AlertTriangle} label="Kelmagan" value={todaySummary.absent} tone="danger" />
           <SummaryTile icon={CircleSlash} label="Kutilmoqda" value={todaySummary.pending} tone="muted" />
+          <SummaryTile
+            className="col-span-2 sm:col-span-1"
+            icon={MapPinOff}
+            label="GPS muammo / uzoqda"
+            value={todaySummary.gps_issue + todaySummary.away}
+            tone="info"
+          />
         </div>
       )}
 
@@ -271,7 +286,7 @@ export default function AttendancePage() {
         </div>
 
         <div className="flex flex-wrap gap-x-4 gap-y-2 border-b border-border bg-bg/40 px-4 py-2.5 sm:px-5">
-          {(['on_time', 'late', 'absent', 'pending', 'gps_issue', 'day_off'] as CellStatus[]).map((s) => (
+          {(['on_time', 'late', 'absent', 'pending', 'gps_issue', 'away', 'day_off'] as CellStatus[]).map((s) => (
             <span key={s} className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-dark">
               <span className={`h-2.5 w-2.5 rounded-full ${LEGEND_DOT[s]}`} />
               {CELL_CONFIG[s].label}
@@ -289,24 +304,45 @@ export default function AttendancePage() {
           </div>
         ) : (
           <>
-            {/* Telefonda kunlik ko'rinish jadval emas, ro'yxat — bitta ustunli
-                jadval gorizontal siljish talab qilib, o'qishni qiyinlashtirardi. */}
+            {/* Kunlik ko'rinish — har bir xodim bo'yicha batafsil: qachon,
+                qanchalik uzoqda, qanday aniqlikda, qaysi qurilmadan; muammo
+                bo'lsa — aniq sababi. */}
             {rangeMode === 'day' && (
-              <ul className="divide-y divide-border sm:hidden">
+              <ul className="divide-y divide-border">
                 {enrolledEmployees.map((emp) => {
+                  const key = `${emp.id}_${toDateKey(days[0])}`
                   const status = statusOf(emp, days[0])
-                  const record = recordsByKey[`${emp.id}_${toDateKey(days[0])}`]
+                  const record = recordsByKey[key]
+                  const issue = issuesByKey[key]
                   const cell = CELL_CONFIG[status]
+                  const details = record
+                    ? [
+                        record.checkedInTime ? `Belgilandi: ${record.checkedInTime}` : null,
+                        record.distanceMeters != null ? `ishxonadan ${formatMeters(record.distanceMeters)}` : null,
+                        record.accuracyMeters != null ? `aniqlik ±${formatMeters(record.accuracyMeters)}` : null,
+                        record.platform ?? (record.source === 'app' ? 'Ilova' : null),
+                      ].filter(Boolean)
+                    : []
                   return (
-                    <li key={emp.id} className="flex items-center gap-3 px-4 py-3">
+                    <li key={emp.id} className="flex items-start gap-3 px-4 py-3 sm:px-5">
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-bold text-ink">{emp.fullName}</div>
-                        {record?.checkedInTime && (
-                          <div className="text-xs text-gray-dark">Belgilandi: {record.checkedInTime}</div>
+                        <div className="text-sm font-bold text-ink [overflow-wrap:anywhere]">{emp.fullName}</div>
+                        {details.length > 0 && <div className="mt-0.5 text-xs text-gray-dark">{details.join(' · ')}</div>}
+                        {!record && issue && (
+                          <div className="mt-0.5 text-xs font-semibold text-info">
+                            {issueText(issue)}
+                            {issue.platform && <span className="font-normal text-gray-dark"> · {issue.platform}</span>}
+                            {issue.reportedAt && (
+                              <span className="font-normal text-gray-dark">
+                                {' '}
+                                · {String(issue.reportedAt.getHours()).padStart(2, '0')}:{String(issue.reportedAt.getMinutes()).padStart(2, '0')}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                       {cell.short && (
-                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${cell.className}`}>
+                        <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${cell.className}`}>
                           {cell.label}
                         </span>
                       )}
@@ -316,7 +352,7 @@ export default function AttendancePage() {
               </ul>
             )}
 
-            <div className={`overflow-x-auto ${rangeMode === 'day' ? 'hidden sm:block' : ''}`}>
+            <div className={`overflow-x-auto ${rangeMode === 'day' ? 'hidden' : ''}`}>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-gray-dark">
@@ -345,27 +381,34 @@ export default function AttendancePage() {
                       {days.map((d) => {
                         const dateKey = toDateKey(d)
                         const record = recordsByKey[`${emp.id}_${dateKey}`]
+                        const issue = issuesByKey[`${emp.id}_${dateKey}`]
                         const status = statusOf(emp, d)
                         const cell = CELL_CONFIG[status]
                         const title = record
                           ? [
                               record.checkedInTime ? `Belgilandi: ${record.checkedInTime}` : null,
-                              record.distanceMeters != null ? `${record.distanceMeters} m masofada` : null,
+                              record.distanceMeters != null ? `${formatMeters(record.distanceMeters)} masofada` : null,
+                              record.accuracyMeters != null ? `aniqlik ±${formatMeters(record.accuracyMeters)}` : null,
+                              record.platform,
                             ]
                               .filter(Boolean)
                               .join(' · ')
-                          : status === 'gps_issue'
-                            ? ISSUE_LABELS.unknown
+                          : issue && (status === 'gps_issue' || status === 'away')
+                            ? issueText(issue)
                             : undefined
                         return (
                           <td key={dateKey} className={`px-3 py-3 text-center ${status === 'day_off' ? 'bg-bg/60' : ''}`}>
                             {cell.short && (
-                              <span
-                                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${cell.className}`}
-                                title={title}
+                              <button
+                                onClick={() => {
+                                  setAnchorDate(d)
+                                  setRangeMode('day')
+                                }}
+                                className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold hover:ring-2 hover:ring-brand-primary/20 ${cell.className}`}
+                                title={title ? `${title} — batafsil ko'rish` : "Batafsil ko'rish"}
                               >
                                 {cell.short}
-                              </span>
+                              </button>
                             )}
                             {record?.checkedInTime && status !== 'day_off' && (
                               <div className="mt-0.5 text-[10px] font-semibold text-gray-dark">
@@ -396,25 +439,30 @@ function SummaryTile({
   label,
   value,
   tone,
+  className = '',
 }: {
   icon: typeof Check
   label: string
   value: number
-  tone: 'success' | 'warning' | 'danger' | 'muted'
+  tone: 'success' | 'warning' | 'danger' | 'muted' | 'info'
+  className?: string
 }) {
   const tones = {
     success: 'text-success bg-success-bg',
     warning: 'text-warning bg-warning-bg',
     danger: 'text-danger bg-danger-bg',
     muted: 'text-gray-dark bg-bg',
+    info: 'text-info bg-info-bg',
   }
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
-      <div className={`mb-2 inline-flex h-8 w-8 items-center justify-center rounded-lg ${tones[tone]}`}>
+    <div className={`flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-sm sm:block sm:p-4 ${className}`}>
+      <div className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:mb-2 sm:h-8 sm:w-8 ${tones[tone]}`}>
         <Icon size={16} />
       </div>
-      <div className="text-2xl font-extrabold text-ink">{value}</div>
-      <div className="text-xs font-semibold text-gray-dark">{label}</div>
+      <div className="min-w-0">
+        <div className="text-xl font-extrabold leading-tight text-ink sm:text-2xl">{value}</div>
+        <div className="text-xs font-semibold leading-snug text-gray-dark">{label}</div>
+      </div>
     </div>
   )
 }

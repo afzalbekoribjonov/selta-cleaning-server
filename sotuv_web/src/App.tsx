@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth-context'
 import { AppShell } from '@/components/AppShell'
+import { AttendanceGate } from '@/components/AttendanceGate'
 import { FullPageSpinner } from '@/components/Spinner'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
@@ -26,16 +27,18 @@ export default function App() {
           path="/*"
           element={
             <RequireAuth>
-              <AppShell>
-                <Suspense fallback={<FullPageSpinner />}>
-                  <Routes>
-                    <Route index element={<ActiveOrdersPage />} />
-                    <Route path="yangi" element={<NewOrderPage />} />
-                    <Route path="qidiruv" element={<SearchPage />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Suspense>
-              </AppShell>
+              <AttendanceGate>
+                <AppShell>
+                  <Suspense fallback={<FullPageSpinner />}>
+                    <Routes>
+                      <Route index element={<ActiveOrdersPage />} />
+                      <Route path="yangi" element={<NewOrderPage />} />
+                      <Route path="qidiruv" element={<SearchPage />} />
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Suspense>
+                </AppShell>
+              </AttendanceGate>
             </RequireAuth>
           }
         />

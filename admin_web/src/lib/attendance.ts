@@ -51,6 +51,12 @@ export interface AttendanceRecord {
   checkedInTime: string | null
   gpsCoords: string | null
   distanceMeters: number | null
+  /** Telefon bergan aniqlik (m) — kichik bo'lsa ishonchliroq. */
+  accuracyMeters: number | null
+  /** 'web' (Safari/Chrome orqali sayt) yoki 'app' (ilova). */
+  source: string | null
+  /** "iPhone · Safari" kabi. */
+  platform: string | null
 }
 
 function toAttendanceRecord(id: string, data: Record<string, unknown>): AttendanceRecord {
@@ -66,6 +72,9 @@ function toAttendanceRecord(id: string, data: Record<string, unknown>): Attendan
     checkedInTime: (data.checkedInTime as string | undefined) ?? null,
     gpsCoords: (data.gpsCoords as string | undefined) ?? null,
     distanceMeters: (data.distanceMeters as number | undefined) ?? null,
+    accuracyMeters: typeof data.accuracyMeters === 'number' ? data.accuracyMeters : null,
+    source: typeof data.source === 'string' ? data.source : null,
+    platform: typeof data.platform === 'string' ? data.platform : null,
   }
 }
 
@@ -80,6 +89,11 @@ export interface AttendanceIssue {
   employeeId: string
   date: string
   issue: string
+  distanceMeters: number | null
+  accuracyMeters: number | null
+  source: string | null
+  platform: string | null
+  reportedAt: Date | null
 }
 
 /** Xodim telefonida GPS o'chiq/ruxsatsiz bo'lgan kunlar — "kelmagan"dan
@@ -94,6 +108,11 @@ export function subscribeAttendanceIssues(startDate: string, endDate: string, ca
           employeeId: (data.employeeId as string) ?? '',
           date: (data.date as string) ?? '',
           issue: (data.issue as string) ?? 'unknown',
+          distanceMeters: typeof data.distanceMeters === 'number' ? data.distanceMeters : null,
+          accuracyMeters: typeof data.accuracyMeters === 'number' ? data.accuracyMeters : null,
+          source: typeof data.source === 'string' ? data.source : null,
+          platform: typeof data.platform === 'string' ? data.platform : null,
+          reportedAt: (data.reportedAt as Timestamp | undefined)?.toDate?.() ?? null,
         }
       }),
     ),
@@ -101,9 +120,27 @@ export function subscribeAttendanceIssues(startDate: string, endDate: string, ca
 }
 
 export const ISSUE_LABELS: Record<string, string> = {
-  location_off: "Telefonda joylashuv o'chiq",
+  location_off: "Telefonda joylashuv (GPS) o'chiq",
   permission_denied: 'Joylashuvga ruxsat berilmagan',
+  imprecise: "«Aniq joylashuv» o'chirilgan",
+  out_of_range: 'Ishxonadan uzoqda edi',
+  unsupported: 'Brauzer joylashuvni bermaydi',
+  insecure: "Xavfsiz bo'lmagan havola orqali kirgan",
+  timeout: "Joylashuvni aniqlab bo'lmadi",
   unknown: "Joylashuvni o'qib bo'lmadi",
+}
+
+/** Muammo matni — masofa/aniqlik bilan ("Ishxonadan uzoqda edi · 1,2 km"). */
+export function issueText(issue: AttendanceIssue): string {
+  const base = ISSUE_LABELS[issue.issue] ?? ISSUE_LABELS.unknown
+  if (issue.issue === 'out_of_range' && issue.distanceMeters != null) return `${base} · ${formatMeters(issue.distanceMeters)}`
+  if (issue.issue === 'imprecise' && issue.accuracyMeters != null) return `${base} · ±${formatMeters(issue.accuracyMeters)}`
+  return base
+}
+
+/** 850 -> "850 m"; 1240 -> "1,2 km". */
+export function formatMeters(meters: number): string {
+  return meters >= 1000 ? `${(meters / 1000).toFixed(1).replace('.', ',')} km` : `${Math.round(meters)} m`
 }
 
 /** "YYYY-MM-DD" sana satriga aylantiradi. Kalendar (kun tanlash) uchun —

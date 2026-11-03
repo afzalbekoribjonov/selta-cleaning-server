@@ -470,7 +470,7 @@ export function seedDemoStore(store: Map<string, Data>) {
       if (d === 0 && chance(0.25)) continue // bugun hali kelmaganlar
       const r = rand()
       if (r < 0.06) {
-        store.set(`attendanceIssues/${e.id}_${key}`, { employeeId: e.id, date: key, issue: pick(['location_off', 'out_of_range', 'imprecise']), distanceMeters: 2300, accuracyMeters: 3200, source: 'web', platform: 'ios-safari', reportedAt: ts(new Date(day.getTime() + 8.5 * HOUR)) })
+        store.set(`attendanceIssues/${e.id}_${key}`, { employeeId: e.id, date: key, issue: pick(['location_off', 'out_of_range', 'imprecise']), distanceMeters: 2300, accuracyMeters: 3200, source: 'web', platform: 'iPhone · Safari', reportedAt: ts(new Date(day.getTime() + 8.5 * HOUR)) })
         continue
       }
       if (r < 0.1) continue // kelmagan
@@ -489,7 +489,7 @@ export function seedDemoStore(store: Map<string, Data>) {
         distanceMeters: Math.round(between(5, 120)),
         accuracyMeters: Math.round(between(5, 40)),
         source: web ? 'web' : 'app',
-        ...(web ? { platform: 'ios-safari' } : {}),
+        ...(web ? { platform: 'iPhone · Safari' } : {}),
       })
     }
   }

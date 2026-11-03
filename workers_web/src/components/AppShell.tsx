@@ -4,7 +4,6 @@ import { ClipboardList, Home, User, BarChart3 } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 import { useMyTeamOrders } from '@/hooks/useMyTeamOrders'
 import { Link } from 'react-router-dom'
-import { AttendanceGate } from '@/components/AttendanceGate'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Ishlar', icon: ClipboardList, end: true },
@@ -54,7 +53,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <main className="flex-1 pb-24">
-        <AttendanceGate />
         {children}
       </main>
 

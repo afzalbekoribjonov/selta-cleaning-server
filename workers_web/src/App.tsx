@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth-context'
 import { FullPageSpinner } from '@/components/SeltaLoader'
 import { AppShell } from '@/components/AppShell'
+import { AttendanceGate } from '@/components/AttendanceGate'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const WorkerHomePage = lazy(() => import('@/pages/WorkerHomePage'))
@@ -35,24 +36,26 @@ export default function App() {
           path="/*"
           element={
             <RequireAuth>
-              <AppShell>
-                <Suspense fallback={<FullPageSpinner />}>
-                  <Routes>
-                    <Route index element={<WorkerHomePage />} />
-                    <Route path="jamoa" element={<TeamJobsPage />} />
-                    <Route path="profil" element={<ProfilePage />} />
-                    <Route
-                      path="statistika"
-                      element={
-                        <RequireStats>
-                          <StatsPage />
-                        </RequireStats>
-                      }
-                    />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Suspense>
-              </AppShell>
+              <AttendanceGate>
+                <AppShell>
+                  <Suspense fallback={<FullPageSpinner />}>
+                    <Routes>
+                      <Route index element={<WorkerHomePage />} />
+                      <Route path="jamoa" element={<TeamJobsPage />} />
+                      <Route path="profil" element={<ProfilePage />} />
+                      <Route
+                        path="statistika"
+                        element={
+                          <RequireStats>
+                            <StatsPage />
+                          </RequireStats>
+                        }
+                      />
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Suspense>
+                </AppShell>
+              </AttendanceGate>
             </RequireAuth>
           }
         />
