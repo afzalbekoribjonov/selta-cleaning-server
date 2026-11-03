@@ -439,7 +439,7 @@ export function seedDemoStore(store: Map<string, Data>) {
     const author = pick(['disp1', 'disp2', 'd1', 'w1'])
     const text = pick(comments)
     store.set(`${path}/comments/c${++c}`, { authorId: author, authorName: employeeName(author), text, createdAt: ts(at) })
-    store.set(path, { ...data, lastCommentText: text, lastCommentAuthor: employeeName(author), lastCommentAt: ts(at) })
+    store.set(path, { ...data, lastComment: { commentId: `c${c}`, text, authorName: employeeName(author), authorId: author, at: ts(at) } })
   }
 
   // --- Chiqimlar ---

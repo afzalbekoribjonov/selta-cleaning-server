@@ -102,6 +102,13 @@ service cloud.firestore {
         allow read: if isSignedIn();
         allow write: if false; // faqat Cloud Function trigger yozadi
       }
+
+      // Mahsulot o'zgarish tarixi (server/src/lib/itemHistory.ts) — faqat
+      // server yozadi, admin panel buyurtma kartasida ko'rsatadi.
+      match /itemEvents/{eventId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
     }
 
     // --- products / settings / counters ---------------------------------

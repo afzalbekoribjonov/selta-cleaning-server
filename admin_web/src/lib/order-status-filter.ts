@@ -25,7 +25,7 @@ export interface StatusFilterOption {
 }
 
 const ITEM_STATUSES = ['pending', 'washing', 'packing', 'ready', 'returned', 'done'] as const
-const ORDER_STATUSES = ['new', 'brought_in', 'team_assigned', 'in_progress', 'done'] as const
+const ORDER_STATUSES = ['new', 'picked_up', 'brought_in', 'team_assigned', 'in_progress', 'done'] as const
 
 export const ITEM_STATUS_OPTIONS: StatusFilterOption[] = ITEM_STATUSES.map((s) => ({
   value: `item:${s}`,

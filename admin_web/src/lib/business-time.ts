@@ -44,3 +44,10 @@ export function businessDayRange(dateKey: string): { start: Date; end: Date } {
   const start = new Date(Date.UTC(y, m - 1, d) - BUSINESS_UTC_OFFSET_MINUTES * 60_000)
   return { start, end: new Date(start.getTime() + 86_400_000) }
 }
+
+/** "2026-11" biznes-oyining [boshi, keyingi oy boshi) — haqiqiy UTC paytlari. */
+export function businessMonthRange(yearMonth: string): { start: Date; end: Date } {
+  const [y, m] = yearMonth.split('-').map(Number)
+  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+  return { start: businessDayRange(`${yearMonth}-01`).start, end: businessDayRange(next).start }
+}

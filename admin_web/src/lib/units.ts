@@ -20,10 +20,15 @@ export function unitList(units: Record<string, number> | null | undefined): Unit
     .map(([unit, amount]) => ({ unit, label: UNIT_LABELS[unit] ?? unit, amount }))
 }
 
-/** 92.68 -> "92,7"; 3 -> "3" (dona butun, qolganlari 1 xona). */
+/**
+ * 92.68 -> "92,7"; 1250 -> "1 250"; 3 -> "3" (dona butun, qolganlari 1 xona).
+ * Ajratgichlar qo'lda: brauzerlar `uz-UZ` uchun turlicha (nuqta/vergul) beradi.
+ */
 export function formatQty(amount: number, unit?: string): string {
   const rounded = unit === 'dona' ? Math.round(amount) : Math.round(amount * 10) / 10
-  return rounded.toLocaleString('uz-UZ', { maximumFractionDigits: 1 }).replace(/\s/g, ' ')
+  const [int, frac] = Math.abs(rounded).toFixed(unit === 'dona' ? 0 : 1).split('.')
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return `${rounded < 0 ? '−' : ''}${grouped}${frac && frac !== '0' ? `,${frac}` : ''}`
 }
 
 /** 1 363 000 -> "1 363 000 so'm" (bo'sh joy — ajratuvchi). */

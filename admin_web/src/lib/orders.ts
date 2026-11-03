@@ -82,6 +82,19 @@ export interface Order {
   source: string | null
   // Talab: "O'zi keldi" — mijoz do'konga o'zi kelganda 'walk_in'.
   intakeMethod: string | null
+  /** Birlik bo'yicha umumiy hajm ({ sqm: 12.5, dona: 2 }) — server: lib/orderSummary.ts. */
+  itemUnitTotals: Record<string, number>
+  /**
+   * To'lov yig'indilari (server: lib/paymentSummary.ts): topshirishda olingan
+   * va keyin yopilgan pul, chegirma va hali yopilmagan qarz qoldig'i.
+   * Oldindan to'lov bularga KIRMAYDI (`prepaidAmount`).
+   */
+  paidTotal: number
+  discountTotal: number
+  debtTotal: number
+  /** Oxirgi izoh (server: routes/comments.ts) — ro'yxatda o'qimasdan ko'rsatish uchun. */
+  lastComment: { text: string; authorName: string; at: Date | null } | null
+  doneAt: Date | null
 }
 
 function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
@@ -132,6 +145,19 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     bonusEarned: typeof data.bonusEarned === 'number' ? data.bonusEarned : null,
     source: data.source ?? null,
     intakeMethod: data.intakeMethod ?? null,
+    itemUnitTotals: data.itemUnitTotals ?? {},
+    paidTotal: Number(data.paidTotal ?? 0),
+    discountTotal: Number(data.discountTotal ?? 0),
+    debtTotal: Number(data.debtTotal ?? 0),
+    lastComment:
+      data.lastComment && typeof data.lastComment.text === 'string'
+        ? {
+            text: data.lastComment.text,
+            authorName: data.lastComment.authorName ?? '',
+            at: (data.lastComment.at as Timestamp | undefined)?.toDate?.() ?? null,
+          }
+        : null,
+    doneAt: (data.doneAt as Timestamp | undefined)?.toDate?.() ?? null,
   }
 }
 
@@ -303,8 +329,18 @@ const PAGE_SIZE = 25
  */
 export async function fetchOrdersPage(
   cursor?: QueryDocumentSnapshot,
+  range?: { start: Date; end: Date },
 ): Promise<{ orders: Order[]; lastDoc: QueryDocumentSnapshot | null; hasMore: boolean }> {
-  const constraints = [orderBy('createdAt', 'desc'), limit(PAGE_SIZE + 1)]
+  // Oy tanlanganda shu oyning o'zi serverdan so'raladi — avval faqat
+  // allaqachon yuklangan 25 talik sahifalar filtrlanardi va eski oylar
+  // "topilmadi" bo'lib chiqardi.
+  const constraints = [
+    ...(range
+      ? [where('createdAt', '>=', Timestamp.fromDate(range.start)), where('createdAt', '<', Timestamp.fromDate(range.end))]
+      : []),
+    orderBy('createdAt', 'desc'),
+    limit(PAGE_SIZE + 1),
+  ]
   const q = cursor
     ? query(collection(db, 'orders'), ...constraints, startAfter(cursor))
     : query(collection(db, 'orders'), ...constraints)
