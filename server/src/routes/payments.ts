@@ -284,8 +284,26 @@ paymentsRouter.post("/settlePayment", withAuth, async (req: AuthedRequest, res) 
         throw new ApiError(412, "failed-precondition", "Bu yozuv allaqachon yopilgan");
       }
 
+      // Chegirma — mijoz qarzdor emas, uni "yopib" kassaga pul qo'shib
+      // bo'lmaydi.
+      if (payment.kind === "discount") {
+        throw new ApiError(412, "failed-precondition", "Chegirma yozuvini yopib bo'lmaydi");
+      }
+
       const shortfall = (payment.shortfall as number | undefined) ?? 0;
-      const settledAmount = typeof amount === "number" && amount > 0 ? Math.round(amount) : shortfall;
+      if (amount !== undefined && amount !== null && (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0)) {
+        throw new ApiError(400, "invalid-argument", "Yopilayotgan summa noto'g'ri");
+      }
+      const settledAmount = typeof amount === "number" ? Math.round(amount) : shortfall;
+      // Qarzdan ko'p yozilsa (xato bosilgan nol) kassa, maosh va keshbek
+      // shu summaga qarab oshib ketardi.
+      if (settledAmount > shortfall) {
+        throw new ApiError(
+          400,
+          "invalid-argument",
+          `Yopilayotgan summa qarzdan ko'p bo'lishi mumkin emas (qarz: ${shortfall.toLocaleString("ru-RU").replace(/\s/g, " ")} so'm)`,
+        );
+      }
 
       const split = normalizePaymentSplit(settledAmount, cashAmount, cardAmount);
       if (!split) {

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:selta_cleaning/core/models/order.dart';
+import 'package:selta_cleaning/core/models/order_item.dart';
 import 'package:selta_cleaning/features/delivery/delivery_buckets.dart';
 
 Order order(
@@ -11,6 +12,7 @@ Order order(
   String? gps,
   DateTime? created,
   DateTime? due,
+  List<OrderItem>? items,
 }) =>
     Order(
       id: id,
@@ -26,6 +28,7 @@ Order order(
       totalPrice: price,
       gpsCoords: gps,
       earliestPendingDueDate: due,
+      itemsMirror: items,
     );
 
 void main() {
@@ -120,32 +123,71 @@ void main() {
   });
 
 
-  group('omborxona', () {
+  group('omborxona — har bir mahsulot alohida', () {
     final now = DateTime(2026, 10, 20, 15);
-    Order late(int days, {Map<String, int> counts = const {'ready': 2}}) =>
-        order('w', counts: counts, due: DateTime(2026, 10, 20 - days, 9));
+    OrderItem item(String id, String status, {int? readyAgo, int? washedAgo}) => OrderItem(
+          id: id,
+          itemNumber: id.codeUnitAt(0) - 96,
+          name: id,
+          area: 0,
+          price: 50000,
+          qcStatus: 'passed',
+          status: status,
+          packedAt: readyAgo == null ? null : DateTime(2026, 10, 20 - readyAgo, 10),
+          washedAt: washedAgo == null ? null : DateTime(2026, 10, 20 - washedAgo, 10),
+        );
 
     test('kartadagi "N kun kechikdi" bilan bir xil hisob', () {
-      expect(daysLate(late(11), now), 11);
-      expect(daysLate(late(0), now), 0);
+      final o = order('w', counts: const {'ready': 1}, due: DateTime(2026, 10, 9, 9));
+      expect(daysLate(o, now), 11);
     });
 
-    test('chegara: 10 kun kechikkan hali omborda emas, 11 kun omborda', () {
-      expect(isInWarehouse(late(10), 10, now), isFalse);
-      expect(isInWarehouse(late(11), 10, now), isTrue);
+    test('tayyor bo\'lganiga 5 kun — omborda, 4 kun — hali emas (kalendar kuni)', () {
+      expect(readyDays(item('a', 'ready', readyAgo: 5), now), 5);
+      expect(isItemInWarehouse(item('a', 'ready', readyAgo: 5), 5, now), isTrue);
+      expect(isItemInWarehouse(item('a', 'ready', readyAgo: 4), 5, now), isFalse);
     });
 
-    test('hammasi tayyor bo\'lmasa omborga tushmaydi', () {
-      expect(isInWarehouse(late(30, counts: const {'ready': 1, 'washing': 1}), 10, now), isFalse);
+    test('faqat "Tayyor" holatdagi mahsulot; yetkazilgan yoki ishlovdagisi tushmaydi', () {
+      expect(isItemInWarehouse(item('a', 'done', readyAgo: 30), 5, now), isFalse);
+      expect(isItemInWarehouse(item('a', 'washing', washedAgo: 30), 5, now), isFalse);
     });
 
-    test('muddati yo\'q buyurtma omborga tushmaydi', () {
-      expect(isInWarehouse(order('x', counts: const {'ready': 1}), 10, now), isFalse);
+    test('eski mahsulot (tayyor bo\'lgan vaqti yo\'q) — yuvilgan vaqtdan; hech biri yo\'q bo\'lsa tushmaydi', () {
+      expect(isItemInWarehouse(item('a', 'ready', washedAgo: 7), 5, now), isTrue);
+      expect(isItemInWarehouse(item('a', 'ready'), 5, now), isFalse);
+    });
+
+    test('buyurtmadan faqat chegaradan o\'tganlari, eng uzoq turgani birinchi', () {
+      final o = order('w', counts: const {'ready': 3, 'washing': 1}, items: [
+        item('a', 'ready', readyAgo: 6),
+        item('b', 'ready', readyAgo: 2),
+        item('c', 'ready', readyAgo: 12),
+        item('d', 'washing'),
+      ]);
+      expect([for (final i in warehouseItemsOf(o, 5, now)) i.id], ['c', 'a']);
+      expect(isWholeOrderInWarehouse(o, 5, now), isFalse, reason: 'qolganlari hali omborda emas');
+    });
+
+    test('qolgan HAMMA mahsulot omborda bo\'lsa — butun buyurtma omborda', () {
+      final o = order('w', counts: const {'ready': 2, 'done': 1}, items: [
+        item('a', 'ready', readyAgo: 6),
+        item('b', 'ready', readyAgo: 9),
+        item('c', 'done', readyAgo: 20),
+      ]);
+      expect(isWholeOrderInWarehouse(o, 5, now), isTrue);
+    });
+
+    test('yakunlangan, joyida yuvish va nusxasiz buyurtma omborga tushmaydi', () {
+      final items = [item('a', 'ready', readyAgo: 30)];
+      expect(warehouseItemsOf(order('w', status: 'done', counts: const {'ready': 1}, items: items), 5, now), isEmpty);
+      expect(warehouseItemsOf(order('w', service: 'onsite', counts: const {'ready': 1}, items: items), 5, now), isEmpty);
+      expect(warehouseItemsOf(order('w', counts: const {'ready': 1}), 5, now), isEmpty);
     });
 
     test('chegara admin sozlamasiga bo\'ysunadi', () {
-      expect(isInWarehouse(late(6), 5, now), isTrue);
-      expect(isInWarehouse(late(6), 30, now), isFalse);
+      expect(isItemInWarehouse(item('a', 'ready', readyAgo: 6), 5, now), isTrue);
+      expect(isItemInWarehouse(item('a', 'ready', readyAgo: 6), 10, now), isFalse);
     });
   });
 }

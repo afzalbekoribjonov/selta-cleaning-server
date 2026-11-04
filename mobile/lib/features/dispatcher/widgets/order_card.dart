@@ -6,6 +6,7 @@ import '../../../core/models/order.dart';
 import '../../../core/services/order_items_provider.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/money_utils.dart';
+import '../../../core/utils/phone_format.dart';
 
 /// Ro'yxatdagi buyurtma kartasi — barcha bo'limlarda bir xil "ixcham"
 /// ramka; o'rtadagi qatorlar ([facts]) bo'limga qarab o'zgaradi.
@@ -55,7 +56,7 @@ class OrderCard extends StatelessWidget {
     // Jamoa biriktirilmagan joyida-yuvish buyurtmasi e'tiborni tortib
     // turishi kerak (talab).
     final needsTeam = order.serviceType == 'onsite' && order.status == 'new' && order.assignedTeam.isEmpty;
-    final lines = facts ?? [CardFact(Icons.payments_rounded, formatMoneyUz(order.totalPrice))];
+    final lines = facts ?? [CardFact.price(order)];
 
     return Material(
       color: AppColors.surface,
@@ -123,6 +124,17 @@ class CardFact {
   final bool strong;
 
   const CardFact(this.icon, this.text, {this.color, this.strong = false});
+
+  /// Buyurtma summasi. Hali o'lchanmagan (narxi 0) buyurtmada "0 so'm"
+  /// o'rniga sotuv menejeri aytgan taxminiy summa yoki tushuntirish.
+  static CardFact price(Order order) {
+    if (order.totalPrice > 0) return CardFact(Icons.payments_rounded, formatMoneyUz(order.totalPrice));
+    final estimate = order.estimatedPrice;
+    if (estimate != null && estimate > 0) {
+      return CardFact(Icons.payments_outlined, 'Taxminan ${formatMoneyUz(estimate)}', color: AppColors.grayDark);
+    }
+    return const CardFact(Icons.straighten_rounded, "Narx o'lchangandan keyin", color: AppColors.gray);
+  }
 
   /// "4 mahsulot · 2 yuvilmoqda · 1 upakovkada" — buyurtma xulosasidan,
   /// mahsulotlarni o'qimasdan.
@@ -227,7 +239,7 @@ class _Contact extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(order.phone.replaceFirst('+998', ''), style: const TextStyle(color: AppColors.grayDark, fontSize: 12.5)),
+        Text(formatPhoneShortUz(order.phone), style: const TextStyle(color: AppColors.grayDark, fontSize: 12.5)),
         if (order.location.isNotEmpty) ...[
           const Text('  ·  ', style: TextStyle(color: AppColors.gray, fontSize: 12.5)),
           Expanded(

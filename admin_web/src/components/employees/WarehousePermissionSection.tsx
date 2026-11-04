@@ -76,7 +76,7 @@ function ConfirmDialog({ employee, grant, onClose }: { employee: Employee; grant
         <p className="mt-2 text-sm text-gray-dark">
           <strong className="text-ink">{employee.fullName}</strong>{' '}
           {grant
-            ? "ilovada Omborxonani ko'radi va ombordagi buyurtmalarni mijozga topshira oladi."
+            ? "ilovada Omborxonani ko'radi va ombordagi mahsulotlarni mijozga topshira oladi."
             : "endi Omborxonani ko'ra olmaydi."}
         </p>
         {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}

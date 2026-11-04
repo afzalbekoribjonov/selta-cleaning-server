@@ -94,8 +94,8 @@ void main() {
     expect(find.textContaining('Mijoz new2'), findsOneWidget);
     expect(find.textContaining('Mijoz ready1'), findsNothing);
 
-    // Deyarli tayyor
-    await tester.tap(find.text('Deyarli tayyor'));
+    // Qisman tayyor
+    await tester.tap(find.text('Qisman'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.textContaining('Mijoz almost'), findsOneWidget);
@@ -120,8 +120,8 @@ void main() {
     final second = tester.getTopLeft(find.textContaining('Mijoz ready2')).dy;
     expect(first, lessThan(second), reason: '420 000 so\'mlik yuqorida');
 
-    // Yetgazildi — bugungi jurnaldan
-    await tester.tap(find.text('Yetgazildi'));
+    // Yetkazildi — bugungi jurnaldan
+    await tester.tap(find.text('Yetkazildi'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.textContaining('Bugungi mijoz'), findsOneWidget);

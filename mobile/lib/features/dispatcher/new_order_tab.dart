@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/filter_pill.dart';
 import '../../app/theme.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show describeApiError, employeeClaimsProvider;
@@ -208,11 +209,7 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
       // Mijoz tekshirilgan bo'lsa GPS haqida forma o'zi qaror qiladi;
       // aks holda (internet yo'q edi) server eski GPS'ni o'zi topadi.
       final gpsChecked = _customerDigits == digits && (_lookup == _Lookup.found || _lookup == _Lookup.newCustomer);
-      final notedItems = _notedItemsController.text
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList();
+      final notedItems = _notedItemsController.text.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
       final estimatedPrice = num.tryParse(_estimatedPriceController.text.replaceAll(',', '.'));
       final actorName = ref.read(currentEmployeeProvider).valueOrNull?['fullName'] as String?;
       final result = await ref.read(ordersRepositoryProvider).createOrder(
@@ -369,18 +366,11 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
                           runSpacing: 8,
                           children: [
                             for (final s in sources)
-                              ChoiceChip(
-                                label: Text(s.name),
+                              FilterPill(
+                                label: s.name,
                                 selected: _source == s.id,
-                                onSelected: (v) => setState(() => _source = v ? s.id : null),
-                                labelStyle: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12.5,
-                                  color: _source == s.id ? Colors.white : AppColors.ink,
-                                ),
-                                selectedColor: colorFromHex(s.color),
-                                backgroundColor: AppColors.surface,
-                                side: BorderSide(color: _source == s.id ? colorFromHex(s.color) : AppColors.border),
+                                color: colorFromHex(s.color),
+                                onTap: () => setState(() => _source = _source == s.id ? null : s.id),
                               ),
                           ],
                         ),
@@ -499,12 +489,13 @@ class _NewOrderTabState extends ConsumerState<NewOrderTab> {
                     children: [
                       const Expanded(child: Text('Jami', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
                       Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(formatMoneyUz(_draftTotal), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.primary)),
-                ),
-              ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(formatMoneyUz(_draftTotal),
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.primary)),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -682,7 +673,8 @@ class _DraftItemRow extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+      decoration:
+          BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
       child: Row(
         children: [
           Container(
@@ -711,12 +703,13 @@ class _DraftItemRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(formatMoneyUz(draft.price ?? 0), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: AppColors.grayDark)),
-                ),
-              ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(formatMoneyUz(draft.price ?? 0),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: AppColors.grayDark)),
+            ),
+          ),
           IconButton(
             onPressed: onRemove,
             icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.gray),

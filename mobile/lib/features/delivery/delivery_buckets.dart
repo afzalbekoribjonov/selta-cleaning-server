@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../../core/models/order.dart';
+import '../../core/models/order_item.dart';
 import '../../core/services/order_items_provider.dart';
 
 /// Dastavchik bo'limlari — qaysi buyurtma qayerga tushadi va qanday
@@ -127,12 +128,48 @@ int daysLate(Order o, DateTime now) {
   return today.difference(DateTime(due.year, due.month, due.day)).inDays;
 }
 
-/// "Omborxona" — qolgan mahsulotlarning hammasi tayyor VA muddatidan
-/// [thresholdDays] kundan KO'P o'tgan (kartada "11 kun kechikdi" bo'lsa
-/// 10 kunlik chegarada omborga tushadi).
+/* ------------------------------------------------------------------ */
+/* Omborxona — MAHSULOT darajasida                                      */
+/* ------------------------------------------------------------------ */
+
+/// Mahsulot "Tayyor" bo'lgan payt — upakovka tugagan vaqt. Bu maydondan
+/// oldingi eski mahsulotlarda yuvilgan vaqt (tayyor bo'lishdan oldingi
+/// eng yaqin belgi) olinadi.
+DateTime? readySince(OrderItem item) => item.packedAt ?? item.washedAt;
+
+/// Mahsulot necha kalendar kundan beri tayyor turibdi (noma'lum bo'lsa null).
+int? readyDays(OrderItem item, DateTime now) {
+  final since = readySince(item);
+  if (since == null) return null;
+  final today = DateTime(now.year, now.month, now.day);
+  return today.difference(DateTime(since.year, since.month, since.day)).inDays;
+}
+
+/// Mahsulot omborda: tayyor holatda va tayyor bo'lganiga [days] kun yoki
+/// undan ko'p bo'lgan (mijoz olib ketmagan). Har bir mahsulot ALOHIDA —
+/// buyurtmaning qolganlari o'z vaqtida tushadi.
 ///
-/// Hech qanday yozuv yoki rejalashtirilgan vazifasiz — buyurtma
-/// xulosasidan hisoblanadi, shuning uchun mijoz olib ketgani zahoti
+/// Hech qanday yozuv yoki rejalashtirilgan vazifasiz — buyurtmadagi
+/// mahsulotlar nusxasidan hisoblanadi, shuning uchun topshirilishi bilan
 /// ombordan ham o'z-o'zidan chiqadi.
-bool isInWarehouse(Order o, int thresholdDays, DateTime now) =>
-    isFullyReady(o) && daysLate(o, now) > thresholdDays;
+bool isItemInWarehouse(OrderItem item, int days, DateTime now) =>
+    item.status == 'ready' && (readyDays(item, now) ?? -1) >= days;
+
+/// Buyurtmaning omborga tushgan mahsulotlari (eng uzoq turgani birinchi).
+List<OrderItem> warehouseItemsOf(Order o, int days, DateTime now) {
+  if (o.serviceType != 'pickup' || o.isDone) return const [];
+  final items = [
+    for (final i in o.itemsMirror ?? const <OrderItem>[])
+      if (isItemInWarehouse(i, days, now)) i,
+  ]..sort((a, b) => (readyDays(b, now) ?? 0).compareTo(readyDays(a, now) ?? 0));
+  return items;
+}
+
+/// Buyurtmaning yetkazilmagan HAMMA mahsuloti omborda — bunday buyurtma
+/// dastavchikning "Tayyor" ro'yxatidan chiqadi (mijoz olib ketmayapti),
+/// Omborxonada turadi. Qisman omborda bo'lsa, ro'yxatda qoladi va
+/// kartada "N ta omborda" deb ko'rsatiladi.
+bool isWholeOrderInWarehouse(Order o, int days, DateTime now) {
+  final remaining = remainingItems(o);
+  return remaining > 0 && warehouseItemsOf(o, days, now).length == remaining;
+}

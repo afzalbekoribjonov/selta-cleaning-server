@@ -67,7 +67,7 @@ export function PipelineOverview() {
       { key: 'washing', label: 'Yuvilmoqda', hint: 'sexda', value: sum('washing'), unit: 'mahsulot', icon: Droplets, tone: 'blue', to: '/orders?status=item:washing' },
       { key: 'packing', label: 'Upakovkada', hint: 'sexda', value: sum('packing'), unit: 'mahsulot', icon: PackageCheck, tone: 'amber', to: '/orders?status=item:packing' },
       { key: 'returned', label: 'Qayta ishlovda', hint: 'sifatdan qaytgan', value: sum('returned'), unit: 'mahsulot', icon: Undo2, tone: 'red', to: '/orders?status=item:returned', hideWhenZero: true },
-      { key: 'ready', label: 'Tayyor', hint: 'omborda, yetkazishga', value: sum('ready'), unit: 'mahsulot', icon: Sparkles, tone: 'green', to: '/orders?status=item:ready' },
+      { key: 'ready', label: 'Tayyor', hint: 'yetkazishga tayyor', value: sum('ready'), unit: 'mahsulot', icon: Sparkles, tone: 'green', to: '/orders?status=item:ready' },
       { key: 'onsite', label: 'Joyida yuvish', hint: 'faol ishlar', value: active.filter((o) => o.serviceType === 'onsite').length, unit: 'buyurtma', icon: House, tone: 'violet', to: '/orders?service=onsite' },
       { key: 'overdue', label: 'Kechikkan', hint: "muddati o'tgan", value: active.filter((o) => isOrderOverdue(o)).length, unit: 'buyurtma', icon: AlertTriangle, tone: 'red', to: '/orders?overdue=1' },
     ]

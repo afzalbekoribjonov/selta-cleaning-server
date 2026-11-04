@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:selta_cleaning/core/models/order.dart';
+import 'package:selta_cleaning/core/models/order_item.dart';
 import 'package:selta_cleaning/core/services/connectivity_service.dart';
 import 'package:selta_cleaning/core/services/employee_repository.dart';
 import 'package:selta_cleaning/core/services/orders_repository.dart';
@@ -16,11 +17,25 @@ class _EmptyQueue extends ActionQueue {
   List<PendingAction> build() => const [];
 }
 
-Order ready(String id, int daysLate) {
+/// Buyurtma: har bir son — shu mahsulot necha kundan beri tayyor.
+Order ready(String id, int number, List<int> readyAgo) {
   final now = DateTime.now();
+  final items = [
+    for (var i = 0; i < readyAgo.length; i++)
+      OrderItem(
+        id: '$id-$i',
+        itemNumber: i + 1,
+        name: 'Gilam $id$i',
+        area: 0,
+        price: 100000,
+        qcStatus: 'passed',
+        status: 'ready',
+        packedAt: now.subtract(Duration(days: readyAgo[i], hours: 1)),
+      ),
+  ];
   return Order(
     id: id,
-    orderNumber: 100 + daysLate,
+    orderNumber: number,
     customerName: 'Mijoz $id',
     phone: '+998901112233',
     location: 'Manzil',
@@ -28,22 +43,22 @@ Order ready(String id, int daysLate) {
     status: 'brought_in',
     createdBy: 'e',
     createdAt: now.subtract(const Duration(days: 40)),
-    itemStatusCounts: const {'ready': 2},
-    totalPrice: 200000,
-    earliestPendingDueDate: DateTime(now.year, now.month, now.day).subtract(Duration(days: daysLate)),
+    itemStatusCounts: {'ready': readyAgo.length},
+    totalPrice: 100000 * readyAgo.length,
+    itemsMirror: items,
   );
 }
 
 List<Override> base({required Map<String, dynamic> employee, List<Order> orders = const []}) => [
       ordersProvider.overrideWithValue(AsyncData(orders)),
       currentEmployeeProvider.overrideWith((ref) => Stream.value(employee)),
-      warehouseThresholdProvider.overrideWith((ref) => Stream.value(10)),
+      warehouseReadyDaysProvider.overrideWith((ref) => Stream.value(5)),
       actionQueueProvider.overrideWith(_EmptyQueue.new),
       connectivityProvider.overrideWith((ref) => Stream.value(true)),
     ];
 
 void main() {
-  testWidgets('omborda faqat chegaradan o\'tganlar, eng uzoq turgani birinchi', (tester) async {
+  testWidgets('omborda har bir mahsulot alohida: faqat 5+ kun tayyorlari, eng uzoq turgani tepada', (tester) async {
     tester.view.physicalSize = const Size(360 * 3, 760 * 3);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
@@ -52,7 +67,11 @@ void main() {
       ProviderScope(
         overrides: base(
           employee: {'department': 'dispatcher', 'canAccessWarehouse': true},
-          orders: [ready('a', 12), ready('b', 30), ready('c', 10), ready('d', 3)],
+          orders: [
+            ready('a', 101, [12, 2]), // faqat birinchisi omborda
+            ready('b', 102, [30]),
+            ready('c', 103, [4]), // hali chegarada emas
+          ],
         ),
         child: const MaterialApp(home: WarehouseScreen()),
       ),
@@ -60,14 +79,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    expect(find.text('Mijoz a'), findsOneWidget);
-    expect(find.text('Mijoz b'), findsOneWidget);
-    expect(find.text('Mijoz c'), findsNothing, reason: '10 kun — hali chegarada');
-    expect(find.text('Mijoz d'), findsNothing);
-    expect(find.textContaining('2 ta buyurtma'), findsOneWidget);
+    expect(find.text('Gilam a0'), findsOneWidget);
+    expect(find.text('Gilam a1'), findsNothing, reason: '2 kun — hali omborda emas');
+    expect(find.text('Gilam b0'), findsOneWidget);
+    expect(find.text('Gilam c0'), findsNothing);
+    expect(find.text('101/1'), findsOneWidget, reason: 'mahsulot raqami bilan');
+    expect(find.text('Yana 1 ta mahsuloti omborda emas'), findsOneWidget);
+    expect(find.text('12 kun'), findsOneWidget);
 
-    final b = tester.getTopLeft(find.text('Mijoz b')).dy;
-    final a = tester.getTopLeft(find.text('Mijoz a')).dy;
+    final b = tester.getTopLeft(find.text('Gilam b0')).dy;
+    final a = tester.getTopLeft(find.text('Gilam a0')).dy;
     expect(b, lessThan(a), reason: '30 kun turgani tepada');
   });
 

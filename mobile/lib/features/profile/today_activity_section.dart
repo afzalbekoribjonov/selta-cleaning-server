@@ -411,10 +411,7 @@ class _ActivityCard extends StatelessWidget {
 }
 
 /// "12.50" emas, "12.5"; butun son bo'lsa kasr qismi umuman yozilmaydi.
-String _trimNumber(num value) {
-  if (value == value.roundToDouble()) return value.round().toString();
-  return value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
-}
+String _trimNumber(num value) => formatQtyUz(value);
 
 class _ErrorBox extends StatelessWidget {
   final VoidCallback onRetry;

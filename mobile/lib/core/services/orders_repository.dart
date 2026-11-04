@@ -803,6 +803,9 @@ class OrdersRepository {
               ? 'failed'
               : null,
       qcNote: toStatus == 'returned' ? qcNote : null,
+      // Omborxona hisobi shu paytdan boshlanadi — oflayn ham to'g'ri tursin.
+      packedBy: toStatus == 'ready' ? _employeeId : null,
+      packedAt: toStatus == 'ready' ? DateTime.now() : null,
       deliveredBy: toStatus == 'done' ? _employeeId : null,
       deliveredAt: toStatus == 'done' ? DateTime.now() : null,
       collectedAmount: toStatus == 'done' ? collectedAmount : null,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/services/employee_repository.dart';
+import '../../core/widgets/app_bottom_nav.dart';
 import '../shared/employee_app_bar.dart';
 import 'active_orders_tab.dart';
 import 'new_order_tab.dart';
@@ -33,12 +34,12 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
           NewOrderTab(onSaved: _goToActiveTab),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.list_alt_rounded), label: 'Faol buyurtmalar'),
-          NavigationDestination(icon: Icon(Icons.add_circle_rounded), label: 'Yangi buyurtma'),
+      bottomNavigationBar: AppBottomNav(
+        currentIndex: _index,
+        onSelect: (i) => setState(() => _index = i),
+        items: const [
+          AppNavItem(label: 'Faol buyurtmalar', icon: Icons.list_alt_outlined, activeIcon: Icons.list_alt_rounded),
+          AppNavItem(label: 'Yangi buyurtma', icon: Icons.add_circle_outline_rounded, activeIcon: Icons.add_circle_rounded),
         ],
       ),
     );

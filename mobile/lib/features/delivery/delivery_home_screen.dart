@@ -9,10 +9,13 @@ import '../../core/services/employee_repository.dart';
 import '../../core/services/my_activity_repository.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/services/warehouse_settings.dart';
+import '../../core/models/order_item.dart';
 import '../../core/sync/action_queue.dart';
 import '../../core/sync/pending_action.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/money_utils.dart';
+import '../../core/widgets/app_bottom_nav.dart';
+import '../../core/widgets/filter_pill.dart';
 import '../../core/widgets/selta_loader.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/employee_app_bar.dart';
@@ -23,12 +26,23 @@ import '../../core/sync/fast_get.dart';
 
 enum _Tab { fresh, almost, ready, delivered }
 
+/// Pastki menyu bandlari — nomlar qisqa va bir xil uzunlikda: avval
+/// "Deyarli tayyor" tor ekranda qisqarib ("Deyarli t…"), qolganlari bilan
+/// tartibsiz ko'rinardi. To'liq ma'nosi bo'lim sarlavhasida yoziladi.
 const _tabs = [
-  (_Tab.fresh, 'Yangi', Icons.move_to_inbox_rounded),
-  (_Tab.almost, 'Deyarli tayyor', Icons.hourglass_bottom_rounded),
-  (_Tab.ready, 'Tayyor', Icons.done_all_rounded),
-  (_Tab.delivered, 'Yetgazildi', Icons.local_shipping_rounded),
+  (_Tab.fresh, 'Olib kelish', Icons.move_to_inbox_outlined, Icons.move_to_inbox_rounded),
+  (_Tab.almost, 'Qisman', Icons.hourglass_empty_rounded, Icons.hourglass_bottom_rounded),
+  (_Tab.ready, 'Tayyor', Icons.inventory_2_outlined, Icons.inventory_2_rounded),
+  (_Tab.delivered, 'Yetkazildi', Icons.local_shipping_outlined, Icons.local_shipping_rounded),
 ];
+
+/// Bo'lim sarlavhasi va izohi — ro'yxat tepasida.
+const _tabTitles = {
+  _Tab.fresh: ('Mijozdan olib kelish', 'Yangi buyurtmalar — mahsulotlarni sexga olib kelish kerak'),
+  _Tab.almost: ('Qisman tayyor', "Bir qismi tayyor, qolgani hali ishlovda — kutish yoki tayyorini olib borish mumkin"),
+  _Tab.ready: ('Tayyor — yetkazish', 'Qolgan barcha mahsulotlari tayyor'),
+  _Tab.delivered: ('Bugun yetkazildi', 'Siz bugun topshirgan buyurtmalar'),
+};
 
 /// Har bir bo'limga MAZMUNAN tegishli tartiblar. "Yangi"da narx va
 /// muddat hali ahamiyatsiz (mahsulotlar o'lchanmagan), "Yetgazildi"da esa
@@ -125,15 +139,18 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
     final fullName = ref.watch(currentEmployeeProvider).valueOrNull?['fullName'] as String? ?? '...';
     final ordersAsync = ref.watch(ordersProvider);
     final orders = ordersAsync.valueOrNull ?? const <Order>[];
-    final warehouseDays = ref.warehouseThreshold;
+    final warehouseDays = ref.warehouseReadyDays;
     final now = DateTime.now();
 
     final buckets = {
       _Tab.fresh: orders.where(isToPickUp).toList(),
       _Tab.almost: orders.where(isAlmostReady).toList(),
-      // Muddatidan uzoq o'tganlari Omborxonaga o'tadi (⋮ menyu).
-      _Tab.ready: orders.where((o) => isFullyReady(o) && !isInWarehouse(o, warehouseDays, now)).toList(),
+      // Qolgan HAMMA mahsuloti omborga tushgan buyurtma Omborxonada turadi
+      // (⋮ menyu); qisman omborda bo'lsa shu yerda, kartada belgisi bilan.
+      _Tab.ready: orders.where((o) => isFullyReady(o) && !isWholeOrderInWarehouse(o, warehouseDays, now)).toList(),
     };
+    List<OrderItem> inWarehouse(Order o) => warehouseItemsOf(o, warehouseDays, now);
+    final (title, subtitle) = _tabTitles[_tab]!;
 
     return Scaffold(
       appBar: EmployeeAppBar(departmentLabel: 'Dastavchik', employeeName: fullName),
@@ -143,6 +160,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
           _SearchField(
             onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
           ),
+          _SectionHeader(title: title, subtitle: subtitle, count: _tab == _Tab.delivered ? null : buckets[_tab]!.length),
           _SortChips(
             options: _sortsFor[_tab]!,
             selected: _sort[_tab]!,
@@ -161,20 +179,23 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
                         position: _position,
                         locationError: _sort[_tab] == DeliverySort.distance ? _locationError : null,
                         locating: _locating,
+                        warehouseItems: inWarehouse,
                       ),
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tabs.indexWhere((t) => t.$1 == _tab),
-        onDestinationSelected: (i) => setState(() => _tab = _tabs[i].$1),
-        destinations: [
-          for (final (tab, label, icon) in _tabs)
-            NavigationDestination(
-              // "Yetgazildi" — tarix, bajariladigan ish emas: unga son
-              // qo'yilmaydi (aks holda u doim "e'tibor kerak" kabi ko'rinardi).
-              icon: _BadgedIcon(icon: icon, count: buckets[tab]?.length ?? 0),
+      bottomNavigationBar: AppBottomNav(
+        currentIndex: _tabs.indexWhere((t) => t.$1 == _tab),
+        onSelect: (i) => setState(() => _tab = _tabs[i].$1),
+        items: [
+          for (final (tab, label, icon, activeIcon) in _tabs)
+            AppNavItem(
               label: label,
+              icon: icon,
+              activeIcon: activeIcon,
+              // "Yetkazildi" — tarix, bajariladigan ish emas: unga son
+              // qo'yilmaydi (aks holda u doim "e'tibor kerak" kabi ko'rinardi).
+              count: buckets[tab]?.length ?? 0,
             ),
         ],
       ),
@@ -217,42 +238,17 @@ class _SortChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-        itemCount: options.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final sort = options[i];
-          final active = sort == selected;
-          return ChoiceChip(
-            label: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (sort == DeliverySort.distance && active && locating) ...[
-                  const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                  const SizedBox(width: 6),
-                ],
-                Text(deliverySortLabels[sort]!),
-              ],
-            ),
-            selected: active,
-            showCheckmark: false,
-            onSelected: (_) => onSelected(sort),
-            visualDensity: VisualDensity.compact,
-            selectedColor: AppColors.primary,
-            backgroundColor: AppColors.surface,
-            side: BorderSide(color: active ? AppColors.primary : AppColors.border),
-            labelStyle: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: active ? Colors.white : AppColors.ink,
-            ),
-          );
-        },
-      ),
+    return FilterPillBar(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      children: [
+        for (final sort in options)
+          FilterPill(
+            label: deliverySortLabels[sort]!,
+            selected: sort == selected,
+            busy: sort == DeliverySort.distance && sort == selected && locating,
+            onTap: () => onSelected(sort),
+          ),
+      ],
     );
   }
 }
@@ -265,6 +261,9 @@ class _OrdersList extends StatelessWidget {
   final String? locationError;
   final bool locating;
 
+  /// Buyurtmaning omborga tushgan mahsulotlari — kartada belgi uchun.
+  final List<OrderItem> Function(Order) warehouseItems;
+
   const _OrdersList({
     required this.tab,
     required this.orders,
@@ -272,6 +271,7 @@ class _OrdersList extends StatelessWidget {
     required this.position,
     required this.locationError,
     required this.locating,
+    required this.warehouseItems,
   });
 
   @override
@@ -314,14 +314,17 @@ class _OrdersList extends StatelessWidget {
           order: order,
           onTap: () => openDeliveryOrderDetailSheet(context, order),
           onCommentTap: () => openDeliveryOrderDetailSheet(context, order, focusComments: true),
-          facts: _factsFor(tab, order),
+          facts: _factsFor(tab, order, warehouseItems(order).length),
           trailing: position != null && gps != null ? formatDistance(distanceKm(position!, gps)) : null,
         );
       },
     );
   }
 
-  static List<CardFact> _factsFor(_Tab tab, Order o) {
+  static List<CardFact> _factsFor(_Tab tab, Order o, int inWarehouse) {
+    final warehouse = inWarehouse > 0
+        ? CardFact(Icons.warehouse_rounded, '$inWarehouse ta mahsulot omborda', color: const Color(0xFFDD6B20), strong: true)
+        : null;
     switch (tab) {
       case _Tab.fresh:
         final items = o.itemStatusCounts.values.fold<int>(0, (s, v) => s + v);
@@ -344,10 +347,12 @@ class _OrdersList extends StatelessWidget {
         return [
           CardFact(Icons.check_circle_rounded, '$ready/$remaining tayyor', color: AppColors.success, strong: true),
           if (rest.isNotEmpty) CardFact(Icons.pending_rounded, rest.join(' · ')),
+          if (warehouse != null) warehouse,
         ];
       case _Tab.ready:
         return [
-          CardFact(Icons.payments_rounded, "Yig'ish: ${formatMoneyUz(o.totalPrice)}", color: AppColors.success, strong: true),
+          CardFact(Icons.payments_rounded, "Yig'ish: ${formatMoneyUz(o.collectibleAmount)}", color: AppColors.success, strong: true),
+          if (warehouse != null) warehouse,
         ];
       case _Tab.delivered:
         return const [];
@@ -573,18 +578,43 @@ class _Message extends StatelessWidget {
   }
 }
 
-class _BadgedIcon extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  const _BadgedIcon({required this.icon, required this.count});
+/// Bo'lim sarlavhasi — pastki menyudagi qisqa nomning to'liq ma'nosi.
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final int? count;
+  const _SectionHeader({required this.title, required this.subtitle, required this.count});
 
   @override
   Widget build(BuildContext context) {
-    if (count == 0) return Icon(icon);
-    return Badge(
-      label: Text(count > 99 ? '99+' : '$count'),
-      backgroundColor: AppColors.danger,
-      child: Icon(icon),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                const SizedBox(height: 1),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.grayDark, height: 1.3),
+                ),
+              ],
+            ),
+          ),
+          if (count != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 10, bottom: 2),
+              child: Text('$count ta', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary)),
+            ),
+        ],
+      ),
     );
   }
 }
+

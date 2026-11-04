@@ -444,9 +444,9 @@ function StagePreview({ setting }: { setting: TariffSetting }) {
 }
 
 /**
- * Omborxona chegarasi. Qoida ilovada buyurtma xulosasidan hisoblanadi —
+ * Omborxona chegarasi. Qoida ilovada mahsulotlar nusxasidan hisoblanadi —
  * shu son o'zgarishi bilan ombor ro'yxati hamma xodimda darhol yangilanadi
- * (hech qanday buyurtma "ko'chirilmaydi", shuning uchun qaytarib
+ * (hech qanday mahsulot "ko'chirilmaydi", shuning uchun qaytarib
  * o'zgartirish ham xavfsiz).
  */
 function WarehouseSettingsCard() {
@@ -484,9 +484,9 @@ function WarehouseSettingsCard() {
         Omborxona
       </h2>
       <p className="mb-4 text-xs text-gray-dark">
-        Barcha mahsulotlari tayyor buyurtma muddatidan shuncha kundan ko'p o'tsa (mijoz olib ketmasa), u
-        dastavchikning "Tayyor" ro'yxatidan Omborxonaga o'tadi. Omborxonani vakolat berilgan xodimlar
-        ko'radi — vakolat Xodimlar sahifasida beriladi.
+        "Tayyor" holatiga o'tganiga shuncha kun bo'lgan har bir mahsulot (mijoz olib ketmagan bo'lsa) alohida
+        Omborxonaga o'tadi — butun buyurtma emas, faqat o'sha mahsulot. Omborxonani vakolat berilgan
+        xodimlar ko'radi — vakolat Xodimlar sahifasida beriladi.
       </p>
 
       {current === null ? (
@@ -494,7 +494,7 @@ function WarehouseSettingsCard() {
       ) : (
         <div className="flex flex-wrap items-end gap-3">
           <label className="block">
-            <span className="text-xs font-semibold text-gray-dark">Kechikish chegarasi (kun)</span>
+            <span className="text-xs font-semibold text-gray-dark">Tayyor bo'lgandan keyin (kun)</span>
             <input
               type="number"
               min={1}

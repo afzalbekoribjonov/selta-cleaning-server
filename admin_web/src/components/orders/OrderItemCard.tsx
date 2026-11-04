@@ -14,6 +14,8 @@ import { daysUntil, dueLabel } from '@/lib/order-tariffs'
 import { COLOR_STAGE_HEX, STATUS_CONFIG, TARIFF_CONFIG, colorStageFor } from '@/lib/status-config'
 import { type TariffConfig } from '@/lib/tariffs'
 import { formatMoney } from '@/lib/units'
+import { readyDaysOf } from '@/lib/warehouse'
+import { useWarehouseDays } from '@/hooks/useWarehouseDays'
 import { cn } from '@/lib/utils'
 import { ItemPhotoStrip } from './ItemPhotos'
 import { ItemTimeline } from './ItemTimeline'
@@ -48,6 +50,11 @@ export function OrderItemCard({
   const measurement = itemMeasurement(item)
   const perUnit = unitPriceLabel(item)
   const overdue = !!item.dueDate && !done && daysUntil(item.dueDate) < 0
+  // Tayyor bo'lganiga chegara kunidan oshgan mahsulot omborda turadi
+  // (ilovadagi Omborxona bilan bir xil qoida).
+  const threshold = useWarehouseDays()
+  const sinceReady = item.status === 'ready' ? readyDaysOf(item.packedAt ?? item.washedAt) : null
+  const warehouseDays = sinceReady !== null && sinceReady >= threshold ? sinceReady : null
 
   // Tarix yozilishidan oldingi mahsulotlar uchun — vaqt belgilaridan tiklanadi.
   const history = events.length > 0 ? events : derivedItemEvents(item)
@@ -100,6 +107,11 @@ export function OrderItemCard({
           >
             {colorStage && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLOR_STAGE_HEX[colorStage] }} />}
             {formatDateUz(item.dueDate)} · {dueLabel(item.dueDate)}
+          </span>
+        )}
+        {warehouseDays !== null && (
+          <span className="rounded-full bg-[#fdf0e6] px-2 py-0.5 text-[11px] font-bold text-[#dd6b20]">
+            Omborda · {warehouseDays} kun
           </span>
         )}
       </div>

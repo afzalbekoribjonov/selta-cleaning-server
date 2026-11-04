@@ -25,3 +25,11 @@ String formatPhoneUz(String phone) {
   final d = digits.substring(digits.length - 9);
   return '+998 ${d.substring(0, 2)} ${d.substring(2, 5)} ${d.substring(5, 7)} ${d.substring(7)}';
 }
+
+/// Ro'yxat kartalari uchun ixcham: "+998901234567" -> "90 123 45 67".
+String formatPhoneShortUz(String phone) {
+  final digits = phone.replaceAll(RegExp(r'\D'), '');
+  if (digits.length < 9) return phone;
+  final d = digits.substring(digits.length - 9);
+  return '${d.substring(0, 2)} ${d.substring(2, 5)} ${d.substring(5, 7)} ${d.substring(7)}';
+}

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/filter_pill.dart';
 import '../../app/theme.dart';
 import '../../core/constants.dart';
 import '../../core/models/order.dart';
@@ -34,7 +35,6 @@ void openOrderDetailSheet(BuildContext context, Order order, {bool focusComments
     builder: (context) => _OrderDetailSheet(order: order, focusComments: focusComments),
   );
 }
-
 
 class _OrderDetailSheet extends ConsumerWidget {
   final Order order;
@@ -190,7 +190,7 @@ class _InfoCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _row(Icons.person_rounded, order.customerName.isEmpty ? "Noma'lum mijoz" : order.customerName),
-          _row(Icons.phone_rounded, order.phone),
+          _row(Icons.phone_rounded, formatPhoneUz(order.phone)),
           _row(Icons.location_on_rounded, order.location),
           _row(
             order.serviceType == 'onsite' ? Icons.home_repair_service_rounded : Icons.local_shipping_rounded,
@@ -215,7 +215,10 @@ class _InfoCard extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: color ?? AppColors.gray),
             const SizedBox(width: 10),
-            Expanded(child: Text(text, style: TextStyle(fontSize: 13.5, color: color ?? AppColors.ink, fontWeight: color != null ? FontWeight.w700 : FontWeight.w500))),
+            Expanded(
+                child: Text(text,
+                    style: TextStyle(
+                        fontSize: 13.5, color: color ?? AppColors.ink, fontWeight: color != null ? FontWeight.w700 : FontWeight.w500))),
           ],
         ),
       );
@@ -240,7 +243,8 @@ class _ItemsSummaryCard extends StatelessWidget {
     final pending = itemsPendingNote(itemsAsync);
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
+      decoration:
+          BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -351,7 +355,9 @@ class _ProgressChecklist extends StatelessWidget {
                 ),
                 child: done
                     ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
-                    : (current ? Center(child: Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle))) : null),
+                    : (current
+                        ? Center(child: Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)))
+                        : null),
               ),
               if (!isLast) Expanded(child: Container(width: 2, color: done ? color : AppColors.border)),
             ],
@@ -413,7 +419,8 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
     final digits = o.phone.replaceAll(RegExp(r'\D'), '');
     _phoneController = TextEditingController(
       text: UzPhoneFormatter()
-          .formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: digits.length > 9 ? digits.substring(digits.length - 9) : digits))
+          .formatEditUpdate(
+              TextEditingValue.empty, TextEditingValue(text: digits.length > 9 ? digits.substring(digits.length - 9) : digits))
           .text,
     );
     _locationController = TextEditingController(text: o.location);
@@ -453,9 +460,8 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
             newOrderFields: _isNew
                 ? (
                     source: _source,
-                    notedItems: _isOnsite
-                        ? _notedItemsController.text.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).toList()
-                        : null,
+                    notedItems:
+                        _isOnsite ? _notedItemsController.text.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).toList() : null,
                     estimatedPrice: _isOnsite ? num.tryParse(_estimateController.text.replaceAll(' ', '')) : null,
                   )
                 : null,
@@ -519,16 +525,11 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
                                 runSpacing: 8,
                                 children: [
                                   for (final src in sources)
-                                    ChoiceChip(
-                                      label: Text(src.name),
+                                    FilterPill(
+                                      label: src.name,
                                       selected: _source == src.id,
-                                      onSelected: (v) => setState(() => _source = v ? src.id : null),
-                                      selectedColor: colorFromHex(src.color),
-                                      labelStyle: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12.5,
-                                        color: _source == src.id ? Colors.white : AppColors.ink,
-                                      ),
+                                      color: colorFromHex(src.color),
+                                      onTap: () => setState(() => _source = _source == src.id ? null : src.id),
                                     ),
                                 ],
                               ),
@@ -546,12 +547,11 @@ class _EditOrderDialogState extends ConsumerState<_EditOrderDialog> {
               runSpacing: 8,
               children: [
                 for (final entry in kTariffConfig.entries)
-                  ChoiceChip(
-                    label: Text(entry.value.label),
+                  FilterPill(
+                    label: entry.value.label,
                     selected: _tariff == entry.key,
-                    onSelected: (_) => setState(() => _tariff = entry.key),
-                    selectedColor: entry.value.color,
-                    labelStyle: TextStyle(color: _tariff == entry.key ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700),
+                    color: entry.value.color,
+                    onTap: () => setState(() => _tariff = entry.key),
                   ),
               ],
             ),

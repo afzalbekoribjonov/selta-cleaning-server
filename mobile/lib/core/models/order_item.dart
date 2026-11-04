@@ -35,6 +35,11 @@ class OrderItem {
   final String? addedByDepartment;
   final String? washedBy;
   final DateTime? washedAt;
+
+  /// Upakovka tugab "Tayyor" bo'lgan payt (server: changeItemStatus,
+  /// packing -> ready). Omborxona shu paytdan hisoblanadi.
+  final String? packedBy;
+  final DateTime? packedAt;
   final String? deliveredBy;
   final DateTime? deliveredAt;
   // Faqat ko'rsatish uchun (server: changeItemStatus) — haqiqiy
@@ -74,6 +79,8 @@ class OrderItem {
     this.addedByDepartment,
     this.washedBy,
     this.washedAt,
+    this.packedBy,
+    this.packedAt,
     this.deliveredBy,
     this.deliveredAt,
     this.deliveredByName,
@@ -99,6 +106,8 @@ class OrderItem {
     String? condition,
     String? tariff,
     String? status,
+    String? packedBy,
+    DateTime? packedAt,
     String? deliveredBy,
     DateTime? deliveredAt,
     num? collectedAmount,
@@ -130,6 +139,8 @@ class OrderItem {
       addedByDepartment: addedByDepartment,
       washedBy: washedBy,
       washedAt: washedAt,
+      packedBy: packedBy ?? this.packedBy,
+      packedAt: packedAt ?? this.packedAt,
       deliveredBy: deliveredBy ?? this.deliveredBy,
       deliveredAt: deliveredAt ?? this.deliveredAt,
       deliveredByName: deliveredByName,
@@ -169,6 +180,8 @@ class OrderItem {
       addedByDepartment: data['addedByDepartment']?.toString(),
       washedBy: data['washedBy']?.toString(),
       washedAt: (data['washedAt'] as Timestamp?)?.toDate(),
+      packedBy: data['packedBy']?.toString(),
+      packedAt: (data['packedAt'] as Timestamp?)?.toDate(),
       deliveredBy: data['deliveredBy']?.toString(),
       deliveredAt: (data['deliveredAt'] as Timestamp?)?.toDate(),
       deliveredByName: data['deliveredByName']?.toString(),

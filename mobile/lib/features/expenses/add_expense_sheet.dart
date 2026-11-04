@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/filter_pill.dart';
 import '../../app/theme.dart';
 import '../../core/services/expenses_repository.dart';
 import '../../core/utils/money_utils.dart';
@@ -183,19 +184,14 @@ class _AddExpenseSheetState extends ConsumerState<_AddExpenseSheet> {
 
   Widget _kindChip(String label, IconData icon) {
     final selected = _kind == label;
-    return ChoiceChip(
-      avatar: Icon(icon, size: 16, color: selected ? Colors.white : AppColors.grayDark),
-      label: Text(label),
+    return FilterPill(
+      icon: icon,
+      label: label,
       selected: selected,
-      showCheckmark: false,
-      onSelected: (_) => setState(() {
+      onTap: () => setState(() {
         _kind = label;
         _error = null;
       }),
-      labelStyle: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: selected ? Colors.white : AppColors.ink),
-      selectedColor: AppColors.primary,
-      backgroundColor: AppColors.surface,
-      side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
     );
   }
 }

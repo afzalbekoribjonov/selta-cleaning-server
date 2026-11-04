@@ -265,7 +265,7 @@ void main() {
           overrides: [
             ordersProvider.overrideWithValue(const AsyncData([])),
             currentEmployeeProvider.overrideWith((ref) => Stream.value(employee)),
-            warehouseThresholdProvider.overrideWith((ref) => Stream.value(10)),
+            warehouseReadyDaysProvider.overrideWith((ref) => Stream.value(5)),
             actionQueueProvider.overrideWith(() => _RecordingQueue()),
             connectivityProvider.overrideWith((ref) => Stream.value(true)),
           ],

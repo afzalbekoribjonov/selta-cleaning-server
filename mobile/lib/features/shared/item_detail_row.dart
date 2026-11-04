@@ -6,6 +6,8 @@ import '../../core/constants.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/tariff_settings.dart';
 import '../../core/utils/money_utils.dart';
+import '../../core/services/warehouse_settings.dart';
+import '../delivery/delivery_buckets.dart' show isItemInWarehouse, readyDays;
 import '../photos/item_photos_chip.dart';
 
 const _conditionLabels = {
@@ -14,28 +16,23 @@ const _conditionLabels = {
   'veryBad': 'Juda yomon',
 };
 
-/// "3" / "3.5" / "10.55" — keraksiz nollarsiz (o'lcham "3.0×4.0" emas "3×4").
-String _dimension(num value) {
-  final fixed = value.toStringAsFixed(2);
-  return fixed.contains('.') ? fixed.replaceFirst(RegExp(r'\.?0+$'), '') : fixed;
-}
-
 /// Mahsulotning o'lchov/miqdor tafsilotini hisoblash turiga qarab
 /// o'qiladigan matnga aylantiradi.
 String itemMeasurementLabel(OrderItem item) {
   switch (item.calcType) {
+    // O'zbekcha o'nlik vergul, keraksiz nollarsiz: "9,8 m² (3,9×2,5)".
     case 'sqm':
-      final qty = item.qty?.toStringAsFixed(2) ?? '0';
+      final qty = formatQtyUz(item.qty ?? 0);
       if (item.width != null && item.height != null) {
-        return '$qty m² (${_dimension(item.width!)}×${_dimension(item.height!)})';
+        return '$qty m² (${formatQtyUz(item.width!)}×${formatQtyUz(item.height!)})';
       }
       return '$qty m²';
     case 'meter':
-      return '${item.qty?.toStringAsFixed(1) ?? '0'} metr';
+      return '${formatQtyUz(item.qty ?? 0, decimals: 1)} metr';
     case 'kg':
-      return '${item.qty?.toStringAsFixed(1) ?? '0'} kg';
+      return '${formatQtyUz(item.qty ?? 0, decimals: 1)} kg';
     case 'count':
-      return '${item.qty?.toStringAsFixed(0) ?? '0'} dona';
+      return '${formatQtyUz(item.qty ?? 0, decimals: 0)} dona';
     case 'size':
       return item.sizeVariant == 'large' ? 'Katta' : 'Kichik';
     default:
@@ -78,6 +75,10 @@ class ItemDetailRow extends ConsumerWidget {
     // yuvishga ham, upakovkaga ham o'ta olmaydi, shuning uchun ro'yxatda
     // birinchi bo'lib ko'zga tashlanishi kerak.
     final unmeasured = item.price <= 0 && !item.isDone;
+    // Tayyor bo'lganiga chegara kunidan oshgan mahsulot omborda turadi —
+    // dastavchik va xodimlar uni qayerdan olishni bilsin.
+    final now = DateTime.now();
+    final inWarehouse = isItemInWarehouse(item, ref.warehouseReadyDays, now);
 
     // Holat belgilari: tarif, jarayon, mahsulot holati (ustama bilan) va
     // "o'lchanmagan". Ular nom yonida emas, alohida qatorda — tor ekranda
@@ -94,6 +95,12 @@ class ItemDetailRow extends ConsumerWidget {
           label: kStatusConfig[item.status]?.label ?? item.status!,
           color: kStatusConfig[item.status]?.color ?? AppColors.grayDark,
           background: kStatusConfig[item.status]?.background ?? AppColors.bg,
+        ),
+      if (inWarehouse)
+        _Badge(
+          label: 'Omborda · ${readyDays(item, now)} kun',
+          color: const Color(0xFFDD6B20),
+          background: const Color(0xFFDD6B20).withValues(alpha: 0.12),
         ),
       if (conditionLabel != null)
         _Badge(

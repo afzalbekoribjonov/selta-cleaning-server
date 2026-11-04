@@ -39,3 +39,8 @@ String formatDaysLeftUz(DateTime dueDate) {
 /// "14:35" — bugungi ro'yxatlarda vaqt ko'rsatish uchun.
 String formatTimeHm(DateTime date) =>
     '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+
+const _uzWeekdays = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+
+/// "Seshanba, 4-noyabr".
+String formatWeekdayDateUz(DateTime date) => '${_uzWeekdays[date.weekday - 1]}, ${formatDateUz(date)}';

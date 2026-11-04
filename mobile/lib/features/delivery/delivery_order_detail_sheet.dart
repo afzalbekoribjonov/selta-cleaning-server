@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../app/theme.dart';
+import '../../core/utils/phone_format.dart';
 import '../../core/constants.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
@@ -226,7 +227,7 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _row(Icons.person_rounded, order.customerName),
-                          _row(Icons.phone_rounded, order.phone),
+                          _row(Icons.phone_rounded, formatPhoneUz(order.phone)),
                           _row(Icons.location_on_rounded, order.location),
                           if (order.dueDate != null) _row(Icons.event_rounded, 'Muddat: ${formatDateUz(order.dueDate!)}', color: order.isOverdue ? AppColors.danger : null),
                           if (order.pickedUpByName != null) _row(Icons.local_shipping_rounded, 'Olib keldi: ${order.pickedUpByName}'),

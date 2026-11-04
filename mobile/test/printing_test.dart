@@ -177,7 +177,7 @@ void main() {
       expect(t, contains('Buyurtma #1245'));
       expect(t, contains('06.10.2026 14:05'));
       expect(t, contains('1245/1'));
-      expect(t, contains('12.00 m2 (3x4)'), reason: "o'lcham ASCII bilan");
+      expect(t, contains('12 m2 (3x4)'), reason: "o'lcham ASCII bilan");
       expect(t, contains('Express'));
       expect(t, contains("To'landi:"));
       expect(t, isNot(contains('Chegirma')));

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
-import '../../core/constants.dart';
 import '../../core/models/order.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/orders_repository.dart';
+import '../../core/widgets/app_bottom_nav.dart';
 import '../../core/widgets/selta_loader.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/employee_app_bar.dart';
@@ -14,6 +14,14 @@ import 'worker_order_detail_sheet.dart';
 import '../../core/widgets/load_error_note.dart';
 
 const _workerStages = ['pending', 'washing', 'packing', 'returned'];
+/// Qisqa nomlar — pastki menyuda bir qatorga sig'adi.
+const _stageLabels = {
+  'pending': 'Navbatda',
+  'washing': 'Yuvish',
+  'packing': 'Upakovka',
+  'returned': 'Qaytarilgan',
+};
+
 const _stageIcons = {
   'pending': Icons.hourglass_empty_rounded,
   'washing': Icons.local_laundry_service_rounded,
@@ -125,9 +133,29 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
 
                 if (filtered.isEmpty) {
                   return Center(
-                    child: Text(
-                      stage == 'returned' ? "Qaytarilgan mahsulot yo'q" : 'Bu bosqichda buyurtma yo\'q',
-                      style: const TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600),
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
+                            child: Icon(_stageIcons[stage], size: 30, color: AppColors.primary),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _search.isNotEmpty
+                                ? 'Topilmadi'
+                                : stage == 'returned'
+                                    ? "Qaytarilgan mahsulot yo'q"
+                                    : "${_stageLabels[stage]} bosqichida buyurtma yo'q",
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w700, fontSize: 14.5),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
@@ -151,25 +179,25 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: ordersAsync.when(
-        loading: () => null,
-        error: (_, __) => null,
-        data: (orders) {
-          final activeOrders = orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in').toList();
-
-          return NavigationBar(
-            selectedIndex: _stageIndex,
-            onDestinationSelected: (i) => setState(() => _stageIndex = i),
-            destinations: [
-              for (final s in _workerStages)
-                NavigationDestination(
-                  icon: _BadgedIcon(icon: _stageIcons[s]!, count: _ordersForStage(activeOrders, s, specializations).length),
-                  label: kStatusConfig[s]!.label,
-                ),
-            ],
-          );
-        },
-      ),
+      // Menyu yuklanish paytida ham turadi (sonlarsiz) — avval u
+      // ma'lumot kelguncha yo'q bo'lib, keyin paydo bo'lar va butun
+      // sahifa pastga-yuqoriga "sakrardi".
+      bottomNavigationBar: Builder(builder: (context) {
+        final orders = ordersAsync.valueOrNull ?? const <Order>[];
+        final activeOrders = orders.where((o) => o.serviceType == 'pickup' && o.status == 'brought_in').toList();
+        return AppBottomNav(
+          currentIndex: _stageIndex,
+          onSelect: (i) => setState(() => _stageIndex = i),
+          items: [
+            for (final s in _workerStages)
+              AppNavItem(
+                label: _stageLabels[s]!,
+                icon: _stageIcons[s]!,
+                count: _ordersForStage(activeOrders, s, specializations).length,
+              ),
+          ],
+        );
+      }),
     );
   }
 }
@@ -202,18 +230,3 @@ List<Order> _ordersForStage(List<Order> orders, String stage, List<String> speci
   return result;
 }
 
-class _BadgedIcon extends StatelessWidget {
-  final IconData icon;
-  final int count;
-  const _BadgedIcon({required this.icon, required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    if (count == 0) return Icon(icon);
-    return Badge(
-      label: Text(count > 99 ? '99+' : '$count'),
-      backgroundColor: AppColors.danger,
-      child: Icon(icon),
-    );
-  }
-}

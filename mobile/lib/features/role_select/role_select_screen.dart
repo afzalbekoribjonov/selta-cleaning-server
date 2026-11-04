@@ -7,11 +7,27 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/config.dart';
 import '../../core/constants.dart';
+import '../../core/utils/date_utils.dart';
 
-/// Bo'lim tanlash ekrani — brendlangan gradient bosh qism + ixcham
-/// grid ko'rinishidagi bo'lim kartalari (talab: "tugmalar haddan ziyod
-/// katta va xunuk ko'rinmoqda" — to'g'irlangan). Pastda 4 ta doimiy
-/// bo'limga tegishli bo'lmagan xodimlar uchun "Boshqa" matnli havola.
+/// "Boshqa" — doimiy bo'limlarga kirmaydigan (admin yaratgan kasblardagi)
+/// xodimlar. Avval pastda kichik matnli havola edi — ko'pchilik uni
+/// sezmasdi; endi u ham boshqa bo'limlar qatorida, bir xil kartada.
+const _otherInfo = DepartmentInfo(
+  label: 'Boshqa',
+  description: 'Boshqa kasbdagi xodimlar',
+  icon: Icons.groups_2_rounded,
+);
+
+/// Har bir bo'limning o'z rangi — kartalar bir qarashda ajralsin.
+const _tileColors = <String, Color>{
+  'dispatcher': AppColors.primary,
+  'worker': AppColors.info,
+  'delivery': Color(0xFF0E9488),
+  'other': Color(0xFFDD6B20),
+};
+
+/// Bo'lim tanlash ekrani — brendlangan gradient bosh qism + 2×2 bo'lim
+/// kartalari: Sotuv menejeri, Ishchi, Dastavchik va Boshqa.
 class RoleSelectScreen extends StatelessWidget {
   const RoleSelectScreen({super.key});
 
@@ -38,33 +54,34 @@ class RoleSelectScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink),
                   ),
                   const SizedBox(height: 14),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 14,
-                    childAspectRatio: 0.98,
-                    children: [
-                      for (final entry in kDepartmentConfig.entries)
-                        _DepartmentTile(
-                          info: entry.value,
-                          onTap: () => context.push('/employees/${entry.key.name}'),
-                        ),
-                    ],
+                  // Kartalar balandligi matnga qarab (katta shrift sozlamasida
+                  // ham kesilmaydi) — qat'iy nisbatli GridView emas.
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final tileWidth = (constraints.maxWidth - 12) / 2;
+                      final tiles = [
+                        for (final entry in kDepartmentConfig.entries)
+                          (entry.value, entry.key.name),
+                        (_otherInfo, 'other'),
+                      ];
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          for (final (info, key) in tiles)
+                            SizedBox(
+                              width: tileWidth,
+                              child: _DepartmentTile(
+                                info: info,
+                                color: _tileColors[key] ?? AppColors.primary,
+                                onTap: () => context.push('/employees/$key'),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () => context.push('/employees/other'),
-                      icon: const Icon(Icons.more_horiz_rounded, size: 18, color: AppColors.grayDark),
-                      label: const Text(
-                        'Boshqa',
-                        style: TextStyle(color: AppColors.grayDark, fontWeight: FontWeight.w700, fontSize: 14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 24),
                   Center(
                     child: Text(
                       '© 2026 Selta Cleaning',
@@ -123,7 +140,7 @@ class _HeroHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      "Davom etish uchun bo'limingizni tanlang",
+                      formatWeekdayDateUz(DateTime.now()),
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13.5, height: 1.4),
                     ),
                   ],
@@ -157,9 +174,10 @@ class _HeroHeader extends StatelessWidget {
 
 class _DepartmentTile extends StatelessWidget {
   final DepartmentInfo info;
+  final Color color;
   final VoidCallback onTap;
 
-  const _DepartmentTile({required this.info, required this.onTap});
+  const _DepartmentTile({required this.info, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +188,8 @@ class _DepartmentTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          constraints: const BoxConstraints(minHeight: 148),
+          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppColors.border),
@@ -180,25 +199,37 @@ class _DepartmentTile extends StatelessWidget {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: const BoxDecoration(gradient: heroGradient, shape: BoxShape.circle),
-                child: Icon(info.icon, color: Colors.white, size: 20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(info.icon, color: color, size: 24),
+                  ),
+                  const Spacer(),
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(color: AppColors.bg, shape: BoxShape.circle),
+                    child: const Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.grayDark),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Text(
                 info.label,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
+                style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: AppColors.ink, height: 1.2),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 4),
               Text(
                 info.description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11.5, color: AppColors.grayDark, height: 1.25),
+                style: const TextStyle(fontSize: 12, color: AppColors.grayDark, height: 1.3),
               ),
             ],
           ),

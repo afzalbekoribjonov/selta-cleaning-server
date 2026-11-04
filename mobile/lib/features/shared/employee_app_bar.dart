@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/sync/sync_status_button.dart';
+import '../../core/widgets/employee_avatar.dart';
 import '../search/global_search_screen.dart';
 import 'create_order_screen.dart';
 
@@ -45,38 +46,48 @@ class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
         onTap: () => context.push('/profile'),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          // Ism-familiya birinchi o'rinda (xodim qaysi hisobda ekanini darhol
+          // ko'radi), bo'lim nomi esa uning ostida rangli kichik yozuv. Avval
+          // aksincha edi: ism mayda kulrang matnda yo'qolib qolardi.
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(gradient: heroGradient, shape: BoxShape.circle),
-                child: Image.asset('assets/brand/icon_white.png', fit: BoxFit.contain),
-              ),
+              EmployeeAvatar(name: employeeName, size: 38),
               const SizedBox(width: 10),
               // Flexible: o'ngdagi qidiruv/menyu belgilari joy egallagach,
-              // uzun bo'lim nomi (admin yaratgan maxsus bo'limlar) yoki katta
-              // shrift sozlamasida sarlavha ekrandan chiqib ketmasin.
+              // uzun ism yoki bo'lim nomi (admin yaratgan maxsus bo'limlar)
+              // katta shrift sozlamasida ham ekrandan chiqib ketmasin.
               Flexible(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(departmentLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(
+                      employeeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: AppColors.ink, height: 1.2),
+                    ),
+                    const SizedBox(height: 2),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 5),
                         Flexible(
                           child: Text(
-                            employeeName,
+                            departmentLabel,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.grayDark),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
                           ),
                         ),
-                        const SizedBox(width: 2),
-                        const Icon(Icons.chevron_right_rounded, size: 15, color: AppColors.grayDark),
+                        const SizedBox(width: 1),
+                        const Icon(Icons.chevron_right_rounded, size: 15, color: AppColors.primary),
                       ],
                     ),
                   ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/widgets/filter_pill.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
@@ -319,7 +320,8 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(_editing ? 'Mahsulotni tahrirlash' : 'Mahsulot qo\'shish', style: Theme.of(context).textTheme.headlineSmall),
+                          child: Text(_editing ? 'Mahsulotni tahrirlash' : 'Mahsulot qo\'shish',
+                              style: Theme.of(context).textTheme.headlineSmall),
                         ),
                         if (_editing)
                           IconButton(
@@ -331,7 +333,6 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                       ],
                     ),
                     const SizedBox(height: 16),
-
                     if (_showTariffPicker) ...[
                       const Text('Tarif', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
                       const SizedBox(height: 4),
@@ -345,24 +346,19 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                         runSpacing: 8,
                         children: [
                           for (final entry in kTariffConfig.entries)
-                            ChoiceChip(
-                              label: Text(entry.value.label),
+                            FilterPill(
+                              label: entry.value.label,
                               selected: _tariff == entry.key,
-                              onSelected: (_) => setState(() {
+                              color: entry.value.color,
+                              onTap: () => setState(() {
                                 _tariff = entry.key;
                                 _product = null;
                               }),
-                              selectedColor: entry.value.color,
-                              labelStyle: TextStyle(
-                                color: _tariff == entry.key ? Colors.white : AppColors.ink,
-                                fontWeight: FontWeight.w700,
-                              ),
                             ),
                         ],
                       ),
                       const SizedBox(height: 16),
                     ],
-
                     if (!_customMode) ...[
                       const Text('Katalogdan tanlang', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
                       const SizedBox(height: 8),
@@ -370,9 +366,8 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                         loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: LinearProgressIndicator()),
                         error: (e, _) => LoadErrorNote(error: e),
                         data: (allProducts) {
-                          final products = allProducts
-                              .where((p) => p.appliesToTariff(_tariff) && p.matchesSpecializations(specializations))
-                              .toList();
+                          final products =
+                              allProducts.where((p) => p.appliesToTariff(_tariff) && p.matchesSpecializations(specializations)).toList();
                           if (products.isEmpty) {
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -425,12 +420,10 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                         ),
                       ),
                     ],
-
                     const SizedBox(height: 14),
                     const Text('Nomi', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
                     const SizedBox(height: 6),
                     TextField(controller: _nameController, decoration: const InputDecoration(isDense: true)),
-
                     if (_customMode) ...[
                       const SizedBox(height: 14),
                       const Text('Narx (so\'m)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5)),
@@ -470,7 +463,6 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                         ),
                       ),
                     ],
-
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -485,27 +477,27 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
                           const SizedBox(width: 10),
                           const Expanded(child: Text('Taxminiy narx', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5))),
                           Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(formatMoneyUz(_estimatedPrice), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.primary)),
-                ),
-              ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(formatMoneyUz(_estimatedPrice),
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.primary)),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-
                     if (_error != null) ...[
                       const SizedBox(height: 12),
                       Text(_error!, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
                     ],
-
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
                         onPressed: _saving ? null : _save,
-                        style: FilledButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(vertical: 16)),
+                        style:
+                            FilledButton.styleFrom(backgroundColor: AppColors.primary, padding: const EdgeInsets.symmetric(vertical: 16)),
                         child: _saving
                             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
                             : Text(_editing ? 'SAQLASH' : "QO'SHISH", style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -574,7 +566,7 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
               ],
             ),
           const SizedBox(height: 6),
-          Text('Jami: ${_measuredQty.toStringAsFixed(2)} m² × ${(tariffPrice.unitPrice ?? 0).toStringAsFixed(0)} so\'m',
+          Text('Jami: ${formatQtyUz(_measuredQty)} m² × ${formatMoneyUz(tariffPrice.unitPrice ?? 0)}',
               style: const TextStyle(fontSize: 12, color: AppColors.grayDark)),
         ],
       );
@@ -637,7 +629,8 @@ class _CatalogItemSheetState extends ConsumerState<_CatalogItemSheet> {
             const SizedBox(width: 12),
             _StepButton(icon: Icons.add_rounded, onTap: () => setState(() => _setQty(_qty + step, calcType))),
             const SizedBox(width: 12),
-            Text('× ${(tariffPrice.unitPrice ?? 0).toStringAsFixed(0)} so\'m', style: const TextStyle(fontSize: 12, color: AppColors.grayDark)),
+            Text('× ${formatMoneyUz(tariffPrice.unitPrice ?? 0)}',
+                style: const TextStyle(fontSize: 12, color: AppColors.grayDark)),
           ],
         ),
       ],
@@ -668,9 +661,11 @@ class _ProductChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(_calcTypeIcons[product.calcType] ?? Icons.inventory_2_rounded, size: 15, color: selected ? Colors.white : AppColors.primary),
+              Icon(_calcTypeIcons[product.calcType] ?? Icons.inventory_2_rounded,
+                  size: 15, color: selected ? Colors.white : AppColors.primary),
               const SizedBox(width: 6),
-              Text(product.name, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: selected ? Colors.white : AppColors.ink)),
+              Text(product.name,
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: selected ? Colors.white : AppColors.ink)),
               const SizedBox(width: 4),
               Text(
                 '(${_calcTypeLabels[product.calcType] ?? ''})',
@@ -702,7 +697,8 @@ class _ConditionChip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: selected ? color : AppColors.border)),
+          decoration:
+              BoxDecoration(borderRadius: BorderRadius.circular(20), border: Border.all(color: selected ? color : AppColors.border)),
           child: Text(
             percent > 0 ? '$label (+${percent.toStringAsFixed(0)}%)' : label,
             style: TextStyle(color: selected ? Colors.white : AppColors.ink, fontWeight: FontWeight.w700, fontSize: 12),
@@ -738,7 +734,7 @@ class _SizeOption extends StatelessWidget {
             children: [
               Text(label, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: selected ? AppColors.primary : AppColors.ink)),
               const SizedBox(height: 2),
-              Text('${price.toStringAsFixed(0)} so\'m', style: const TextStyle(fontSize: 11.5, color: AppColors.grayDark)),
+              Text(formatMoneyUz(price), style: const TextStyle(fontSize: 11.5, color: AppColors.grayDark)),
             ],
           ),
         ),

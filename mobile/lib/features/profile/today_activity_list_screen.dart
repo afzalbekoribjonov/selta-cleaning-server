@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../core/utils/phone_format.dart';
 import '../../core/services/auth_service.dart' show describeApiError;
 import '../../core/services/my_activity_repository.dart';
 import '../../core/services/orders_repository.dart';
@@ -120,7 +121,7 @@ class _OrderTile extends StatelessWidget {
             entry.customerName.isEmpty ? "Noma'lum" : entry.customerName,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink),
           ),
-          Text(entry.phone, style: const TextStyle(fontSize: 12.5, color: AppColors.grayDark)),
+          Text(formatPhoneUz(entry.phone), style: const TextStyle(fontSize: 12.5, color: AppColors.grayDark)),
           const SizedBox(height: 8),
           _MetaRow(
             items: [
@@ -366,7 +367,4 @@ class _MetaRow extends StatelessWidget {
   }
 }
 
-String _trim(num value) {
-  if (value == value.roundToDouble()) return value.round().toString();
-  return value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
-}
+String _trim(num value) => formatQtyUz(value);

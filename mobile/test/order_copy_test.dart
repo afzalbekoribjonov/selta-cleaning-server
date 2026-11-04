@@ -43,7 +43,7 @@ void main() {
       'Telefon: +998 90 123 45 67\n'
       '\n'
       'Mahsulotlar (2):\n'
-      "1. 1245/1 · Gilam — 12.00 m² (3×4) — 360 000 so'm\n"
+      "1. 1245/1 · Gilam — 12 m² (3×4) — 360 000 so'm\n"
       "2. 1245/2 · Parda — 2 dona — 80 000 so'm\n"
       '\n'
       "Jami: 440 000 so'm",

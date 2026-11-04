@@ -162,6 +162,24 @@ class Order {
   /// oldindan to'langani va bonus). Manfiy — ortiqcha to'langan.
   num get remainingToPay => totalPrice - prepaidAmount - bonusAmount;
 
+  /// Yetkazishda mijozdan olinadigan summa: hali topshirilmagan
+  /// mahsulotlar narxi minus ishlatilmagan oldindan to'lov va bonus
+  /// (server: deliverOrderItems bilan bir xil qoida).
+  ///
+  /// Avval kartalarda "Yig'ish: {umumiy narx}" ko'rsatilardi — oldindan
+  /// to'langan yoki qisman topshirilgan buyurtmada dastavchik mijozdan
+  /// ortiqcha so'rashi mumkin edi.
+  num get collectibleAmount {
+    final items = itemsMirror;
+    if (items == null || items.isEmpty) {
+      final rest = remainingToPay;
+      return rest > 0 ? rest : 0;
+    }
+    final pending = items.where((i) => i.status != 'done').fold<num>(0, (s, i) => s + i.price);
+    final due = pending - prepaidCredit;
+    return due > 0 ? due : 0;
+  }
+
   /// Oflayn yaratilgan buyurtma hali serverga yetmagan — raqami yo'q.
   bool get awaitingNumber => orderNumber <= 0;
 
