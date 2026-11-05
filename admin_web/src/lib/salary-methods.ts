@@ -67,6 +67,7 @@ export const DEPARTMENT_SALARY_METHODS: Record<string, string[]> = {
   worker: ['fixed', 'fixed_percent', 'washing', 'finishing', 'furniture_onsite_percent'],
   delivery: ['fixed', 'fixed_percent', 'delivery'],
   qc: ['fixed', 'fixed_percent'],
+  supervisor: ['fixed', 'fixed_percent'],
 }
 
 export function recommendedSalaryMethods(department: string): string[] {

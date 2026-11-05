@@ -15,12 +15,13 @@ import {
   X,
 } from 'lucide-react'
 import { db } from '@/lib/firebase'
-import { subscribeOrder, type Order } from '@/lib/orders'
+import { subscribeOrder, type Order, type OrderAssignment } from '@/lib/orders'
 import { actorName, mapOrderItem, useItemEvents, type ItemEvent, type OrderItem } from '@/lib/order-items'
 import { effectiveDueDate, isOrderOverdue, dueLabel } from '@/lib/order-tariffs'
 import { itemProgressLabel } from '@/lib/order-status-filter'
 import { STATUS_CONFIG } from '@/lib/status-config'
 import { formatDateTimeUz, formatDateUz } from '@/lib/date-utils'
+import { businessDateKey } from '@/lib/business-time'
 import { formatQty, unitList } from '@/lib/units'
 import { cn } from '@/lib/utils'
 import { externalLinksSupported } from '@/lib/embedded'
@@ -445,6 +446,11 @@ function OverviewTab({
             )
           )}
           {team.length > 0 && <Fact label="Jamoa">{team.join(', ')}</Fact>}
+          {order.assignment && order.status !== 'done' && (
+            <Fact label="Topshiriq">
+              <AssignmentLine assignment={order.assignment} />
+            </Fact>
+          )}
           {due && order.status !== 'done' && (
             <Fact label={order.serviceType === 'pickup' ? 'Eng yaqin muddat' : 'Muddat'}>
               <span className={overdue ? 'font-bold text-danger' : undefined}>
@@ -501,6 +507,28 @@ function OverviewTab({
         </section>
       ) : null}
     </div>
+  )
+}
+
+/** Nazoratchi bergan dastavchik topshirig'i: kim, qaysi kun, nima qiladi. */
+function AssignmentLine({ assignment: a }: { assignment: OrderAssignment }) {
+  const now = new Date()
+  const today = businessDateKey(now)
+  const tomorrow = businessDateKey(new Date(now.getTime() + 86_400_000))
+  const [y, m, d] = a.date.split('-').map(Number)
+  const day = a.date === today ? 'bugun' : a.date === tomorrow ? 'ertaga' : formatDateUz(new Date(y, m - 1, d))
+  const what =
+    a.kind === 'pickup'
+      ? 'mijozdan olib keladi'
+      : a.itemIds.length > 0
+        ? `${a.itemIds.length} ta mahsulotni yetkazadi`
+        : 'tayyorlarini yetkazadi'
+  return (
+    <span className="[overflow-wrap:anywhere]">
+      <span className="font-bold">{a.driverName || 'Dastavchik'}</span> · {day} {what}
+      {a.assignedByName && <span className="block text-xs text-gray-dark">Berdi: {a.assignedByName}</span>}
+      {a.note && <span className="block text-xs text-gray-dark">Izoh: {a.note}</span>}
+    </span>
   )
 }
 

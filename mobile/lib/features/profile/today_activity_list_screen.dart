@@ -25,9 +25,10 @@ void openTodayActivityList(
   BuildContext context, {
   required TodayListKind kind,
   required MyDailyActivity activity,
+  bool readOnly = false,
 }) {
   Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => TodayActivityListScreen(kind: kind, activity: activity)),
+    MaterialPageRoute(builder: (_) => TodayActivityListScreen(kind: kind, activity: activity, readOnly: readOnly)),
   );
 }
 
@@ -39,7 +40,10 @@ class TodayActivityListScreen extends StatelessWidget {
   final TodayListKind kind;
   final MyDailyActivity activity;
 
-  const TodayActivityListScreen({super.key, required this.kind, required this.activity});
+  /// Boshqa xodimning yozuvlari: qarzni yopish tugmasi ko'rsatilmaydi.
+  final bool readOnly;
+
+  const TodayActivityListScreen({super.key, required this.kind, required this.activity, this.readOnly = false});
 
   @override
   Widget build(BuildContext context) {
@@ -49,12 +53,12 @@ class TodayActivityListScreen extends StatelessWidget {
       TodayListKind.delivered => activity.delivered.map((s) => _StageTile(entry: s, showPrice: true)).toList(),
       TodayListKind.washed => activity.washed.map((s) => _StageTile(entry: s, showPrice: false)).toList(),
       TodayListKind.packed => activity.packed.map((s) => _StageTile(entry: s, showPrice: false)).toList(),
-      TodayListKind.payments => activity.payments.map((p) => _PaymentTile(entry: p)).toList(),
+      TodayListKind.payments => activity.payments.map((p) => _PaymentTile(entry: p, readOnly: readOnly)).toList(),
     };
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      appBar: AppBar(title: Text(_titles[kind]!)),
+      appBar: AppBar(title: Text(readOnly && kind == TodayListKind.payments ? "To'lovlar" : _titles[kind]!)),
       body: children.isEmpty
           ? const Center(
               child: Text(
@@ -103,15 +107,15 @@ class _OrderTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('#${entry.orderNumber}',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink)),
+              Text('#${entry.orderNumber}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink)),
               const SizedBox(width: 12),
               const Spacer(),
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerRight,
-                  child: Text(formatMoneyUz(entry.totalPrice), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.primary)),
+                  child: Text(formatMoneyUz(entry.totalPrice),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.primary)),
                 ),
               ),
             ],
@@ -150,8 +154,7 @@ class _StageTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('#${entry.orderNumber}',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink)),
+              Text('#${entry.orderNumber}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -205,7 +208,8 @@ const _kindColors = {
 /// dastavchik uni shu yerdan yopa oladi (admin ham panelda yopa oladi).
 class _PaymentTile extends ConsumerStatefulWidget {
   final PaymentEntry entry;
-  const _PaymentTile({required this.entry});
+  final bool readOnly;
+  const _PaymentTile({required this.entry, this.readOnly = false});
 
   @override
   ConsumerState<_PaymentTile> createState() => _PaymentTileState();
@@ -253,7 +257,7 @@ class _PaymentTileState extends ConsumerState<_PaymentTile> {
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final tone = _kindColors[entry.kind] ?? AppColors.grayDark;
-    final open = entry.shortfall > 0 && !entry.settled && !_done;
+    final open = entry.shortfall > 0 && !entry.settled && !_done && !widget.readOnly;
 
     return _Card(
       borderColor: open ? tone.withValues(alpha: 0.4) : null,
@@ -262,8 +266,7 @@ class _PaymentTileState extends ConsumerState<_PaymentTile> {
         children: [
           Row(
             children: [
-              Text('#${entry.orderNumber}',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink)),
+              Text('#${entry.orderNumber}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.ink)),
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

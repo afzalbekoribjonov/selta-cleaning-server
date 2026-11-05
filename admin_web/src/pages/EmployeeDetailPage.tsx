@@ -45,6 +45,7 @@ import { EditEmployeeDialog } from '@/components/employees/EditEmployeeDialog'
 import { ChangeDepartmentDialog } from '@/components/employees/ChangeDepartmentDialog'
 import { TasksSection } from '@/components/employees/TasksSection'
 import { AdvancesSection } from '@/components/employees/AdvancesSection'
+import { WarningsSection } from '@/components/employees/WarningsSection'
 import { SpecializationsSection } from '@/components/employees/SpecializationsSection'
 import { OrderPermissionSection } from '@/components/employees/OrderPermissionSection'
 import { OnsiteWashingPermissionSection } from '@/components/employees/OnsiteWashingPermissionSection'
@@ -477,6 +478,8 @@ export default function EmployeeDetailPage() {
       </section>
 
       <AdvancesSection employee={employee} />
+
+      <WarningsSection employeeId={employee.id} />
 
       <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <div className="mb-1 flex items-center gap-2">

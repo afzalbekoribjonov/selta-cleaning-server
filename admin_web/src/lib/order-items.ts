@@ -145,6 +145,8 @@ export interface ItemEvent {
   itemName: string
   by: string
   role: string | null
+  /** Ishchi nomidan nazoratchi qayd etgan bo'lsa — nazoratchi. */
+  recordedBy: string | null
   changes: { field: string; from: unknown; to: unknown }[]
   snapshot: Record<string, unknown> | null
   fromStatus: string | null
@@ -164,6 +166,7 @@ export function mapItemEvent(id: string, d: Record<string, unknown>): ItemEvent 
     itemName: str(d.itemName) ?? 'Mahsulot',
     by: str(d.by) ?? '',
     role: str(d.role),
+    recordedBy: str(d.recordedBy),
     changes: Array.isArray(d.changes) ? (d.changes as ItemEvent['changes']) : [],
     snapshot: d.snapshot && typeof d.snapshot === 'object' ? (d.snapshot as Record<string, unknown>) : null,
     fromStatus: str(d.fromStatus),
@@ -296,6 +299,7 @@ export function derivedItemEvents(item: OrderItem): ItemEvent[] {
     itemNumber: item.itemNumber,
     itemName: item.name,
     role: null,
+    recordedBy: null,
     changes: [],
     snapshot: null,
     note: null,

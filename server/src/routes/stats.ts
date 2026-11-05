@@ -2,6 +2,7 @@ import { Router } from "express";
 import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz";
+import { canManageWorkflow } from "../lib/roles";
 import { businessDateString, businessDayRangeUtc, parseDateKey } from "../lib/businessTime";
 import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
 import { cashPartOf } from "../lib/dailyActivity";
@@ -69,7 +70,8 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
     const role = req.auth!.role;
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
 
-    if (role !== "admin") {
+    // Nazoratchi ish jarayonini boshqaradi — ko'rsatkichlar uning asosiy ishi.
+    if (!canManageWorkflow(role)) {
       const empSnap = await db.collection("employees").doc(employeeId).get();
       if (empSnap.data()?.canViewStats !== true) {
         throw new ApiError(403, "permission-denied", "Ko'rsatkichlarni ko'rish huquqingiz yo'q");

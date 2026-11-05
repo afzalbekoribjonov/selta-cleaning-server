@@ -11,6 +11,7 @@ import 'today_activity_section.dart';
 
 String _resolveDepartmentLabel(String? key, String? customLabel) {
   if (key == null) return '';
+  if (key == 'supervisor') return 'Nazoratchi';
   for (final d in Department.values) {
     if (d.name == key) return kDepartmentConfig[d]!.label;
   }
@@ -47,7 +48,8 @@ class EmployeeProfileScreen extends ConsumerWidget {
           final phone = employee['phone'] as String? ?? '';
           final specializations = (employee['specializations'] as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
           final canPack = employee['canPack'] as bool? ?? false;
-          final canCreateOrders = employee['canCreateOrders'] as bool? ?? false;
+          // Nazoratchi ham buyurtma ocha oladi (server: canManageWorkflow).
+          final canCreateOrders = (employee['canCreateOrders'] as bool? ?? false) || departmentKey == 'supervisor';
 
           return ListView(
             padding: EdgeInsets.zero,

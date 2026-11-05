@@ -29,6 +29,8 @@ export interface ItemEventInput {
   itemName: string;
   employeeId: string;
   role?: string | null;
+  /** Nazoratchi boshqa xodim nomidan qayd etgan bo'lsa — nazoratchi. */
+  recordedBy?: string | null;
   /** `updated` — qaysi maydon nimadan nimaga o'zgardi. */
   changes?: ItemFieldChange[];
   /** `created`/`deleted` — o'sha paytdagi asosiy maydonlar. */
@@ -105,6 +107,7 @@ export function recordItemEvent(writer: Writer, orderRef: DocumentReference, inp
     at: at ? Timestamp.fromDate(at) : FieldValue.serverTimestamp(),
   };
   if (input.role) doc.role = input.role;
+  if (input.recordedBy) doc.recordedBy = input.recordedBy;
   if (input.changes && input.changes.length > 0) doc.changes = input.changes;
   if (input.snapshot && Object.keys(input.snapshot).length > 0) doc.snapshot = input.snapshot;
   if (input.fromStatus !== undefined) doc.fromStatus = input.fromStatus ?? null;

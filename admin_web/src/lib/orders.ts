@@ -95,6 +95,37 @@ export interface Order {
   /** Oxirgi izoh (server: routes/comments.ts) — ro'yxatda o'qimasdan ko'rsatish uchun. */
   lastComment: { text: string; authorName: string; at: Date | null } | null
   doneAt: Date | null
+  /** Nazoratchi bergan dastavchik topshirig'i (server: routes/supervisor.ts). */
+  assignment: OrderAssignment | null
+}
+
+export interface OrderAssignment {
+  driverId: string
+  driverName: string
+  /** YYYY-MM-DD */
+  date: string
+  kind: 'pickup' | 'delivery'
+  /** Bo'sh — hozir tayyor mahsulotlarning hammasi. */
+  itemIds: string[]
+  note: string | null
+  assignedByName: string
+  assignedAt: Date | null
+}
+
+function toAssignment(raw: unknown): OrderAssignment | null {
+  if (!raw || typeof raw !== 'object') return null
+  const a = raw as Record<string, unknown>
+  if (typeof a.driverId !== 'string' || typeof a.date !== 'string') return null
+  return {
+    driverId: a.driverId,
+    driverName: typeof a.driverName === 'string' ? a.driverName : '',
+    date: a.date,
+    kind: a.kind === 'pickup' ? 'pickup' : 'delivery',
+    itemIds: Array.isArray(a.itemIds) ? a.itemIds.filter((x): x is string => typeof x === 'string') : [],
+    note: typeof a.note === 'string' && a.note.trim() ? a.note : null,
+    assignedByName: typeof a.assignedByName === 'string' ? a.assignedByName : '',
+    assignedAt: (a.assignedAt as Timestamp | undefined)?.toDate?.() ?? null,
+  }
 }
 
 function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
@@ -158,6 +189,7 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
           }
         : null,
     doneAt: (data.doneAt as Timestamp | undefined)?.toDate?.() ?? null,
+    assignment: toAssignment(data.assignment),
   }
 }
 

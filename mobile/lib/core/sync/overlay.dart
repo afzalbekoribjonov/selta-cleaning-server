@@ -188,6 +188,12 @@ List<Order> applyToOrders(List<Order> base, List<PendingAction> actions) {
         // bo'lsa — aks holda u ikkinchi marta qo'shilardi.
         final stillPending = baseSignatures[id] == e['base'];
         var next = stillPending ? _withSummary(o, _summaryOf(e)) : o;
+        // Mahsulotlar nusxasi ham — ro'yxatlar (nazoratchi, omborxona)
+        // mahsulot holatini nusxadan o'qiydi; aks holda mahsulot server
+        // tasdiqlaguncha eski bosqichda ko'rinib turardi.
+        if (stillPending && o.itemsMirror != null) {
+          next = next.copyWith(itemsMirror: applyToItems(id, o.itemsMirror!, [a]));
+        }
         final status = e['orderStatus'] as String?;
         if (status != null) next = next.copyWith(status: status);
         // Topshirishda ishlatilgan oldindan to'lov — xuddi hosila maydonlar

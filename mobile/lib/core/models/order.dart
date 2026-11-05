@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'order_assignment.dart';
 import 'order_item.dart';
 
 class Order {
@@ -93,6 +94,9 @@ class Order {
   /// nusxa hali yozilmagan (eski buyurtma): mahsulotlar alohida o'qiladi.
   final List<OrderItem>? itemsMirror;
 
+  /// Nazoratchi dastavchikka bergan topshiriq (yo'q bo'lsa `null`).
+  final OrderAssignment? assignment;
+
   /// Bu buyurtmada serverga hali yetib bormagan (navbatdagi) o'zgarish bor.
   /// Firestore'da YO'Q maydon — faqat ilova ichida, oflayn navbat
   /// (core/sync) ekranga qo'yadi. Kartada kichik belgi bilan ko'rsatiladi.
@@ -147,6 +151,7 @@ class Order {
     this.discountTotal = 0,
     this.debtTotal = 0,
     this.itemsMirror,
+    this.assignment,
     this.pendingSync = false,
   });
 
@@ -223,6 +228,7 @@ class Order {
     num? paidTotal,
     num? discountTotal,
     num? debtTotal,
+    List<OrderItem>? itemsMirror,
     bool? pendingSync,
   }) {
     return Order(
@@ -273,7 +279,8 @@ class Order {
       paidTotal: paidTotal ?? this.paidTotal,
       discountTotal: discountTotal ?? this.discountTotal,
       debtTotal: debtTotal ?? this.debtTotal,
-      itemsMirror: itemsMirror,
+      itemsMirror: itemsMirror ?? this.itemsMirror,
+      assignment: assignment,
       pendingSync: pendingSync ?? this.pendingSync,
     );
   }
@@ -342,6 +349,7 @@ class Order {
       discountTotal: (data['discountTotal'] as num?) ?? 0,
       debtTotal: (data['debtTotal'] as num?) ?? 0,
       itemsMirror: _itemsMirrorOf(data['itemsMirror']),
+      assignment: OrderAssignment.fromRaw(data['assignment']),
     );
   }
 

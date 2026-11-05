@@ -62,8 +62,12 @@ function comparable(v) {
   return v;
 }
 
+// Nuqtali yo'l ("assignment.driverId") — ichki maydon.
+const fieldOf = (data, field) => field.split('.').reduce((v, k) => (v == null ? undefined : v[k]), data);
+
 function matches(data, [field, op, value]) {
-  const actual = comparable(data[field]);
+  const raw = fieldOf(data, field);
+  const actual = comparable(raw);
   const expected = comparable(value);
   switch (op) {
     case '==':
@@ -71,7 +75,7 @@ function matches(data, [field, op, value]) {
     case 'in':
       return value.map(comparable).includes(actual);
     case 'array-contains':
-      return Array.isArray(data[field]) && data[field].includes(value);
+      return Array.isArray(raw) && raw.includes(value);
     case '>=':
       return actual !== undefined && actual >= expected;
     case '>':
@@ -123,6 +127,7 @@ const db = {
   runTransaction: async (fn) =>
     fn({
       get: async (r) => (r._list ? { docs: r._list(), size: r._list().length } : snapOf(r.key)),
+      getAll: async (...refs) => refs.map((r) => snapOf(r.key)),
       set: (r, data, opts) => applyUpdate(r.key, data, !!(opts && opts.merge)),
       update: (r, data) => applyUpdate(r.key, data),
       delete: (r) => docs.delete(r.key),

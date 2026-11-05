@@ -61,19 +61,29 @@ class TodayActivitySection extends ConsumerWidget {
             child: Center(child: SeltaLoader(size: 32)),
           ),
           error: (err, _) => _ErrorBox(onRetry: () => ref.invalidate(myDailyActivityProvider)),
-          data: (a) => _Body(activity: a, departmentKey: departmentKey, canCreateOrders: canCreateOrders),
+          data: (a) => DailyActivityBody(activity: a, departmentKey: departmentKey, canCreateOrders: canCreateOrders),
         ),
       ],
     );
   }
 }
 
-class _Body extends StatelessWidget {
+/// Kunlik ish kartalari. [readOnly] — boshqa xodimning ishini ko'rish
+/// (nazoratchi): o'z navbatidagi chiqimlar qo'shilmaydi, qarzni yopish
+/// va chiqimlar sahifasi kabi o'z amallari ko'rsatilmaydi.
+class DailyActivityBody extends StatelessWidget {
   final MyDailyActivity activity;
   final String? departmentKey;
   final bool canCreateOrders;
+  final bool readOnly;
 
-  const _Body({required this.activity, required this.departmentKey, required this.canCreateOrders});
+  const DailyActivityBody({
+    super.key,
+    required this.activity,
+    required this.departmentKey,
+    required this.canCreateOrders,
+    this.readOnly = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +102,7 @@ class _Body extends StatelessWidget {
           detail: activity.broughtInCount > 0 ? formatMoneyUz(activity.broughtInTotal) : null,
           onView: activity.broughtInCount == 0
               ? null
-              : () => openTodayActivityList(context, kind: TodayListKind.broughtIn, activity: activity),
+              : () => openTodayActivityList(context, kind: TodayListKind.broughtIn, activity: activity, readOnly: readOnly),
         ),
         _ActivityCard(
           icon: Icons.check_circle_rounded,
@@ -105,7 +115,7 @@ class _Body extends StatelessWidget {
               : null,
           onView: activity.deliveredCount == 0
               ? null
-              : () => openTodayActivityList(context, kind: TodayListKind.delivered, activity: activity),
+              : () => openTodayActivityList(context, kind: TodayListKind.delivered, activity: activity, readOnly: readOnly),
         ),
       ],
       if (isWorker) ...[
@@ -118,7 +128,7 @@ class _Body extends StatelessWidget {
           totals: activity.washedTotals,
           onView: activity.washedCount == 0
               ? null
-              : () => openTodayActivityList(context, kind: TodayListKind.washed, activity: activity),
+              : () => openTodayActivityList(context, kind: TodayListKind.washed, activity: activity, readOnly: readOnly),
         ),
         _ActivityCard(
           icon: Icons.inventory_2_rounded,
@@ -129,7 +139,7 @@ class _Body extends StatelessWidget {
           totals: activity.packedTotals,
           onView: activity.packedCount == 0
               ? null
-              : () => openTodayActivityList(context, kind: TodayListKind.packed, activity: activity),
+              : () => openTodayActivityList(context, kind: TodayListKind.packed, activity: activity, readOnly: readOnly),
         ),
       ],
       if (isDispatcher || canCreateOrders)
@@ -142,7 +152,7 @@ class _Body extends StatelessWidget {
           detail: activity.createdCount > 0 ? formatMoneyUz(activity.createdTotal) : null,
           onView: activity.createdCount == 0
               ? null
-              : () => openTodayActivityList(context, kind: TodayListKind.created, activity: activity),
+              : () => openTodayActivityList(context, kind: TodayListKind.created, activity: activity, readOnly: readOnly),
         ),
     ];
 
@@ -150,7 +160,7 @@ class _Body extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final card in cards) ...[card, const SizedBox(height: 10)],
-        _MoneySummary(activity: activity, alwaysShow: isDelivery),
+        _MoneySummary(activity: activity, alwaysShow: isDelivery, readOnly: readOnly),
       ],
     );
   }
@@ -165,11 +175,13 @@ class _Body extends StatelessWidget {
 class _MoneySummary extends ConsumerWidget {
   final MyDailyActivity activity;
   final bool alwaysShow;
-  const _MoneySummary({required this.activity, required this.alwaysShow});
+  final bool readOnly;
+  const _MoneySummary({required this.activity, required this.alwaysShow, this.readOnly = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final expenses = mergeExpenses(activity.expenses, ref.watch(actionQueueProvider));
+    // Navbatdagi (hali yuborilmagan) chiqimlar faqat o'ziniki.
+    final expenses = readOnly ? activity.expenses : mergeExpenses(activity.expenses, ref.watch(actionQueueProvider));
     final cash = cashInHand(activity.collectedCash, expenses);
     if (!alwaysShow && expenses.isEmpty && cash.collected == 0 && activity.payments.isEmpty) {
       return const SizedBox.shrink();
@@ -181,7 +193,7 @@ class _MoneySummary extends ConsumerWidget {
         _MoneyTile(label: 'Naqddan chiqim', value: formatMoneyUz(-cash.cashExpenses), tone: AppColors.danger),
       ],
       _MoneyTile(
-        label: cash.inHand < 0 ? 'Sizga qaytariladi' : 'Qo\'lingizda',
+        label: readOnly ? (cash.inHand < 0 ? 'Unga qaytariladi' : "Qo'lida") : (cash.inHand < 0 ? 'Sizga qaytariladi' : "Qo'lingizda"),
         value: formatMoneyUz(cash.inHand.abs()),
         tone: AppColors.ink,
       ),
@@ -230,7 +242,7 @@ class _MoneySummary extends ConsumerWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () => openTodayActivityList(context, kind: TodayListKind.payments, activity: activity),
+                onPressed: () => openTodayActivityList(context, kind: TodayListKind.payments, activity: activity, readOnly: readOnly),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.border),
@@ -241,7 +253,7 @@ class _MoneySummary extends ConsumerWidget {
               ),
             ),
           ],
-          if (expenses.isNotEmpty) ...[
+          if (expenses.isNotEmpty && !readOnly) ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../shared/warnings_banner.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/widgets/app_bottom_nav.dart';
 import '../shared/employee_app_bar.dart';
@@ -27,11 +28,18 @@ class _DispatcherHomeScreenState extends ConsumerState<DispatcherHomeScreen> {
 
     return Scaffold(
       appBar: EmployeeAppBar(departmentLabel: 'Sotuv menejeri', employeeName: fullName),
-      body: IndexedStack(
-        index: _index,
+      body: Column(
         children: [
-          const ActiveOrdersTab(),
-          NewOrderTab(onSaved: _goToActiveTab),
+          const WarningsBanner(),
+          Expanded(
+            child: IndexedStack(
+              index: _index,
+              children: [
+                const ActiveOrdersTab(),
+                NewOrderTab(onSaved: _goToActiveTab),
+              ],
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: AppBottomNav(

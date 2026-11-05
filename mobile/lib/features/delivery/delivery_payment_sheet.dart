@@ -67,7 +67,18 @@ class _PaymentSheet extends ConsumerStatefulWidget {
 }
 
 class _PaymentSheetState extends ConsumerState<_PaymentSheet> {
-  late final Set<String> _selected = widget.readyItems.map((i) => i.id).toSet();
+  late final Set<String> _selected = _initialSelection();
+
+  /// Nazoratchi aniq mahsulotlarni topshiriq qilgan bo'lsa — o'shalar
+  /// belgilangan holda ochiladi (qolganlarini xodim o'zi qo'sha oladi);
+  /// aks holda hamma tayyorlari.
+  Set<String> _initialSelection() {
+    final all = widget.readyItems.map((i) => i.id).toSet();
+    final assignment = widget.order.assignment;
+    if (assignment == null || assignment.isPickup || assignment.itemIds.isEmpty) return all;
+    final assigned = all.intersection(assignment.itemIds.toSet());
+    return assigned.isEmpty ? all : assigned;
+  }
   final _amountController = TextEditingController();
   ShortfallKind? _kind;
 

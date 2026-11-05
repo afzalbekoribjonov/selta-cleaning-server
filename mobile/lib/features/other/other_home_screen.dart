@@ -9,6 +9,7 @@ import '../../core/services/tasks_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/widgets/selta_loader.dart';
 import '../shared/employee_app_bar.dart';
+import '../shared/warnings_banner.dart';
 
 /// "Boshqa" (4 ta doimiy bo'limga kirmaydigan) xodimlar uchun bosh ekran —
 /// bo'lim panellari o'rniga admin tayinlagan topshiriqlar ro'yxati
@@ -21,8 +22,7 @@ class OtherHomeScreen extends ConsumerWidget {
     final employeeAsync = ref.watch(currentEmployeeProvider);
     final claims = ref.watch(employeeClaimsProvider).value;
     final fullName = employeeAsync.value?['fullName'] as String? ?? '...';
-    final departmentLabel =
-        (employeeAsync.value?['departmentLabel'] as String?) ?? (employeeAsync.value?['department'] as String?) ?? '';
+    final departmentLabel = (employeeAsync.value?['departmentLabel'] as String?) ?? (employeeAsync.value?['department'] as String?) ?? '';
 
     if (claims == null) {
       return Scaffold(
@@ -35,56 +35,63 @@ class OtherHomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: EmployeeAppBar(departmentLabel: departmentLabel, employeeName: fullName),
-      body: tasksAsync.when(
-        loading: () => const SeltaLoadingView(),
-        error: (err, _) => Center(child: Text(describeApiError(err))),
-        data: (tasks) {
-          final singleTasks = tasks.where((t) => t.isSingle).toList()
-            ..sort((a, b) {
-              if (a.isPending != b.isPending) return a.isPending ? -1 : 1;
-              final ad = a.dueDate ?? DateTime(2100);
-              final bd = b.dueDate ?? DateTime(2100);
-              return ad.compareTo(bd);
-            });
-          final monthlyTasks = tasks.where((t) => !t.isSingle).toList()
-            ..sort((a, b) => (a.scheduledDate ?? a.createdAt).compareTo(b.scheduledDate ?? b.createdAt));
+      body: Column(
+        children: [
+          const WarningsBanner(),
+          Expanded(
+            child: tasksAsync.when(
+              loading: () => const SeltaLoadingView(),
+              error: (err, _) => Center(child: Text(describeApiError(err))),
+              data: (tasks) {
+                final singleTasks = tasks.where((t) => t.isSingle).toList()
+                  ..sort((a, b) {
+                    if (a.isPending != b.isPending) return a.isPending ? -1 : 1;
+                    final ad = a.dueDate ?? DateTime(2100);
+                    final bd = b.dueDate ?? DateTime(2100);
+                    return ad.compareTo(bd);
+                  });
+                final monthlyTasks = tasks.where((t) => !t.isSingle).toList()
+                  ..sort((a, b) => (a.scheduledDate ?? a.createdAt).compareTo(b.scheduledDate ?? b.createdAt));
 
-          if (singleTasks.isEmpty && monthlyTasks.isEmpty) {
-            return const _EmptyTasksState();
-          }
+                if (singleTasks.isEmpty && monthlyTasks.isEmpty) {
+                  return const _EmptyTasksState();
+                }
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            children: [
-              if (singleTasks.isNotEmpty) ...[
-                const _SectionTitle(icon: Icons.assignment_rounded, label: 'Vazifalar'),
-                const SizedBox(height: 10),
-                for (final task in singleTasks) ...[
-                  _SingleTaskCard(task: task),
-                  const SizedBox(height: 10),
-                ],
-                const SizedBox(height: 12),
-              ],
-              if (monthlyTasks.isNotEmpty) ...[
-                const _SectionTitle(icon: Icons.calendar_month_rounded, label: 'Oylik topshiriqlar'),
-                const SizedBox(height: 10),
-                for (final entry in _groupByMonth(monthlyTasks).entries) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      entry.key,
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.grayDark),
-                    ),
-                  ),
-                  for (final task in entry.value) ...[
-                    _MonthlyTaskRow(task: task),
-                    const SizedBox(height: 8),
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  children: [
+                    if (singleTasks.isNotEmpty) ...[
+                      const _SectionTitle(icon: Icons.assignment_rounded, label: 'Vazifalar'),
+                      const SizedBox(height: 10),
+                      for (final task in singleTasks) ...[
+                        _SingleTaskCard(task: task),
+                        const SizedBox(height: 10),
+                      ],
+                      const SizedBox(height: 12),
+                    ],
+                    if (monthlyTasks.isNotEmpty) ...[
+                      const _SectionTitle(icon: Icons.calendar_month_rounded, label: 'Oylik topshiriqlar'),
+                      const SizedBox(height: 10),
+                      for (final entry in _groupByMonth(monthlyTasks).entries) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            entry.key,
+                            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.grayDark),
+                          ),
+                        ),
+                        for (final task in entry.value) ...[
+                          _MonthlyTaskRow(task: task),
+                          const SizedBox(height: 8),
+                        ],
+                      ],
+                    ],
                   ],
-                ],
-              ],
-            ],
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

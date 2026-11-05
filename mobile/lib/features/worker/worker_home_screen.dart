@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../shared/warnings_banner.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/employee_repository.dart';
@@ -69,6 +70,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
         appBar: EmployeeAppBar(departmentLabel: 'Ishchi', employeeName: fullName),
         body: const Column(
           children: [
+            WarningsBanner(),
             TeamJobsSection(),
             Expanded(
               child: Center(
@@ -91,6 +93,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
       appBar: EmployeeAppBar(departmentLabel: 'Ishchi', employeeName: fullName),
       body: Column(
         children: [
+          const WarningsBanner(),
           const TeamJobsSection(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),

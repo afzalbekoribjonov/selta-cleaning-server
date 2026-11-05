@@ -65,79 +65,8 @@ employeeActivityRouter.post("/adminEmployeeActivity", withAuth, requireAdmin, as
       throw new ApiError(400, "invalid-argument", "Sana oralig'i noto'g'ri");
     }
 
-    const startUtc = businessDayRangeUtc(days[0])!.start;
-    const endUtc = businessDayRangeUtc(days[days.length - 1])!.end;
-
-    const [eventSnaps, createdSnap, pickedUpSnap, names] = await Promise.all([
-      Promise.all(days.map((d) => dailyActivityEvents(d).get())),
-      db
-        .collection("orders")
-        .where("createdAt", ">=", Timestamp.fromDate(startUtc))
-        .where("createdAt", "<", Timestamp.fromDate(endUtc))
-        .get(),
-      db
-        .collection("orders")
-        .where("pickedUpAt", ">=", Timestamp.fromDate(startUtc))
-        .where("pickedUpAt", "<", Timestamp.fromDate(endUtc))
-        .get(),
-      loadEmployeeNames(),
-    ]);
-
-    const rows = new Map<string, ActivityRow>();
-    const ensure = (id: string): ActivityRow => {
-      let row = rows.get(id);
-      if (!row) {
-        row = {
-          employeeId: id,
-          name: names.get(id) ?? "Noma'lum xodim",
-          ordersCreated: 0,
-          ordersCreatedTotal: 0,
-          pickedUpCount: 0,
-          pickedUpTotal: 0,
-          deliveredCount: 0,
-          deliveredTotal: 0,
-          washedCount: 0,
-          packedCount: 0,
-        };
-        rows.set(id, row);
-      }
-      return row;
-    };
-
-    for (const doc of createdSnap.docs) {
-      const o = doc.data();
-      const by = o.createdBy as string | undefined;
-      if (!by) continue;
-      const row = ensure(by);
-      row.ordersCreated += 1;
-      row.ordersCreatedTotal += (o.totalPrice as number | undefined) ?? 0;
-    }
-
-    for (const doc of pickedUpSnap.docs) {
-      const o = doc.data();
-      const by = o.pickedUpBy as string | undefined;
-      if (!by) continue;
-      const row = ensure(by);
-      row.pickedUpCount += 1;
-      row.pickedUpTotal += (o.totalPrice as number | undefined) ?? 0;
-    }
-
-    for (const snap of eventSnaps) {
-      for (const doc of snap.docs) {
-        const e = doc.data();
-        const by = (e.employeeId as string | undefined) ?? "";
-        if (!by) continue;
-        const row = ensure(by);
-        if (e.type === "washed") row.washedCount += 1;
-        else if (e.type === "packed") row.packedCount += 1;
-        else if (e.type === "delivered" || e.type === "onsite_done") {
-          row.deliveredCount += 1;
-          row.deliveredTotal += ((e.collectedAmount as number | null) ?? (e.price as number | undefined) ?? 0) as number;
-        }
-      }
-    }
-
-    res.json({ from: days[0], to: days[days.length - 1], rows: [...rows.values()] });
+    const rows = await computeActivityRows(days);
+    res.json({ from: days[0], to: days[days.length - 1], rows });
   } catch (err) {
     sendError(res, err);
   }
@@ -163,145 +92,153 @@ employeeActivityRouter.post("/myDailyActivity", withAuth, async (req: AuthedRequ
   try {
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
     const dateKey = resolveDateKey(req.body?.date);
-    const range = businessDayRangeUtc(dateKey)!;
-    const start = Timestamp.fromDate(range.start);
-    const end = Timestamp.fromDate(range.end);
-
-    const [eventsSnap, pickedUpSnap, createdSnap, paymentsSnap, allExpenses] = await Promise.all([
-      dailyActivityEvents(dateKey).where("employeeId", "==", employeeId).get(),
-      db.collection("orders").where("pickedUpAt", ">=", start).where("pickedUpAt", "<", end).get(),
-      db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
-      db.collection("payments").where("dateKey", "==", dateKey).get(),
-      loadEmployeeExpenses(dateKey),
-    ]);
-
-    // --- Bosqich hodisalari (yuvildi / upakovka / yetkazildi) ---
-    const washed: StageRow[] = [];
-    const packed: StageRow[] = [];
-    const delivered: StageRow[] = [];
-    // Qo'ldagi naqd — admin panelidagi kunlik kassa bilan AYNAN bir xil
-    // qoida (routes/dailyReport.ts): yetkazish va shu kuni yopilgan
-    // qarzlarning naqd qismi. Karta puli xodim qo'lidan o'tmaydi.
-    let collectedCash = 0;
-    let prepaidCount = 0;
-    let prepaidTotal = 0;
-
-    for (const doc of eventsSnap.docs) {
-      const e = doc.data();
-      if (e.type === "delivered" || e.type === "onsite_done") collectedCash += cashPartOf(e);
-      else if (e.type === "settled" || e.type === "prepaid") collectedCash += cashPartOf({ ...e, price: 0 });
-      if (e.type === "prepaid") {
-        prepaidCount += 1;
-        prepaidTotal += (e.collectedAmount as number | null) ?? 0;
-      }
-      const calcType = (e.calcType as string | null) ?? null;
-      const unit = UNIT_BY_CALC_TYPE[calcType ?? "fixed"] ?? "dona";
-      const row: StageRow = {
-        id: doc.id,
-        at: toIso(e.at),
-        orderId: (e.orderId as string) ?? "",
-        itemId: (e.itemId as string | null) ?? null,
-        orderNumber: (e.orderNumber as number) ?? 0,
-        customerName: (e.customerName as string) ?? "",
-        itemName: (e.itemName as string) ?? "Mahsulot",
-        itemNumber: (e.itemNumber as number | null) ?? null,
-        unit,
-        unitLabel: UNIT_LABELS[unit] ?? unit,
-        unitAmount: unitAmountOf(calcType, e.qty as number | null),
-        price: (e.price as number | undefined) ?? 0,
-        collectedAmount: (e.collectedAmount as number | null) ?? null,
-      };
-      if (e.type === "washed") washed.push(row);
-      else if (e.type === "packed") packed.push(row);
-      else if (e.type === "delivered" || e.type === "onsite_done") delivered.push(row);
-    }
-
-    const newestFirst = (a: { at: string | null }, b: { at: string | null }) =>
-      (b.at ?? "").localeCompare(a.at ?? "");
-    washed.sort(newestFirst);
-    packed.sort(newestFirst);
-    delivered.sort(newestFirst);
-
-    // --- Buyurtma darajasidagi ish ---
-    const broughtIn = pickedUpSnap.docs
-      .filter((d) => d.data().pickedUpBy === employeeId)
-      .map((d) => toOrderRow(d, d.data().pickedUpAt))
-      .sort(newestFirst);
-
-    const created = createdSnap.docs
-      .filter((d) => d.data().createdBy === employeeId)
-      .map((d) => toOrderRow(d, d.data().createdAt))
-      .sort(newestFirst);
-
-    // --- To'lovlar ---
-    const payments = paymentsSnap.docs
-      .filter((d) => d.data().employeeId === employeeId)
-      .map((d) => {
-        const p = d.data();
-        return {
-          id: d.id,
-          at: toIso(p.at),
-          orderId: (p.orderId as string) ?? "",
-          orderNumber: (p.orderNumber as number) ?? 0,
-          customerName: (p.customerName as string) ?? "",
-          phone: (p.phone as string) ?? "",
-          dueAmount: (p.dueAmount as number | undefined) ?? 0,
-          paidAmount: (p.paidAmount as number | undefined) ?? 0,
-          shortfall: (p.shortfall as number | undefined) ?? 0,
-          kind: (p.kind as string) ?? "full",
-          settled: p.settled === true,
-        };
-      })
-      .sort(newestFirst);
-
-    const expenses = allExpenses.filter((x) => x.employeeId === employeeId);
-    const cashExpenses = expenses.filter((x) => x.fromCash).reduce((sum, x) => sum + x.amount, 0);
-    const byKind = (kind: string, onlyOpen: boolean) =>
-      payments.filter((p) => p.kind === kind && (!onlyOpen || !p.settled));
-
-    res.json({
-      date: dateKey,
-      broughtIn: {
-        count: broughtIn.length,
-        totalPrice: broughtIn.reduce((s, o) => s + o.totalPrice, 0),
-        orders: broughtIn,
-      },
-      delivered: {
-        count: delivered.length,
-        orderCount: new Set(delivered.map((r) => r.orderId)).size,
-        totalPrice: delivered.reduce((s, r) => s + r.price, 0),
-        rows: delivered,
-      },
-      washed: { count: washed.length, totals: unitTotalsOf(washed), rows: washed },
-      packed: { count: packed.length, totals: unitTotalsOf(packed), rows: packed },
-      created: {
-        count: created.length,
-        totalPrice: created.reduce((s, o) => s + o.totalPrice, 0),
-        orders: created,
-      },
-      payments: {
-        // Kassaga topshiriladigan naqd: yig'ilgani minus qo'ldagi naqddan
-        // qilingan chiqimlar. Manfiy — kompaniya xodimga qarzdor.
-        cash: Math.round(collectedCash - cashExpenses),
-        collectedCash: Math.round(collectedCash),
-        // Shu kuni qabul qilingan oldindan to'lovlar (naqd + karta).
-        prepaid: { count: prepaidCount, amount: Math.round(prepaidTotal) },
-        debt: sumShortfall(byKind("debt", true)),
-        partial: sumShortfall(byKind("partial", true)),
-        discount: sumShortfall(byKind("discount", false)),
-        rows: payments,
-      },
-      expenses: {
-        count: expenses.length,
-        total: expenses.reduce((sum, x) => sum + x.amount, 0),
-        cashTotal: cashExpenses,
-        rows: expenses,
-      },
-    });
+    res.json(await buildDailyActivity(employeeId, dateKey));
   } catch (err) {
     sendError(res, err);
   }
 });
+
+/**
+ * Bitta xodimning bir kunlik ishi — profil sahifasi (o'zi uchun) va
+ * nazoratchining xodim sahifasi (boshqa xodim uchun) bir xil javob oladi.
+ */
+export async function buildDailyActivity(employeeId: string, dateKey: string) {
+  const range = businessDayRangeUtc(dateKey)!;
+  const start = Timestamp.fromDate(range.start);
+  const end = Timestamp.fromDate(range.end);
+
+  const [eventsSnap, pickedUpSnap, createdSnap, paymentsSnap, allExpenses] = await Promise.all([
+    dailyActivityEvents(dateKey).where("employeeId", "==", employeeId).get(),
+    db.collection("orders").where("pickedUpAt", ">=", start).where("pickedUpAt", "<", end).get(),
+    db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
+    db.collection("payments").where("dateKey", "==", dateKey).get(),
+    loadEmployeeExpenses(dateKey),
+  ]);
+
+  // --- Bosqich hodisalari (yuvildi / upakovka / yetkazildi) ---
+  const washed: StageRow[] = [];
+  const packed: StageRow[] = [];
+  const delivered: StageRow[] = [];
+  // Qo'ldagi naqd — admin panelidagi kunlik kassa bilan AYNAN bir xil
+  // qoida (routes/dailyReport.ts): yetkazish va shu kuni yopilgan
+  // qarzlarning naqd qismi. Karta puli xodim qo'lidan o'tmaydi.
+  let collectedCash = 0;
+  let prepaidCount = 0;
+  let prepaidTotal = 0;
+
+  for (const doc of eventsSnap.docs) {
+    const e = doc.data();
+    if (e.type === "delivered" || e.type === "onsite_done") collectedCash += cashPartOf(e);
+    else if (e.type === "settled" || e.type === "prepaid") collectedCash += cashPartOf({ ...e, price: 0 });
+    if (e.type === "prepaid") {
+      prepaidCount += 1;
+      prepaidTotal += (e.collectedAmount as number | null) ?? 0;
+    }
+    const calcType = (e.calcType as string | null) ?? null;
+    const unit = UNIT_BY_CALC_TYPE[calcType ?? "fixed"] ?? "dona";
+    const row: StageRow = {
+      id: doc.id,
+      at: toIso(e.at),
+      orderId: (e.orderId as string) ?? "",
+      itemId: (e.itemId as string | null) ?? null,
+      orderNumber: (e.orderNumber as number) ?? 0,
+      customerName: (e.customerName as string) ?? "",
+      itemName: (e.itemName as string) ?? "Mahsulot",
+      itemNumber: (e.itemNumber as number | null) ?? null,
+      unit,
+      unitLabel: UNIT_LABELS[unit] ?? unit,
+      unitAmount: unitAmountOf(calcType, e.qty as number | null),
+      price: (e.price as number | undefined) ?? 0,
+      collectedAmount: (e.collectedAmount as number | null) ?? null,
+    };
+    if (e.type === "washed") washed.push(row);
+    else if (e.type === "packed") packed.push(row);
+    else if (e.type === "delivered" || e.type === "onsite_done") delivered.push(row);
+  }
+
+  const newestFirst = (a: { at: string | null }, b: { at: string | null }) =>
+    (b.at ?? "").localeCompare(a.at ?? "");
+  washed.sort(newestFirst);
+  packed.sort(newestFirst);
+  delivered.sort(newestFirst);
+
+  // --- Buyurtma darajasidagi ish ---
+  const broughtIn = pickedUpSnap.docs
+    .filter((d) => d.data().pickedUpBy === employeeId)
+    .map((d) => toOrderRow(d, d.data().pickedUpAt))
+    .sort(newestFirst);
+
+  const created = createdSnap.docs
+    .filter((d) => d.data().createdBy === employeeId)
+    .map((d) => toOrderRow(d, d.data().createdAt))
+    .sort(newestFirst);
+
+  // --- To'lovlar ---
+  const payments = paymentsSnap.docs
+    .filter((d) => d.data().employeeId === employeeId)
+    .map((d) => {
+      const p = d.data();
+      return {
+        id: d.id,
+        at: toIso(p.at),
+        orderId: (p.orderId as string) ?? "",
+        orderNumber: (p.orderNumber as number) ?? 0,
+        customerName: (p.customerName as string) ?? "",
+        phone: (p.phone as string) ?? "",
+        dueAmount: (p.dueAmount as number | undefined) ?? 0,
+        paidAmount: (p.paidAmount as number | undefined) ?? 0,
+        shortfall: (p.shortfall as number | undefined) ?? 0,
+        kind: (p.kind as string) ?? "full",
+        settled: p.settled === true,
+      };
+    })
+    .sort(newestFirst);
+
+  const expenses = allExpenses.filter((x) => x.employeeId === employeeId);
+  const cashExpenses = expenses.filter((x) => x.fromCash).reduce((sum, x) => sum + x.amount, 0);
+  const byKind = (kind: string, onlyOpen: boolean) =>
+    payments.filter((p) => p.kind === kind && (!onlyOpen || !p.settled));
+
+  return {
+    date: dateKey,
+    broughtIn: {
+      count: broughtIn.length,
+      totalPrice: broughtIn.reduce((s, o) => s + o.totalPrice, 0),
+      orders: broughtIn,
+    },
+    delivered: {
+      count: delivered.length,
+      orderCount: new Set(delivered.map((r) => r.orderId)).size,
+      totalPrice: delivered.reduce((s, r) => s + r.price, 0),
+      rows: delivered,
+    },
+    washed: { count: washed.length, totals: unitTotalsOf(washed), rows: washed },
+    packed: { count: packed.length, totals: unitTotalsOf(packed), rows: packed },
+    created: {
+      count: created.length,
+      totalPrice: created.reduce((s, o) => s + o.totalPrice, 0),
+      orders: created,
+    },
+    payments: {
+      // Kassaga topshiriladigan naqd: yig'ilgani minus qo'ldagi naqddan
+      // qilingan chiqimlar. Manfiy — kompaniya xodimga qarzdor.
+      cash: Math.round(collectedCash - cashExpenses),
+      collectedCash: Math.round(collectedCash),
+      // Shu kuni qabul qilingan oldindan to'lovlar (naqd + karta).
+      prepaid: { count: prepaidCount, amount: Math.round(prepaidTotal) },
+      debt: sumShortfall(byKind("debt", true)),
+      partial: sumShortfall(byKind("partial", true)),
+      discount: sumShortfall(byKind("discount", false)),
+      rows: payments,
+    },
+    expenses: {
+      count: expenses.length,
+      total: expenses.reduce((sum, x) => sum + x.amount, 0),
+      cashTotal: cashExpenses,
+      rows: expenses,
+    },
+  };
+}
 
 interface StageRow {
   id: string;
@@ -328,7 +265,7 @@ function toIso(value: unknown): string | null {
 }
 
 /** Kun kalitini tekshiradi; berilmasa bugungi biznes kuni. */
-function resolveDateKey(raw: unknown): string {
+export function resolveDateKey(raw: unknown): string {
   const dateKey = parseDateKey(raw);
   if (!dateKey) throw new ApiError(400, "invalid-argument", "Sana YYYY-MM-DD ko'rinishida bo'lishi kerak");
   return dateKey;
@@ -361,4 +298,85 @@ function unitTotalsOf(rows: StageRow[]) {
 
 function sumShortfall(rows: { shortfall: number }[]) {
   return { count: rows.length, amount: rows.reduce((s, r) => s + r.shortfall, 0) };
+}
+
+/**
+ * Berilgan kunlar uchun har bir xodimning faolligi — admin panelidagi
+ * "Eng faol xodimlar" va nazoratchining "Xodimlar" bo'limi uchun bir xil
+ * hisob (kunlik jurnal + yaratilgan/olib kelingan buyurtmalar oralig'i).
+ */
+export async function computeActivityRows(days: string[]): Promise<ActivityRow[]> {
+  const startUtc = businessDayRangeUtc(days[0])!.start;
+  const endUtc = businessDayRangeUtc(days[days.length - 1])!.end;
+
+  const [eventSnaps, createdSnap, pickedUpSnap, names] = await Promise.all([
+    Promise.all(days.map((d) => dailyActivityEvents(d).get())),
+    db
+      .collection("orders")
+      .where("createdAt", ">=", Timestamp.fromDate(startUtc))
+      .where("createdAt", "<", Timestamp.fromDate(endUtc))
+      .get(),
+    db
+      .collection("orders")
+      .where("pickedUpAt", ">=", Timestamp.fromDate(startUtc))
+      .where("pickedUpAt", "<", Timestamp.fromDate(endUtc))
+      .get(),
+    loadEmployeeNames(),
+  ]);
+
+  const rows = new Map<string, ActivityRow>();
+  const ensure = (id: string): ActivityRow => {
+    let row = rows.get(id);
+    if (!row) {
+      row = {
+        employeeId: id,
+        name: names.get(id) ?? "Noma'lum xodim",
+        ordersCreated: 0,
+        ordersCreatedTotal: 0,
+        pickedUpCount: 0,
+        pickedUpTotal: 0,
+        deliveredCount: 0,
+        deliveredTotal: 0,
+        washedCount: 0,
+        packedCount: 0,
+      };
+      rows.set(id, row);
+    }
+    return row;
+  };
+
+  for (const doc of createdSnap.docs) {
+    const o = doc.data();
+    const by = o.createdBy as string | undefined;
+    if (!by) continue;
+    const row = ensure(by);
+    row.ordersCreated += 1;
+    row.ordersCreatedTotal += (o.totalPrice as number | undefined) ?? 0;
+  }
+
+  for (const doc of pickedUpSnap.docs) {
+    const o = doc.data();
+    const by = o.pickedUpBy as string | undefined;
+    if (!by) continue;
+    const row = ensure(by);
+    row.pickedUpCount += 1;
+    row.pickedUpTotal += (o.totalPrice as number | undefined) ?? 0;
+  }
+
+  for (const snap of eventSnaps) {
+    for (const doc of snap.docs) {
+      const e = doc.data();
+      const by = (e.employeeId as string | undefined) ?? "";
+      if (!by) continue;
+      const row = ensure(by);
+      if (e.type === "washed") row.washedCount += 1;
+      else if (e.type === "packed") row.packedCount += 1;
+      else if (e.type === "delivered" || e.type === "onsite_done") {
+        row.deliveredCount += 1;
+        row.deliveredTotal += ((e.collectedAmount as number | null) ?? (e.price as number | undefined) ?? 0) as number;
+      }
+    }
+  }
+
+  return [...rows.values()];
 }

@@ -33,6 +33,9 @@ class OrderItem {
   final DateTime? createdAt;
   final String? status; // 'pending' | 'washing' | 'packing' | 'ready' | 'returned' | 'done'
   final String? addedByDepartment;
+  /// Yuvishni boshlagan (yoki nazoratchi belgilagan) ishchi — "Yuvildi"
+  /// bosilganda o'sha taklif qilinadi.
+  final String? washingBy;
   final String? washedBy;
   final DateTime? washedAt;
 
@@ -77,6 +80,7 @@ class OrderItem {
     this.createdAt,
     this.status,
     this.addedByDepartment,
+    this.washingBy,
     this.washedBy,
     this.washedAt,
     this.packedBy,
@@ -106,6 +110,8 @@ class OrderItem {
     String? condition,
     String? tariff,
     String? status,
+    String? washingBy,
+    String? washedBy,
     String? packedBy,
     DateTime? packedAt,
     String? deliveredBy,
@@ -137,7 +143,8 @@ class OrderItem {
       createdAt: createdAt,
       status: status ?? this.status,
       addedByDepartment: addedByDepartment,
-      washedBy: washedBy,
+      washingBy: washingBy ?? this.washingBy,
+      washedBy: washedBy ?? this.washedBy,
       washedAt: washedAt,
       packedBy: packedBy ?? this.packedBy,
       packedAt: packedAt ?? this.packedAt,
@@ -178,6 +185,7 @@ class OrderItem {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       status: data['status']?.toString(),
       addedByDepartment: data['addedByDepartment']?.toString(),
+      washingBy: data['washingBy']?.toString(),
       washedBy: data['washedBy']?.toString(),
       washedAt: (data['washedAt'] as Timestamp?)?.toDate(),
       packedBy: data['packedBy']?.toString(),

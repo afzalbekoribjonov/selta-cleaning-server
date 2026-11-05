@@ -155,6 +155,27 @@ class OrdersRepository {
   /// (kamida 9 raqam) — yarim kiritilgan raqamga so'rov yuborishning
   /// ma'nosi yo'q. "+998" shart emas: bazadagi turli yozilish shakllari
   /// birdaniga tekshiriladi.
+  /// Yakunlangan buyurtmalarning bitta sahifasi (eng yangisi birinchi) —
+  /// faqat so'ralganda o'qiladi, oqim emas. (status, createdAt) indeksi
+  /// mavjud. [after] — oldingi sahifaning oxirgi hujjati.
+  Future<({List<Order> orders, DocumentSnapshot<Map<String, dynamic>>? last, bool fromCache})> fetchDoneOrdersPage({
+    DocumentSnapshot<Map<String, dynamic>>? after,
+    int limit = 20,
+  }) async {
+    var query = FirebaseFirestore.instance
+        .collection('orders')
+        .where('status', isEqualTo: 'done')
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (after != null) query = query.startAfterDocument(after);
+    final snap = await getQueryFast(query);
+    return (
+      orders: snap.docs.map(Order.fromFirestore).toList(),
+      last: snap.docs.isEmpty ? null : snap.docs.last,
+      fromCache: snap.metadata.isFromCache,
+    );
+  }
+
   Future<List<Order>> searchOrders(String term) async {
     final trimmed = term.trim();
     if (trimmed.isEmpty) return const [];
@@ -341,8 +362,7 @@ class OrdersRepository {
     final drafts = isPickup ? (items ?? const <CatalogItemDraft>[]) : const <CatalogItemDraft>[];
 
     final createdItems = [
-      for (var i = 0; i < drafts.length; i++)
-        _draftToItem(drafts[i], id: '$orderId-$i', number: i + 1, pickup: true, now: now),
+      for (var i = 0; i < drafts.length; i++) _draftToItem(drafts[i], id: '$orderId-$i', number: i + 1, pickup: true, now: now),
     ];
     final onsiteDays = tariff == null ? null : (_tariffs[tariff] ?? _tariffs['standart'])?.days;
 
@@ -517,7 +537,10 @@ class OrdersRepository {
       effect: _itemsEffect(
         orderId,
         after: after,
-        upserts: [for (final i in items ?? const <OrderItem>[]) if (ids.contains(i.id)) deliver(i)],
+        upserts: [
+          for (final i in items ?? const <OrderItem>[])
+            if (ids.contains(i.id)) deliver(i)
+        ],
         orderStatus: remaining == 0 ? 'done' : null,
         prepaidUsed: prepaidUsedAfter,
         paymentSummary: paymentSummaryAfter,
@@ -787,8 +810,13 @@ class OrdersRepository {
     String? qcNote,
     num? collectedAmount,
     String? actorName,
+
+    /// Nazoratchi: ishni bajargan xodim (u qayd etadi, ish o'sha xodimga yoziladi).
+    String? onBehalfOf,
+    String? performerName,
   }) async {
     final current = _items(orderId);
+    final performer = onBehalfOf ?? _employeeId;
     OrderItem? existing;
     for (final i in current ?? const <OrderItem>[]) {
       if (i.id == itemId) existing = i;
@@ -803,8 +831,10 @@ class OrdersRepository {
               ? 'failed'
               : null,
       qcNote: toStatus == 'returned' ? qcNote : null,
+      washingBy: toStatus == 'washing' ? performer : null,
+      washedBy: toStatus == 'packing' ? performer : null,
       // Omborxona hisobi shu paytdan boshlanadi — oflayn ham to'g'ri tursin.
-      packedBy: toStatus == 'ready' ? _employeeId : null,
+      packedBy: toStatus == 'ready' ? performer : null,
       packedAt: toStatus == 'ready' ? DateTime.now() : null,
       deliveredBy: toStatus == 'done' ? _employeeId : null,
       deliveredAt: toStatus == 'done' ? DateTime.now() : null,
@@ -814,11 +844,15 @@ class OrdersRepository {
     _enqueue(
       path: '/changeItemStatus',
       orderId: orderId,
-      label: _label(orderId, '${existing?.name ?? 'Mahsulot'} — ${statusOf(toStatus).label}'),
+      label: _label(
+        orderId,
+        '${existing?.name ?? 'Mahsulot'} — ${statusOf(toStatus).label}${performerName != null ? ' · $performerName' : ''}',
+      ),
       body: {
         'orderId': orderId,
         'itemId': itemId,
         'toStatus': toStatus,
+        if (onBehalfOf != null) 'onBehalfOf': onBehalfOf,
         if (qcNote != null) 'qcNote': qcNote,
         if (collectedAmount != null) 'collectedAmount': collectedAmount,
         if (actorName != null) 'actorName': actorName,

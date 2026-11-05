@@ -146,6 +146,11 @@ export function ItemEventRow({
           {role && who !== role && <span className="text-gray"> · {role}</span>}
           {e.at && <> · {formatDateTimeUz(e.at)}</>}
         </p>
+        {e.recordedBy && e.recordedBy !== e.by && (
+          <p className="mt-0.5 text-[11px] font-semibold text-brand-primary">
+            Nazoratchi qayd etdi: {employees[e.recordedBy] ?? 'Nazoratchi'}
+          </p>
+        )}
       </div>
     </li>
   )

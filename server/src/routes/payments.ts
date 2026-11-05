@@ -2,6 +2,7 @@ import { Router } from "express";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, requireEmployeeFlag, type AuthedRequest } from "../lib/authz";
+import { canManageWorkflow } from "../lib/roles";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
 import { dailyActivityDocId, dailyActivityEvents, logDailyActivity } from "../lib/dailyActivity";
 import { isValidActionId } from "../lib/idempotency";
@@ -41,7 +42,9 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
     const employeeId = req.auth!.employeeId ?? req.auth!.uid;
     // Dastavchikdan tashqari "Omborxona" vakolati berilgan xodim ham
     // topshira oladi — ombordagi buyurtmani mijoz o'zi kelib oladi.
-    if (role !== "delivery" && role !== "admin") {
+    // Nazoratchi ham — mijoz idoraga o'zi kelganda u topshiradi (pul uning
+    // kassasiga yoziladi).
+    if (role !== "delivery" && !canManageWorkflow(role)) {
       const empSnap = await db.collection("employees").doc(employeeId).get();
       if (empSnap.data()?.canAccessWarehouse !== true) {
         throw new ApiError(403, "permission-denied", "Faqat dastavchik yoki omborxona xodimi buyurtmani topshira oladi");

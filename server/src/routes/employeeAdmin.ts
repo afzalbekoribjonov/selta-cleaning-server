@@ -5,10 +5,11 @@ import { db, auth } from "../lib/admin";
 import { hashPin, isValidFourDigitPin } from "../lib/pin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { VALID_PRODUCT_CATEGORIES } from "./products";
+import { BUILTIN_DEPARTMENT_LABELS, SUPERVISOR } from "../lib/roles";
 
 export const employeeAdminRouter = Router();
 
-const FIXED_DEPARTMENTS = new Set(["dispatcher", "worker", "delivery", "qc"]);
+const FIXED_DEPARTMENTS = new Set(["dispatcher", "worker", "delivery", "qc", SUPERVISOR]);
 
 /**
  * `employees/{id}/private/credentials.firebaseUid` yaratilishida shunchaki
@@ -64,7 +65,7 @@ async function resolveDepartment(
   const newLabel = typeof body.newDepartment?.label === "string" ? body.newDepartment.label.trim() : "";
   if (newLabel) {
     const slug = slugifyDepartmentLabel(newLabel);
-    if (FIXED_DEPARTMENTS.has(slug)) return { key: slug, label: null };
+    if (FIXED_DEPARTMENTS.has(slug)) return { key: slug, label: BUILTIN_DEPARTMENT_LABELS[slug] ?? null };
 
     const ref = db.collection("customDepartments").doc(slug);
     const snap = await tx.get(ref);
@@ -81,7 +82,9 @@ async function resolveDepartment(
 
   const department = typeof body.department === "string" ? body.department.trim() : "";
   if (department) {
-    if (FIXED_DEPARTMENTS.has(department)) return { key: department, label: null };
+    // Nazoratchi — "Boshqa" orqali kiradigan qurilgan bo'lim; nomi xodim
+    // hujjatiga yoziladi (ilova uni reestrsiz ko'rsatadi).
+    if (FIXED_DEPARTMENTS.has(department)) return { key: department, label: BUILTIN_DEPARTMENT_LABELS[department] ?? null };
     const snap = await tx.get(db.collection("customDepartments").doc(department));
     return { key: department, label: (snap.data()?.label as string | undefined) ?? null };
   }

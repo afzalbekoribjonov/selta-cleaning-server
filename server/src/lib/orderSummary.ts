@@ -67,6 +67,8 @@ const MIRROR_FIELDS = [
   "createdAt",
   "status",
   "addedByDepartment",
+  "washingBy",
+  "washingAt",
   "washedBy",
   "washedAt",
   "packedBy",

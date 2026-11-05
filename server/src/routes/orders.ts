@@ -15,6 +15,7 @@ import { paymentSummaryIncrements } from "../lib/paymentSummary";
 import { diffItem, itemSnapshot, recordItemEvent } from "../lib/itemHistory";
 import { deleteImageKitFiles } from "../lib/imagekit";
 import { photoFileIdsOf } from "../lib/itemPhotos";
+import { SUPERVISOR, canManageWorkflow } from "../lib/roles";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -40,7 +41,7 @@ function assertItemsEditable(
   // tahrirlay oladi — mijoz telefonda mahsulotni qo'shsa yoki o'zgartirsa.
   // Olib ketilgandan keyin mahsulotlar sexda, ular endi ishchilarniki.
   const isDispatcherOnNew = role === "dispatcher" && order.status === "new";
-  if (!["worker", "delivery", "admin"].includes(role) && !isTeamMember && !isDispatcherOnNew) {
+  if (!["worker", "delivery", "admin", SUPERVISOR].includes(role) && !isTeamMember && !isDispatcherOnNew) {
     throw new ApiError(403, "permission-denied", "Bu amal uchun ruxsatingiz yo'q");
   }
   if (item && order.serviceType === "pickup" && !ITEM_STILL_EDITABLE_STATUSES.has(item.status as string)) {
@@ -69,7 +70,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
     // Talab: "Buyurtma yaratish huquqi" — sotuv menejeri/admin'dan
     // tashqari, admin panelda shu huquq alohida berilgan xodim ham
     // (masalan mijoz do'konga o'zi kelganda) buyurtma ocha oladi.
-    let canCreate = role === "dispatcher" || role === "admin";
+    let canCreate = role === "dispatcher" || canManageWorkflow(role);
     if (!canCreate) {
       const empSnap = await db.collection("employees").doc(employeeId).get();
       canCreate = empSnap.data()?.canCreateOrders === true;
@@ -279,7 +280,7 @@ ordersRouter.post("/createOrder", withAuth, async (req: AuthedRequest, res) => {
 ordersRouter.post("/updateOrder", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
-    if (role !== "dispatcher" && role !== "admin") {
+    if (role !== "dispatcher" && !canManageWorkflow(role)) {
       throw new ApiError(403, "permission-denied", "Faqat dispetcher buyurtmani tahrirlay oladi");
     }
 
@@ -539,27 +540,60 @@ function assertWorkerLavozim(
   lavozim: { specializations: string[]; canPack: boolean },
   transitionKey: string,
   category: string | null,
+  /** Nazoratchi boshqa xodim nomidan qayd etsa — o'sha xodimning ismi. */
+  performerName: string | null = null,
 ) {
   if (WASHING_TRANSITIONS.has(transitionKey)) {
     if (lavozim.specializations.length === 0) {
-      throw new ApiError(403, "permission-denied", "Sizga hali lavozim (mutaxassislik) belgilanmagan — admin bilan bog'laning");
+      throw new ApiError(
+        403,
+        "permission-denied",
+        performerName
+          ? `${performerName}ga hali mutaxassislik belgilanmagan — boshqa ishchini tanlang`
+          : "Sizga hali lavozim (mutaxassislik) belgilanmagan — admin bilan bog'laning",
+      );
     }
     if (category && !lavozim.specializations.includes(category)) {
-      throw new ApiError(403, "permission-denied", "Bu mahsulot toifasi sizning mutaxassisligingizga mos emas");
+      throw new ApiError(
+        403,
+        "permission-denied",
+        performerName
+          ? `Bu mahsulot toifasi ${performerName}ning mutaxassisligiga mos emas`
+          : "Bu mahsulot toifasi sizning mutaxassisligingizga mos emas",
+      );
     }
   }
   if (PACKING_TRANSITIONS.has(transitionKey) && !lavozim.canPack) {
-    throw new ApiError(403, "permission-denied", "Sizga upakovkachi huquqi berilmagan — admin bilan bog'laning");
+    throw new ApiError(
+      403,
+      "permission-denied",
+      performerName
+        ? `${performerName}ga upakovkachi huquqi berilmagan — boshqa ishchini tanlang`
+        : "Sizga upakovkachi huquqi berilmagan — admin bilan bog'laning",
+    );
   }
 }
 
 ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role!;
-    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    /** Tugmani bosgan xodim. */
+    const recorderId = req.auth!.employeeId ?? req.auth!.uid;
     const { orderId, itemId, toStatus, qcNote, collectedAmount, actorName } = req.body ?? {};
     if (!orderId || !itemId || !toStatus) {
       throw new ApiError(400, "invalid-argument", "orderId, itemId va toStatus majburiy");
+    }
+
+    // Nazoratchi ishni BOSHQA xodim nomidan qayd etadi: "kim yuvdi",
+    // "kim upakovka qildi". Ish (maosh, kunlik hisob, tarix) o'sha
+    // xodimga yoziladi, nazoratchi esa "qayd etgan" sifatida saqlanadi.
+    const onBehalfOf =
+      typeof req.body?.onBehalfOf === "string" && req.body.onBehalfOf.trim() ? (req.body.onBehalfOf as string).trim() : null;
+    if (onBehalfOf && !canManageWorkflow(role)) {
+      throw new ApiError(403, "permission-denied", "Boshqa xodim nomidan faqat nazoratchi qayd eta oladi");
+    }
+    if (role === SUPERVISOR && !onBehalfOf) {
+      throw new ApiError(400, "invalid-argument", "Ishni bajargan xodimni tanlang");
     }
 
     const orderRef = db.collection("orders").doc(orderId);
@@ -569,13 +603,31 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
     // — lavozim ma'lumoti oldindan olinadi (qayta urinishlarda bekorga
     // qayta so'ralmasligi uchun ham).
     let workerLavozim: { specializations: string[]; canPack: boolean } | null = null;
-    if (role === "worker") {
-      const empSnap = await db.collection("employees").doc(employeeId).get();
+    let performerName: string | null = null;
+    if (onBehalfOf) {
+      const performerSnap = await db.collection("employees").doc(onBehalfOf).get();
+      const performer = performerSnap.data();
+      if (!performerSnap.exists || performer?.status !== "active") {
+        throw new ApiError(404, "not-found", "Tanlangan xodim topilmadi yoki ishdan bo'shatilgan");
+      }
+      if (performer.department !== "worker") {
+        throw new ApiError(400, "invalid-argument", "Bu ishni faqat ishchi bajaradi — ishchini tanlang");
+      }
+      performerName = (performer.fullName as string | undefined) ?? "Tanlangan xodim";
+      workerLavozim = {
+        specializations: (performer.specializations as string[] | undefined) ?? [],
+        canPack: (performer.canPack as boolean | undefined) ?? false,
+      };
+    } else if (role === "worker") {
+      const empSnap = await db.collection("employees").doc(recorderId).get();
       workerLavozim = {
         specializations: (empSnap.data()?.specializations as string[] | undefined) ?? [],
         canPack: (empSnap.data()?.canPack as boolean | undefined) ?? false,
       };
     }
+    /** Ishni bajargan (va hisobiga yoziladigan) xodim. */
+    const employeeId = onBehalfOf ?? recorderId;
+    const actorRole = onBehalfOf ? "worker" : role;
 
     let orderNumber = 0;
     let itemName = "";
@@ -604,11 +656,17 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       }
       const transitionKey = `${fromStatus}->${toStatus}`;
       const allowedRoles = ITEM_MANUAL_TRANSITIONS[transitionKey] ?? [];
-      if (role !== "admin" && !allowedRoles.includes(role)) {
-        throw new ApiError(403, "permission-denied", "Bu o'tish uchun ruxsatingiz yo'q");
+      // Nazoratchi ishchining o'tishlarini (yuvish, upakovka, qaytarish)
+      // ishchi nomidan qayd etadi; mijozga topshirish — dastavchikniki.
+      if (role !== "admin" && !allowedRoles.includes(actorRole)) {
+        throw new ApiError(
+          403,
+          "permission-denied",
+          role === SUPERVISOR ? "Bu bosqichni nazoratchi qayd eta olmaydi" : "Bu o'tish uchun ruxsatingiz yo'q",
+        );
       }
-      if (role === "worker" && workerLavozim) {
-        assertWorkerLavozim(workerLavozim, transitionKey, (item.category as string | undefined) ?? null);
+      if (actorRole === "worker" && workerLavozim) {
+        assertWorkerLavozim(workerLavozim, transitionKey, (item.category as string | undefined) ?? null, performerName);
       }
 
       /** Kunlik jurnal hodisasining o'zgarmas qismi — uch bosqichda bir xil. */
@@ -643,6 +701,12 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       }
 
       const itemUpdate: Record<string, unknown> = { status: toStatus, updatedAt: FieldValue.serverTimestamp() };
+      // Yuvishni kim boshlagani — "Yuvildi" bosilganda o'sha xodim taklif
+      // qilinadi (nazoratchi ekranida) va ro'yxatlarda ko'rinadi.
+      if (toStatus === "washing") {
+        itemUpdate.washingBy = employeeId;
+        itemUpdate.washingAt = FieldValue.serverTimestamp();
+      }
       // `washedByEmployees`/`deliveredByEmployees` — order-level denormalizatsiya
       // (arrayUnion) faqat maosh/faollik statistikasi UCHUN, xodim
       // ro'yxatlar/hisobotlarda oson topilishi uchun (talab #13/#7) — haqiqiy
@@ -722,7 +786,8 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         itemNumber: (item.itemNumber as number | undefined) ?? null,
         itemName,
         employeeId,
-        role,
+        role: actorRole,
+        recordedBy: onBehalfOf ? recorderId : null,
         fromStatus,
         toStatus,
         note: toStatus === "returned" && typeof qcNote === "string" ? qcNote : null,
@@ -782,8 +847,8 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
 ordersRouter.post("/submitOrderQcRating", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
-    if (role !== "worker" && role !== "admin") {
-      throw new ApiError(403, "permission-denied", "Faqat ishchi bu amalni bajara oladi");
+    if (role !== "worker" && !canManageWorkflow(role)) {
+      throw new ApiError(403, "permission-denied", "Faqat ishchi yoki nazoratchi bu amalni bajara oladi");
     }
 
     const { orderId, rating, note } = req.body ?? {};
@@ -1086,7 +1151,7 @@ ordersRouter.post("/deleteOrderItem", withAuth, async (req: AuthedRequest, res) 
 ordersRouter.post("/assignTeam", withAuth, async (req: AuthedRequest, res) => {
   try {
     const role = req.auth!.role;
-    if (role !== "dispatcher" && role !== "admin") {
+    if (role !== "dispatcher" && !canManageWorkflow(role)) {
       throw new ApiError(403, "permission-denied", "Faqat sotuv menejeri jamoa biriktira oladi");
     }
 

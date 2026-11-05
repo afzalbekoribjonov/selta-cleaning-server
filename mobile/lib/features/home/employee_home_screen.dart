@@ -9,6 +9,7 @@ import '../../core/widgets/selta_loader.dart';
 import '../delivery/delivery_home_screen.dart';
 import '../dispatcher/dispatcher_home_screen.dart';
 import '../other/other_home_screen.dart';
+import '../supervisor/supervisor_home_screen.dart';
 import '../worker/worker_home_screen.dart';
 
 /// `/home` — claims.department'ga qarab tegishli bo'lim paneliga
@@ -44,6 +45,12 @@ class EmployeeHomeScreen extends ConsumerWidget {
         // doimiy Department qiymatidan hech biriga mos kelmaydi — bunday
         // holatda avvalgi kod xato ravishda Dispetcher paneliga
         // yo'naltirar edi; endi tayinlangan topshiriqlar ekraniga o'tadi.
+        // Nazoratchi — "Boshqa" ro'yxatidan kiradi, lekin o'zining
+        // alohida boshqaruv paneli bor.
+        if (claims.department == 'supervisor') {
+          return const SupervisorHomeScreen();
+        }
+
         Department? department;
         for (final d in Department.values) {
           if (d.name == claims.department) department = d;

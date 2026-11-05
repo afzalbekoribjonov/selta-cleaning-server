@@ -11,6 +11,7 @@ import {
   writeBonus,
 } from "../lib/bonus";
 import { prepaidCredit } from "../lib/prepayments";
+import { canManageWorkflow } from "../lib/roles";
 
 export const bonusRouter = Router();
 
@@ -51,6 +52,7 @@ bonusRouter.post("/customerBonus", withAuth, async (req: AuthedRequest, res) => 
 
 /**
  * Bonusni ishlatish huquqi — mijozdan to'lov oladigan xodimlar: admin,
+ * nazoratchi,
  * dastavchik, sotuv menejeri, oldindan to'lov yoki omborxona vakolati
  * borlar, joyida yuvishda esa shu buyurtma jamoasi.
  */
@@ -60,7 +62,7 @@ async function assertCanApplyBonus(
   employee: Record<string, unknown> | undefined,
 ): Promise<void> {
   const role = req.auth!.role;
-  if (role === "admin" || role === "delivery" || role === "dispatcher") return;
+  if (canManageWorkflow(role) || role === "delivery" || role === "dispatcher") return;
   const employeeId = req.auth!.employeeId ?? req.auth!.uid;
   if (order.serviceType === "onsite" && Array.isArray(order.assignedTeam) && order.assignedTeam.includes(employeeId)) return;
   if (employee?.canTakePrepayment === true || employee?.canAccessWarehouse === true) return;

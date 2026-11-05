@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'driver_tasks.dart';
+import '../shared/warnings_banner.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/employee_repository.dart';
@@ -156,6 +158,8 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
       appBar: EmployeeAppBar(departmentLabel: 'Dastavchik', employeeName: fullName),
       body: Column(
         children: [
+          const WarningsBanner(),
+          const DriverTaskBanner(),
           const TeamJobsSection(),
           _SearchField(
             onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),

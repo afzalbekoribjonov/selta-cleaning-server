@@ -16,6 +16,7 @@ import { employeeActivityRouter } from "./routes/employeeActivity";
 import { paymentsRouter } from "./routes/payments";
 import { tariffsRouter } from "./routes/tariffs";
 import { warehouseRouter } from "./routes/warehouse";
+import { supervisorRouter } from "./routes/supervisor";
 import { commentsRouter } from "./routes/comments";
 import { bonusRouter } from "./routes/bonus";
 import { receiptRouter } from "./routes/receipt";
@@ -53,6 +54,7 @@ app.use("/", statsRouter);
 app.use("/", dailyReportRouter);
 app.use("/", employeeActivityRouter);
 app.use("/", paymentsRouter);
+app.use("/", supervisorRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 8080;
 app.listen(port, () => {

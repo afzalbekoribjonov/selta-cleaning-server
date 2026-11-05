@@ -108,16 +108,21 @@ enum _MenuAction { createOrder, stats, dailyReceipt, warehouse, expenses, printe
 /// Vakolatlar admin panelda xodim sahifasida beriladi; ruxsat o'zgarsa
 /// menyu qayta kirishsiz yangilanadi (xodim profili jonli oqim).
 class EmployeeMenuButton extends ConsumerWidget {
-  const EmployeeMenuButton({super.key});
+  /// Rangli (gradient) sarlavhada — oq.
+  final Color iconColor;
+
+  const EmployeeMenuButton({super.key, this.iconColor = AppColors.ink});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final employee = ref.watch(currentEmployeeProvider).valueOrNull;
     final department = employee?['department'] as String?;
+    // Nazoratchi ish jarayonini to'liq boshqaradi — bu vakolatlar unda doim bor.
+    final isSupervisor = department == 'supervisor';
     // Sotuv menejeri uchun buyurtma yaratish asosiy bo'limning o'zida.
-    final canCreateOrders = (employee?['canCreateOrders'] as bool? ?? false) && department != 'dispatcher';
-    final canViewStats = employee?['canViewStats'] as bool? ?? false;
-    final canAccessWarehouse = employee?['canAccessWarehouse'] as bool? ?? false;
+    final canCreateOrders = (isSupervisor || (employee?['canCreateOrders'] as bool? ?? false)) && department != 'dispatcher';
+    final canViewStats = isSupervisor || (employee?['canViewStats'] as bool? ?? false);
+    final canAccessWarehouse = isSupervisor || (employee?['canAccessWarehouse'] as bool? ?? false);
     final canAddExpenses = employee?['canAddExpenses'] as bool? ?? false;
     // Printer sozlamasi — chek chiqara oladiganlarga.
     final canDailyReceipt = employee?['canPrintDailyReport'] == true;
@@ -126,7 +131,7 @@ class EmployeeMenuButton extends ConsumerWidget {
 
     return PopupMenuButton<_MenuAction>(
       tooltip: 'Boshqa amallar',
-      icon: const Icon(Icons.more_vert_rounded, color: AppColors.ink),
+      icon: Icon(Icons.more_vert_rounded, color: iconColor),
       position: PopupMenuPosition.under,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onSelected: (action) {

@@ -3,6 +3,7 @@ import { db, auth } from "../lib/admin";
 import { verifyPin, isValidFourDigitPin } from "../lib/pin";
 import { ApiError, sendError, withAuth, type AuthedRequest } from "../lib/authz";
 import type { Department } from "../lib/pipeline";
+import { BUILTIN_DEPARTMENT_LABELS } from "../lib/roles";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
@@ -40,13 +41,22 @@ authRouter.post("/listEmployeesByDepartment", async (req, res) => {
       const slugs = [...new Set(rows.map((e) => e.department))];
       const labelEntries = await Promise.all(
         slugs.map(async (slug) => {
+          // Nazoratchi kabi qurilgan bo'limlar reestrda yo'q — nomi shu yerda.
+          if (BUILTIN_DEPARTMENT_LABELS[slug]) return [slug, BUILTIN_DEPARTMENT_LABELS[slug]] as const;
           const deptSnap = await db.collection("customDepartments").doc(slug).get();
           return [slug, (deptSnap.data()?.label as string | undefined) ?? slug] as const;
         }),
       );
       const labels = Object.fromEntries(labelEntries);
 
-      res.json({ employees: rows.map((e) => ({ id: e.id, fullName: e.fullName, departmentLabel: labels[e.department] ?? e.department })) });
+      res.json({
+        employees: rows.map((e) => ({
+          id: e.id,
+          fullName: e.fullName,
+          departmentKey: e.department,
+          departmentLabel: labels[e.department] ?? e.department,
+        })),
+      });
       return;
     }
 
