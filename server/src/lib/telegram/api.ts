@@ -1,12 +1,15 @@
+import https from "node:https";
+
 /**
- * Telegram Bot API'ning juda yupqa mijozi — tashqi kutubxonasiz, Node 20
- * ichidagi `fetch` bilan.
+ * Telegram Bot API'ning juda yupqa mijozi — tashqi kutubxonasiz, Node'ning
+ * o'z `https` moduli bilan (IPv4, doimiy ulanish — pastda `agent`).
  *
  * Ishonchlilik qoidalari:
  *  - har bir so'rovga vaqt chegarasi (osilib qolgan ulanish botni
  *    to'xtatmasin);
  *  - 429 (juda tez) — Telegram aytgan `retry_after` kutib qayta urinadi;
- *  - tarmoq xatosi va 5xx — qisqa kutish bilan 2 marta qayta urinadi;
+ *  - tarmoq xatosi — 1, 2, 4 soniya kutib 3 marta, 5xx — 2 marta qayta
+ *    urinadi;
  *  - "message is not modified" — xato emas (foydalanuvchi bir tugmani ikki
  *    marta bosgan), jim o'tkazib yuboriladi.
  *
@@ -67,39 +70,64 @@ export class TelegramError extends Error {
   }
 }
 
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Telegram'ga ulanish — FAQAT IPv4, doimiy (keep-alive) ulanish bilan.
+ *
+ * NEGA `fetch` emas: Node 20 `fetch` IPv6 va IPv4 manzillarini navbatma-
+ * navbat sinaydi va har biriga atigi 250 ms beradi. Render (Singapur)
+ * dan Telegram serverlarigacha (Yevropa) ulanish bundan uzoqroq —
+ * ikkala urinish ham "vaqt tugadi" (ETIMEDOUT) bo'lib qolardi, garchi
+ * Telegram ishlab turgan bo'lsa ham. IPv4 bilan bunday cheklov yo'q;
+ * doimiy ulanish esa hisobotning 6+ xabarini bitta ulanish orqali
+ * yuboradi (har biriga yangi ulanish ochilmaydi).
+ */
+const agent = new https.Agent({ keepAlive: true, keepAliveMsecs: 30_000, maxSockets: 8, family: 4 });
+
+function postJson(url: string, payload: string): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      url,
+      {
+        method: "POST",
+        agent,
+        family: 4,
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString("utf8") }));
+        res.on("error", reject);
+      },
+    );
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => req.destroy(new Error("Telegram so'rovi vaqti tugadi")));
+    req.on("error", reject);
+    req.end(payload);
+  });
+}
 
 /** Haqiqiy HTTPS transport. */
 export function httpTransport(token: string): Transport {
   return async (method, params) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const response = await postJson(`https://api.telegram.org/bot${token}/${method}`, JSON.stringify(params));
+    let body: { ok?: boolean; result?: unknown; error_code?: number; description?: string; parameters?: { retry_after?: number } };
     try {
-      const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
-        signal: controller.signal,
-      });
-      let body: { ok?: boolean; result?: unknown; error_code?: number; description?: string; parameters?: { retry_after?: number } };
-      try {
-        body = (await response.json()) as typeof body;
-      } catch {
-        throw new TelegramError(method, response.status, "javob JSON emas");
-      }
-      if (!body.ok) {
-        throw new TelegramError(
-          method,
-          body.error_code ?? response.status,
-          body.description ?? "noma'lum xato",
-          body.parameters?.retry_after ?? null,
-        );
-      }
-      return body.result;
-    } finally {
-      clearTimeout(timer);
+      body = JSON.parse(response.text) as typeof body;
+    } catch {
+      throw new TelegramError(method, response.status, "javob JSON emas");
     }
+    if (!body.ok) {
+      throw new TelegramError(
+        method,
+        body.error_code ?? response.status,
+        body.description ?? "noma'lum xato",
+        body.parameters?.retry_after ?? null,
+      );
+    }
+    return body.result;
   };
 }
 
@@ -125,9 +153,9 @@ export class TelegramApi {
           }
           throw err;
         }
-        // Tarmoq xatosi yoki vaqt tugashi.
-        if (attempt <= 2) {
-          await sleep(700 * attempt);
+        // Tarmoq xatosi yoki vaqt tugashi — 1, 2, 4 soniyadan keyin qayta.
+        if (attempt <= 3) {
+          await sleep(1000 * 2 ** (attempt - 1));
           continue;
         }
         throw err;
