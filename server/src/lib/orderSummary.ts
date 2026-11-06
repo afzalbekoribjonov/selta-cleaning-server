@@ -132,8 +132,20 @@ export const UNIT_BY_CALC_TYPE: Record<string, string> = {
   fixed: "dona",
 };
 
-/** O'lchovli tur bo'lsa mahsulotning haqiqiy hajmi, aks holda 1 dona. */
+/**
+ * Mahsulotning shu birlikdagi hajmi: o'lchovli turda (m², metr, kg) —
+ * haqiqiy hajm; donalik ("count") turda — nechta dona (narx ham
+ * `birlik narxi × dona` bo'lib hisoblanadi); o'lcham/qo'lda kiritilgan
+ * mahsulot — 1 dona.
+ *
+ * Avval "count" ham doim 1 deb sanalardi: 3 ta yostiqli mahsulot
+ * hisobotlarda "1 dona" chiqardi.
+ */
 export function unitAmountOf(calcType: string | null | undefined, qty: number | null | undefined): number {
+  if (calcType === "count") {
+    const pieces = Number(qty);
+    return pieces > 0 ? pieces : 1;
+  }
   const unit = UNIT_BY_CALC_TYPE[calcType ?? "fixed"] ?? "dona";
   if (unit === "dona") return 1;
   return Number(qty) || 0;

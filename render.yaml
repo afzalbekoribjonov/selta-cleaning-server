@@ -21,6 +21,9 @@ services:
         sync: false
       - key: IMAGEKIT_URL_ENDPOINT
         sync: false
+      # Kunlik hisobot Telegram boti (BotFather tokeni). Berilmasa bot o'chiq.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
 
   # Admin panel — statik SPA sifatida (Vite build). admin.seltacleaning.uz
   # custom domeni Render dashboard'da shu servisga qo'shiladi (DNS CNAME

@@ -416,6 +416,15 @@ const HANDLERS: Record<string, Handler> = {
     })),
   }),
   '/adminDailyReport': dailyReport,
+  '/adminTelegramBot': () => ({
+    configured: true,
+    botUsername: 'selta_hisobot_bot',
+    webhook: { ok: true, pendingUpdates: 0, lastError: null, lastErrorAt: null },
+    users: [
+      { key: 'demo1', username: 'selta_direktor', userId: 5012345678, label: 'Direktor', lang: 'latn', addedAt: '2026-11-01T06:00:00Z', linkedAt: '2026-11-01T06:05:00Z', linkedName: 'Rustam Nazarov' },
+      { key: 'demo2', username: 'buxgalter_selta', userId: null, label: 'Buxgalter', lang: 'cyrl', addedAt: '2026-11-04T09:00:00Z', linkedAt: null, linkedName: null },
+    ],
+  }),
   '/adminDailyTrend': dailyTrend,
   '/adminEmployeeActivity': employeeActivity,
   '/listPayments': listPayments,

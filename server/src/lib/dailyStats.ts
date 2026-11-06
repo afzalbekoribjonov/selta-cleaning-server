@@ -17,7 +17,8 @@ import { UNIT_BY_CALC_TYPE, unitAmountOf } from "./orderSummary";
  * Bugun va kecha har safar qayta hisoblanadi (kech qolgan amal yoki
  * o'chirilgan mahsulot ularni o'zgartirishi mumkin).
  */
-export const DAY_STATS_VERSION = 1;
+// 2 -> donalik ("count") mahsulot o'z sonicha sanaladi (avval doim 1).
+export const DAY_STATS_VERSION = 2;
 
 export type UnitMap = Record<string, number>;
 

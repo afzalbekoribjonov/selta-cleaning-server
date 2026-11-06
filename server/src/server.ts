@@ -21,6 +21,7 @@ import { commentsRouter } from "./routes/comments";
 import { bonusRouter } from "./routes/bonus";
 import { receiptRouter } from "./routes/receipt";
 import { photosRouter } from "./routes/photos";
+import { startTelegramBot, telegramRouter } from "./routes/telegram";
 
 const app = express();
 
@@ -55,8 +56,10 @@ app.use("/", dailyReportRouter);
 app.use("/", employeeActivityRouter);
 app.use("/", paymentsRouter);
 app.use("/", supervisorRouter);
+app.use("/", telegramRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 8080;
 app.listen(port, () => {
   console.log(`Selta Cleaning server ${port} portda ishga tushdi`);
+  startTelegramBot();
 });

@@ -18,6 +18,7 @@ import {
 import { Spinner } from '@/components/ui/Spinner'
 import { ReceiptSettingsCard } from '@/components/settings/ReceiptSettingsCard'
 import { AppPrinterCard } from '@/components/settings/AppPrinterCard'
+import { TelegramBotCard } from '@/components/settings/TelegramBotCard'
 import { DEFAULT_WAREHOUSE_DAYS, subscribeWarehouseDays, updateWarehouseDays } from '@/lib/warehouse'
 import {
   DEFAULT_BONUS_PERCENT,
@@ -66,6 +67,7 @@ export default function SettingsPage() {
 
       <WarehouseSettingsCard />
       <BonusSettingsCard />
+      <TelegramBotCard />
       <AppPrinterCard />
       <ReceiptSettingsCard />
 
