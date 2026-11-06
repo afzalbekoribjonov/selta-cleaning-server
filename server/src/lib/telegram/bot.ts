@@ -87,11 +87,11 @@ export function createBot(deps: BotDeps): Bot {
       `👋 Assalomu alaykum${name ? `, <b>${name}</b>` : ""}!`,
       `Men <b>Selta Cleaning</b> hisobot botiman. Sizga quyidagilarni tayyorlab beraman:`,
       [
-        "📊 Kunlik hisobot va asosiy ko'rsatkichlar",
-        "🧼 Yuvilgan mahsulotlar hajmi va narxi",
-        "🏷 Tariflar bo'yicha tahlil",
-        "👥 Xodimlar faolligi — sotuv menejerlari, ishchilar, dastavchiklar",
-        "🔎 Buyurtma va har bir mahsulot tafsilotlari",
+        "• kunlik hisobot va kassa",
+        "• yuvilgan mahsulotlar hajmi va narxi",
+        "• tariflar va mahsulot nomlari bo'yicha ko'rsatkichlar",
+        "• xodimlar faolligi — sotuv menejerlari, ishchilar, dastavchiklar",
+        "• buyurtma va har bir mahsulot tafsilotlari",
       ].join("\n"),
       [
         "<b>Buyruqlar</b>",

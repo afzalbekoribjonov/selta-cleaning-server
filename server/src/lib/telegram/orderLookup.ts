@@ -2,7 +2,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { db } from "../admin";
 import type { InlineKeyboard } from "./api";
 import { normalizeTariff } from "./dayReport";
-import { TARIFF_TITLES } from "./reportMessages";
+import { TARIFF_NAMES } from "./reportMessages";
 import { businessDateString } from "../businessTime";
 import { dateTime, dayMonth, esc, inScript, MESSAGE_LIMIT, money, qty, type Script } from "./text";
 
@@ -302,79 +302,76 @@ export function findItem(order: OrderView, ref: string): ItemView | null {
 
 const MAX_ITEM_BUTTONS = 90;
 
+/** Ichki qatorlar chekinishi (uzilmaydigan bo'shliqlar). */
+const IN = "    ";
+
 export function renderOrder(order: OrderView, nameOf: NameOf, script: Script, now = new Date()): { text: string; keyboard: InlineKeyboard } {
-  const head = [`🧾 <b>BUYURTMA #${order.orderNumber}</b>`, `Holati: <b>${stageLabel(order)}</b>`].join("\n");
+  const head = [`🧾 <b>BUYURTMA #${order.orderNumber}</b>`, `Holati — <b>${stageLabel(order)}</b>`].join("\n");
 
   const customer = [
-    `👤 <b>${esc(order.customerName || "Noma'lum mijoz")}</b>`,
-    order.phone ? `📞 ${esc(formatPhone(order.phone))}` : null,
-    order.location ? `📍 ${esc(order.location)}` : null,
+    `<b>${esc(order.customerName || "Noma'lum mijoz")}</b>`,
+    order.phone ? esc(formatPhone(order.phone)) : null,
+    order.location ? esc(order.location) : null,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const flow: string[] = [];
-  flow.push(
-    `📝 Qabul qildi: ${esc(nameOf(order.createdBy) ?? "—")}${order.createdAt ? ` · ${dateTime(order.createdAt)}` : ""}`,
-  );
+  /** "Qabul qildi — Madina Sobirova" + keyingi qatorda vaqti. */
+  const event = (label: string, who: string | null, at: Date | null) =>
+    `${label} — ${who ? `<b>${esc(who)}</b>` : "—"}${at ? `\n${IN}${dateTime(at)}` : ""}`;
+
+  const flow: string[] = [event("Qabul qildi", nameOf(order.createdBy), order.createdAt)];
   if (order.serviceType === "onsite") {
-    flow.push(`🏠 Xizmat: Joyida yuvish${order.tariff ? ` · ${TARIFF_TITLES[normalizeTariff(order.tariff)] ?? ""}` : ""}`);
-    if (order.team.length) flow.push(`👥 Jamoa: ${order.team.map((id) => esc(nameOf(id) ?? "Xodim")).join(", ")}`);
-    if (order.dueDate && order.status !== "done") flow.push(`⏰ Muddat: ${dayMonth(order.dueDate)}`);
+    flow.push(`Xizmat — Joyida yuvish${order.tariff ? `, ${TARIFF_NAMES[normalizeTariff(order.tariff)] ?? ""}` : ""}`);
+    if (order.team.length) flow.push(`Jamoa — ${order.team.map((id) => esc(nameOf(id) ?? "Xodim")).join(", ")}`);
+    if (order.dueDate && order.status !== "done") flow.push(`Muddat — ${dayMonth(order.dueDate)}`);
   } else if (order.intakeMethod === "walk_in") {
-    flow.push(`🚶 Mijoz o'zi olib keldi${order.pickedUpAt ? ` · ${dateTime(order.pickedUpAt)}` : ""}`);
+    flow.push(`Mijoz o'zi olib keldi${order.pickedUpAt ? `\n${IN}${dateTime(order.pickedUpAt)}` : ""}`);
   } else if (order.pickedUpAt) {
-    flow.push(
-      `🚛 Olib keldi: ${esc(order.pickedUpByName ?? nameOf(order.pickedUpBy) ?? "—")} · ${dateTime(order.pickedUpAt)}`,
-    );
+    flow.push(event("Olib keldi", order.pickedUpByName ?? nameOf(order.pickedUpBy), order.pickedUpAt));
   }
   if (order.assignment && order.status !== "done") {
     flow.push(
-      `🗂 Topshiriq: ${esc(order.assignment.driverName)} · ${dayLabel(order.assignment.date, now)} ${
+      `Topshiriq — <b>${esc(order.assignment.driverName)}</b>\n${IN}${dayLabel(order.assignment.date, now)} ${
         order.assignment.kind === "pickup" ? "olib keladi" : "yetkazadi"
       }`,
     );
   }
-  if (order.doneAt) flow.push(`🏁 Yakunlandi: ${dateTime(order.doneAt)}`);
+  if (order.doneAt) flow.push(`Yakunlandi — ${dateTime(order.doneAt)}`);
 
   // Mahsulotlar — xabar chegarasiga sig'maganlari tugmalarda qoladi.
-  const itemLines: string[] = [];
-  let shown = 0;
+  const itemBlocks: string[] = [];
   let budget = MESSAGE_LIMIT - 900 - head.length - customer.length - flow.join("\n").length;
   for (const item of order.items) {
-    const line = [
+    const block = [
       `<b>${subId(order, item)}</b> · ${esc(item.name)}`,
-      `└ ${esc(measurementOf(item))} · ${TARIFF_TITLES[item.tariff] ?? ""} · <b>${money(item.price)}</b> · ${ITEM_STATUS[item.status] ?? esc(item.status)}`,
+      `${IN}${esc(measurementOf(item))} · ${TARIFF_NAMES[item.tariff] ?? "—"}`,
+      `${IN}${money(item.price)} · ${ITEM_STATUS[item.status] ?? esc(item.status)}`,
     ].join("\n");
-    if (line.length + 1 > budget) break;
-    budget -= line.length + 1;
-    itemLines.push(line);
-    shown += 1;
+    if (block.length + 2 > budget) break;
+    budget -= block.length + 2;
+    itemBlocks.push(block);
   }
-  const hidden = order.items.length - shown;
+  const hidden = order.items.length - itemBlocks.length;
 
   const items =
     order.items.length === 0
       ? order.serviceType === "onsite"
-        ? "📦 Joyida yuvish — mahsulotlar alohida qayd etilmaydi"
-        : "📦 Mahsulotlar hali qo'shilmagan"
+        ? "<i>Joyida yuvish — mahsulotlar alohida qayd etilmaydi</i>"
+        : "<i>Mahsulotlar hali qo'shilmagan</i>"
       : [
-          `📦 <b>Mahsulotlar (${order.items.length})</b>`,
-          itemLines.join("\n"),
-          hidden > 0 ? `<i>… va yana ${hidden} ta — tugmalar orqali ko'ring</i>` : null,
-        ]
-          .filter(Boolean)
-          .join("\n");
+          `<b>MAHSULOTLAR (${order.items.length})</b>`,
+          ...itemBlocks,
+          ...(hidden > 0 ? [`<i>… va yana ${hidden} ta — tugmalar orqali ko'ring</i>`] : []),
+        ].join("\n\n");
 
-  const payments = [`💵 <b>Jami: ${money(order.totalPrice)}</b>`];
-  const payLines: string[] = [];
-  if (order.paidTotal > 0) payLines.push(`To'langan: ${money(order.paidTotal)}`);
-  if (order.prepaidAmount > 0) payLines.push(`Oldindan to'lov: ${money(order.prepaidAmount)}`);
-  if (order.discountTotal > 0) payLines.push(`Chegirma: ${money(order.discountTotal)}`);
-  if (order.debtTotal > 0) payLines.push(`Qarz: ${money(order.debtTotal)}`);
-  payLines.forEach((line, i) => payments.push(`${i === payLines.length - 1 ? "└" : "├"} ${line}`));
+  const payments = [`<b>Jami — ${money(order.totalPrice)}</b>`];
+  if (order.paidTotal > 0) payments.push(`${IN}to'langan — ${money(order.paidTotal)}`);
+  if (order.prepaidAmount > 0) payments.push(`${IN}oldindan to'lov — ${money(order.prepaidAmount)}`);
+  if (order.discountTotal > 0) payments.push(`${IN}chegirma — ${money(order.discountTotal)}`);
+  if (order.debtTotal > 0) payments.push(`${IN}qarz — ${money(order.debtTotal)}`);
 
-  const footer = order.items.length > 0 ? "👇 <i>Mahsulot tafsilotlari uchun uning raqamini bosing</i>" : null;
+  const footer = order.items.length > 0 ? "<i>Mahsulot tafsilotlari uchun pastdagi raqamini bosing</i>" : null;
 
   const text = [head, customer, flow.join("\n"), items, payments.join("\n"), footer].filter(Boolean).join("\n\n");
 
@@ -386,10 +383,11 @@ export function renderOrder(order: OrderView, nameOf: NameOf, script: Script, no
   return { text: inScript(text, script), keyboard };
 }
 
-function stageLine(icon: string, label: string, who: string | null, at: Date | null, extra = ""): string {
-  if (!who && !at) return `${icon} ${label}: —`;
-  if (!who) return `${icon} ${label}: ${dateTime(at!)}${extra}`;
-  return `${icon} ${label}: <b>${esc(who)}</b>${at ? ` · ${dateTime(at)}` : ""}${extra}`;
+/** "Yuvdi — <b>Bobur Aliyev</b>" + keyingi qatorda vaqti; bajarilmagan — "hali yo'q". */
+function stageLine(label: string, who: string | null, at: Date | null, extra = "", missing = "<i>hali yo'q</i>"): string {
+  if (!who && !at) return `${label} — ${missing}`;
+  if (!who) return `${label} — ${dateTime(at!)}${extra}`;
+  return `${label} — <b>${esc(who)}</b>${at ? `\n${IN}${dateTime(at)}${extra}` : extra}`;
 }
 
 /**
@@ -409,30 +407,30 @@ function addedByOf(order: OrderView, item: ItemView, nameOf: NameOf): string | n
 export function renderItem(order: OrderView, item: ItemView, nameOf: NameOf, script: Script): { text: string; keyboard: InlineKeyboard } {
   const head = [
     `🔖 <b>${subId(order, item)} · ${esc(item.name)}</b>`,
-    `🧾 Buyurtma #${order.orderNumber}${order.customerName ? ` · ${esc(order.customerName)}` : ""}`,
+    `<i>Buyurtma #${order.orderNumber}${order.customerName ? ` · ${esc(order.customerName)}` : ""}</i>`,
   ].join("\n");
 
   const facts = [
-    `📏 O'lcham: ${esc(measurementOf(item))}`,
-    `🏷 Tarif: ${TARIFF_TITLES[item.tariff] ?? "—"}`,
-    `💵 Narxi: <b>${money(item.price)}</b>`,
-    `📍 Holati: ${ITEM_STATUS[item.status] ?? esc(item.status)}`,
+    `O'lcham — ${esc(measurementOf(item))}`,
+    `Tarif — ${TARIFF_NAMES[item.tariff] ?? "—"}`,
+    `Narxi — <b>${money(item.price)}</b>`,
+    `Holati — ${ITEM_STATUS[item.status] ?? esc(item.status)}`,
   ];
-  if (item.dueDate && item.status !== "done") facts.push(`⏰ Muddat: ${dayMonth(item.dueDate)}`);
+  if (item.dueDate && item.status !== "done") facts.push(`Muddat — ${dayMonth(item.dueDate)}`);
   if (item.qcNote && (item.status === "returned" || item.status === "washing")) {
-    facts.push(`↩️ Qaytarish sababi: <i>${esc(item.qcNote)}</i>`);
+    facts.push(`Qaytarish sababi — <i>${esc(item.qcNote)}</i>`);
   }
 
   const washingNow = item.status === "washing" && !item.washedBy && item.washingBy;
   const flow = [
-    `🛠 <b>Ish jarayoni</b>`,
-    stageLine("➕", "Qo'shildi", addedByOf(order, item, nameOf), item.createdAt),
+    "<b>ISH JARAYONI</b>",
+    "",
+    stageLine("Qo'shdi", addedByOf(order, item, nameOf), item.createdAt, "", "—"),
     washingNow
-      ? stageLine("🧼", "Yuvmoqda", nameOf(item.washingBy), item.washingAt)
-      : stageLine("🧼", "Yuvdi", item.washedBy ? nameOf(item.washedBy) : null, item.washedAt),
-    stageLine("📦", "Qadoqladi", item.packedBy ? nameOf(item.packedBy) : null, item.packedAt),
+      ? stageLine("Yuvmoqda", nameOf(item.washingBy), item.washingAt)
+      : stageLine("Yuvdi", item.washedBy ? nameOf(item.washedBy) : null, item.washedAt),
+    stageLine("Qadoqladi", item.packedBy ? nameOf(item.packedBy) : null, item.packedAt),
     stageLine(
-      "🚚",
       "Topshirdi",
       item.deliveredBy || item.deliveredByName ? item.deliveredByName ?? nameOf(item.deliveredBy) : null,
       item.deliveredAt,

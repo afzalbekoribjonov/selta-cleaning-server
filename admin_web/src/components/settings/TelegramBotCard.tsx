@@ -77,7 +77,7 @@ export function TelegramBotCard() {
         Telegram hisobot boti
       </h2>
       <p className="mb-4 text-xs text-gray-dark">
-        Bot kunlik hisobot, tariflar, xodimlar faolligi va buyurtma tafsilotlarini yuboradi. U faqat shu ro'yxatdagi Telegram
+        Bot kunlik hisobot va kassa, tariflar, mahsulot nomlari, xodimlar faolligi va buyurtma tafsilotlarini yuboradi. U faqat shu ro'yxatdagi Telegram
         hisoblariga javob beradi — boshqalarga umuman javob bermaydi.
       </p>
 

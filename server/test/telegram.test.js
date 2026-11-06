@@ -160,16 +160,26 @@ function sampleInput() {
     itemCount: 0,
     totalPrice: 0,
     itemTariffs: new Map(),
+    items: [],
     ...extra,
   });
   const orders = new Map([
-    ['o1', order('o1', 1201, { createdAtKey: DAY, pickedUpBy: 'd1', pickedUpAtKey: DAY, itemCount: 3, itemTariffs: new Map([['i1', 'express'], ['i2', 'standart'], ['i3', 'Standard']]) })],
+    ['o1', order('o1', 1201, {
+      createdAtKey: DAY, pickedUpBy: 'd1', pickedUpAtKey: DAY, itemCount: 3,
+      itemTariffs: new Map([['i1', 'express'], ['i2', 'standart'], ['i3', 'Standard']]),
+      items: [
+        { id: 'i1', name: 'Gilam', calcType: 'sqm', qty: 6.5, price: 195000 },
+        { id: 'i2', name: 'Parda', calcType: 'meter', qty: 4, price: 60000 },
+        { id: 'i3', name: ' yostiq ', calcType: 'count', qty: 2, price: 0 },
+      ],
+    })],
     ['o2', order('o2', 1199, { createdAtKey: DAY, createdBy: 'sup' })],
     ['o3', order('o3', 1180, { itemTariffs: new Map([['j1', 'premium']]) })],
     ['o4', order('o4', 1210, { createdAtKey: DAY, pickedUpBy: 'disp', pickedUpAtKey: DAY, intakeMethod: 'walk_in', itemCount: 1 })],
   ]);
+  const NAMES = { i1: 'Gilam', i2: 'Parda', i3: 'Yostiq', j1: 'Adyol' };
   const ev = (type, orderId, orderNumber, itemId, calcType, qty, price, employeeId, extra = {}) => ({
-    type, orderId, orderNumber, itemId, calcType, qty, price, employeeId,
+    type, orderId, orderNumber, itemId, itemName: NAMES[itemId] ?? null, calcType, qty, price, employeeId,
     collectedAmount: null, cashAmount: null, cardAmount: null, ...extra,
   });
   const events = [
@@ -191,7 +201,11 @@ function sampleInput() {
       { employeeId: 'd1', kind: 'full', shortfall: 0 },
       { employeeId: 'd1', kind: 'debt', shortfall: 10000 },
     ],
-    expenses: [{ employeeId: 'd1', amount: 5000, fromCash: true }, { employeeId: 'd1', amount: 9999, fromCash: false }],
+    expenses: [
+      { employeeId: 'd1', name: 'Benzin', amount: 5000, fromCash: true },
+      { employeeId: 'd1', name: 'Taksi', amount: 9999, fromCash: false },
+      { employeeId: '', name: 'Yuvish vositasi', amount: 100000, fromCash: false },
+    ],
     employees: employees(),
   };
 }
@@ -245,6 +259,30 @@ test("kunlik hisobot: sonlar, hajm, tarif, xodimlar va kassa aniq", () => {
   assert.equal(r.money.collected, 365000);
   assert.equal(r.money.discount, 20000);
   assert.equal(r.money.debt, 10000);
+
+  // Kunlik kassadan chiqimlar ayiriladi (xodimniki va adminniki).
+  assert.equal(r.money.expenses.total, 114999);
+  assert.equal(r.money.net, 365000 - 114999);
+  assert.deepEqual(r.money.expenses.items.map((x) => [x.name, x.who]), [
+    ['Yuvish vositasi', null],
+    ['Taksi', 'Akmal Qodirov'],
+    ['Benzin', 'Akmal Qodirov'],
+  ]);
+
+  // Mahsulot nomlari bo'yicha: sexga keldi (nusxadan) va bosqichlar; nom bo'shliq/registrsiz birlashadi.
+  const gilam = r.products.find((p) => p.name === 'Gilam');
+  assert.equal(gilam.intake.items, 1);
+  assert.equal(gilam.intake.units.sqm, 6.5);
+  assert.equal(gilam.washed.items, 1);
+  assert.equal(gilam.packed.items, 1);
+  const yostiq = r.products.filter((p) => p.name.toLowerCase() === 'yostiq');
+  assert.equal(yostiq.length, 1);
+  assert.equal(yostiq[0].intake.items, 1);
+  assert.equal(yostiq[0].washed.units.dona, 2);
+  assert.equal(r.products.find((p) => p.name === 'Adyol').delivered.units.kg, 3.5);
+  // Butun buyurtma yozuvlari (joyida yuvish, yopilgan qarz) mahsulot emas.
+  assert.equal(r.products.length, 4);
+  assert.equal(r.products[0].name, 'Gilam');
 });
 
 function tagsBalanced(s) {
@@ -253,10 +291,10 @@ function tagsBalanced(s) {
   }
 }
 
-test("hisobot xabarlari: 6 ta, nollar yashirilmaydi, HTML to'g'ri, ikkala yozuvda", () => {
+test("hisobot xabarlari: 7 ta, har biri o'z qatorida, nollar yashirilmaydi, HTML to'g'ri, ikkala yozuvda", () => {
   const r = buildDayReport(sampleInput());
   const latn = renderDayReport(r, 'latn');
-  assert.equal(latn.length, 6);
+  assert.equal(latn.length, 7);
   for (const group of latn) {
     assert.ok(group.length >= 1);
     for (const m of group) {
@@ -264,17 +302,31 @@ test("hisobot xabarlari: 6 ta, nollar yashirilmaydi, HTML to'g'ri, ikkala yozuvd
       tagsBalanced(m);
     }
   }
-  const [summary, washed, dispatchers, workers, tariffs, drivers] = latn.map((g) => g.join('\n\n'));
-  assert.match(summary, /Qabul qilingan buyurtmalar: <b>3 ta<\/b>/);
+  const all = latn.map((g) => g.join('\n\n'));
+  const [summary, washed, dispatchers, workers, tariffs, drivers, products] = all.map((t) => t.replace(/\u00A0/g, ' '));
+  // Daraxt belgilari yo'q; birliklar bitta qatorga tiqilmagan.
+  for (const t of all) {
+    assert.equal(/[├└]/.test(t), false, 'daraxt belgisi qolgan');
+    assert.equal(/m² [\d,]+ · metr/.test(t), false, 'birliklar bitta qatorda');
+  }
+  assert.match(summary, /Qabul qilindi — <b>3 ta<\/b>/);
   assert.match(summary, /14:35 holatiga/);
-  assert.match(washed, /Kg: <b>0<\/b>/);
-  assert.match(washed, /🍃 Comfort[\s\S]*Soni: <b>0 ta<\/b>[\s\S]*m² 0 · metr 0 · kg 0 · dona 0/);
-  assert.match(dispatchers, /Madina Sobirova[\s\S]*#1201, #1210/);
-  assert.match(dispatchers, /Zarina Ahmedova<\/b>\n└ Buyurtma ochmadi/);
-  assert.match(workers, /Bobur Aliyev[\s\S]*Yuvdi: <b>2 ta<\/b>/);
-  assert.match(tariffs, /💎 PREMIUM[\s\S]*Yetkazildi: <b>1 ta<\/b>/);
-  assert.match(drivers, /Akmal Qodirov[\s\S]*Chegirma: 20 000 so'm \(1 ta\)[\s\S]*Qo'lida naqd: 40 000 so'm/);
-  assert.match(drivers, /Sherzod Karimov<\/b> <i>\(Ishchi\)<\/i>/);
+  assert.match(summary, /Tushum — <b>365 000 so'm<\/b>/);
+  assert.match(summary, /Chiqimlar — <b>114 999 so'm<\/b>\n {4}Yuvish vositasi — 100 000 so'm\n {4}Taksi <i>\(Akmal Qodirov\)<\/i>/);
+  assert.match(summary, /<b>Qoldiq — 250 001 so'm<\/b>/);
+  assert.match(washed, /<b>Comfort<\/b> — 0 ta\n {4}m² — 0\n {4}metr — 0\n {4}kg — 0\n {4}dona — 0/);
+  assert.match(washed, /<b>Hajm<\/b>\n {4}m² — 6,5\n {4}metr — 4\n {4}kg — 0\n {4}dona — 2/);
+  assert.match(dispatchers, /<b>Madina Sobirova<\/b> — <b>2 ta<\/b>\n {4}#1201, #1210/);
+  assert.match(dispatchers, /<b>Zarina Ahmedova<\/b>\n {4}Bugun buyurtma ochmadi/);
+  assert.match(workers, /<b>Bobur Aliyev<\/b>\nYuvdi — <b>2 ta<\/b> · 255 000 so'm\n {4}hajm — 6,5 m² \+ 4 metr\n {4}Express — 1 ta · 6,5 m² · 195 000 so'm/);
+  assert.match(tariffs, /<b>PREMIUM<\/b>\nYuvildi — 0 ta\nQadoqlandi — 0 ta\nYetkazildi — <b>1 ta<\/b> · 70 000 so'm\n {4}hajm — 3,5 kg/);
+  assert.match(drivers, /<b>Akmal Qodirov<\/b>[\s\S]* {4}chegirma — 20 000 so'm \(1 ta\)[\s\S]*<b>Qo'lida naqd — 40 000 so'm<\/b>/);
+  assert.match(drivers, /<b>Sherzod Karimov<\/b> <i>\(Ishchi\)<\/i>/);
+  assert.match(drivers, /┈+\n\n<b>/);
+  assert.match(products, /MAHSULOTLAR BO'YICHA/);
+  assert.match(products, /<b>Gilam<\/b>\nSexga keldi — <b>1 ta<\/b> · 6,5 m² · 195 000 so'm\nYuvildi — <b>1 ta<\/b> · 6,5 m² · 195 000 so'm\nQadoqlandi — <b>1 ta<\/b>/);
+  // O'lchanmagan (narxi 0) mahsulot narxsiz ko'rsatiladi.
+  assert.match(products, /<b>Yostiq<\/b>\nSexga keldi — <b>1 ta<\/b> · 2 dona\n/);
 
   const cyrl = renderDayReport(r, 'cyrl').map((g) => g.join('\n\n')).join('\n');
   tagsBalanced(cyrl);
@@ -296,7 +348,10 @@ test("hisobot bazadan o'qiladi (createdAt/pickedUpAt kuni, to'lov, chiqim, tarif
   docs.set(`dailyActivity/${DAY}/events/washed__i1__${DAY}`, { type: 'washed', orderId: 'o1', orderNumber: 1201, itemId: 'i1', calcType: 'sqm', qty: 5, price: 100000, employeeId: 'w1' });
   docs.set(`dailyActivity/${DAY}/events/delivered__k1__${DAY}`, { type: 'delivered', orderId: 'old', orderNumber: 1100, itemId: 'k1', calcType: 'fixed', price: 30000, employeeId: 'd1', collectedAmount: 30000 });
   docs.set('payments/p1', { dateKey: DAY, employeeId: 'd1', kind: 'discount', shortfall: 5000 });
-  docs.set('expenses/x1', { dateKey: DAY, employeeId: 'd1', amount: 2000, fromCash: true, name: 'Benzin' });
+  docs.set('expenses/x1', { dateKey: DAY, date: ts(12), employeeId: 'd1', amount: 2000, fromCash: true, name: 'Benzin' });
+  docs.set('expenses/a1', { date: ts(13), amount: 50000, name: 'Kukun', recurring: false });
+  docs.set('expenses/a2', { date: ts(13), amount: 3000000, name: 'Ijara', recurring: true });
+  docs.set('expenses/a3', { date: Timestamp.fromDate(new Date(at(0).getTime() - 3600_000)), amount: 70000, name: 'Kechagi', recurring: false });
 
   const r = await computeDayReport(DAY, at(15));
   assert.equal(r.created.orders, 1);
@@ -307,6 +362,9 @@ test("hisobot bazadan o'qiladi (createdAt/pickedUpAt kuni, to'lov, chiqim, tarif
   const d1 = r.drivers.find((d) => d.id === 'd1');
   assert.equal(d1.cashInHand, 28000);
   assert.equal(d1.discount.amount, 5000);
+  // Adminning bugungi bir martalik chiqimi kiradi; takrorlanuvchi va kechagisi — yo'q.
+  assert.deepEqual(r.money.expenses.items.map((x) => x.name), ['Kukun', 'Benzin']);
+  assert.equal(r.money.net, 30000 - 52000);
 });
 
 // --------------------------------------------------------- BUYURTMA
@@ -451,9 +509,9 @@ test("/hisobot: yozuv tanlanadi, 6 ta hisobot alohida yuboriladi", async () => {
   assert.match(answers[1].params.text, /Ҳисобот тайёрланмоқда/);
 
   const reports = sent(calls);
-  assert.ok(reports.length >= 6, `xabarlar: ${reports.length}`);
+  assert.ok(reports.length >= 7, `xabarlar: ${reports.length}`);
   assert.match(reports[0].params.text, /КУНЛИК ҲИСОБОТ/);
-  assert.match(reports[reports.length - 1].params.text, /ДАСТАВЧИКЛАР/);
+  assert.match(reports[reports.length - 1].params.text, /МАҲСУЛОТЛАР БЎЙИЧА/);
   const edits = calls.filter((c) => c.method === 'editMessageText').map((c) => c.params.text);
   assert.match(edits[0], /тайёрланмоқда/);
   assert.match(edits[edits.length - 1], /Ҳисобот юборилди/);
@@ -493,7 +551,8 @@ test("/id: so'raydi, buyurtmani tugmalar bilan ko'rsatadi, mahsulot va ortga", a
   assert.match(order.params.text, /Dilnoza &lt;Karimova&gt;/);
   assert.match(order.params.text, /\+998 90 123 45 67/);
   assert.match(order.params.text, /6,5 m² \(2,5×2,6\)/);
-  assert.match(order.params.text, /Holati: <b>🏭 Sexda · 1\/3 tayyor<\/b>/);
+  assert.match(order.params.text, /Holati — <b>🏭 Sexda · 1\/3 tayyor<\/b>/);
+  assert.equal(/[├└]/.test(order.params.text), false);
   tagsBalanced(order.params.text);
   const kb = order.params.reply_markup.inline_keyboard;
   assert.deepEqual(kb[0].map((b) => b.text), ['1245/1', '1245/2']);
@@ -505,17 +564,18 @@ test("/id: so'raydi, buyurtmani tugmalar bilan ko'rsatadi, mahsulot va ortga", a
   await bot.handleUpdate(press(kb[0][0].callback_data, 100));
   const item = calls.find((c) => c.method === 'editMessageText');
   assert.match(item.params.text, /1245\/1 · Gilam/);
-  assert.match(item.params.text, /Yuvdi: <b>Bobur Aliyev<\/b> · 6-noyabr, 12:00/);
-  assert.match(item.params.text, /Qadoqladi: <b>Sherzod Karimov<\/b>/);
-  assert.match(item.params.text, /Qo'shildi: <b>Madina Sobirova<\/b>/);
-  assert.match(item.params.text, /Topshirdi: —/);
+  const itemText = item.params.text.replace(/\u00A0/g, ' ');
+  assert.match(itemText, /Yuvdi — <b>Bobur Aliyev<\/b>\n {4}6-noyabr, 12:00/);
+  assert.match(itemText, /Qadoqladi — <b>Sherzod Karimov<\/b>/);
+  assert.match(itemText, /Qo'shdi — <b>Madina Sobirova<\/b>/);
+  assert.match(itemText, /Topshirdi — <i>hali yo'q<\/i>/);
   const nav = item.params.reply_markup.inline_keyboard;
   assert.deepEqual(nav[0].map((b) => b.text), ['1245/2 ▶️']);
   assert.equal(nav[1][0].callback_data, 'o:ord1');
 
   calls.length = 0;
   await bot.handleUpdate(press('i:ord1:i2', 100));
-  assert.match(calls.find((c) => c.method === 'editMessageText').params.text, /Yuvmoqda: <b>Bobur Aliyev<\/b>/);
+  assert.match(calls.find((c) => c.method === 'editMessageText').params.text, /Yuvmoqda — <b>Bobur Aliyev<\/b>/);
 
   calls.length = 0;
   await bot.handleUpdate(press('o:ord1', 100));
@@ -607,7 +667,7 @@ test("katta hajm: 120 mahsulotli buyurtma va 60 xodimli hisobot Telegram chegara
     }
   }
   const groups = renderDayReport(buildDayReport(input), 'cyrl');
-  assert.equal(groups.length, 6);
+  assert.equal(groups.length, 7);
   assert.ok(groups[3].length > 1 || groups[5].length > 1, 'uzun ro\'yxat bo\'linishi kerak');
   for (const g of groups) for (const m of g) {
     assert.ok(m.length <= 4096);

@@ -65,6 +65,14 @@ export interface WorkerRow {
   onsite: { orders: number; price: number };
 }
 
+export interface ProductRow {
+  name: string;
+  intake: Stage;
+  washed: Stage;
+  packed: Stage;
+  delivered: Stage;
+}
+
 export interface CountAmount {
   count: number;
   amount: number;
@@ -103,10 +111,31 @@ export interface DayReport {
   delivered: Stage;
   onsiteDone: { orders: number; price: number };
   tariffs: Map<string, TariffStages>;
+  /** Mahsulot nomi bo'yicha: sexga keldi / yuvildi / qadoqlandi / yetkazildi. */
+  products: ProductRow[];
   dispatchers: DispatcherRow[];
   workers: WorkerRow[];
   drivers: DriverRow[];
-  money: { collected: number; cash: number; card: number; discount: number; debt: number };
+  money: {
+    collected: number;
+    cash: number;
+    card: number;
+    discount: number;
+    debt: number;
+    /** Shu kungi chiqimlar (xodimlarniki va adminning bir martalik chiqimlari). */
+    expenses: { total: number; items: ExpenseItem[] };
+    /** Tushum minus chiqimlar. */
+    net: number;
+  };
+}
+
+export interface ExpenseItem {
+  name: string;
+  /** Xodim ismi; adminning chiqimida `null`. */
+  who: string | null;
+  amount: number;
+  /** Xodim qo'lidagi (mijozdan olingan) naqddan to'langan. */
+  fromCash: boolean;
 }
 
 // ------------------------------------------------------------- KIRISH
@@ -116,6 +145,7 @@ export interface RawEvent {
   orderId: string;
   orderNumber: number;
   itemId: string | null;
+  itemName: string | null;
   calcType: string | null;
   qty: number | null;
   price: number | null;
@@ -139,6 +169,16 @@ export interface RawOrder {
   totalPrice: number;
   /** itemId -> tarif (`itemsMirror` dan). */
   itemTariffs: Map<string, string>;
+  /** Mahsulotlar nusxasi (`itemsMirror`) — sexga kelganlarni nom bo'yicha sanash uchun. */
+  items: RawOrderItem[];
+}
+
+export interface RawOrderItem {
+  id: string;
+  name: string;
+  calcType: string | null;
+  qty: number | null;
+  price: number;
 }
 
 export interface RawPayment {
@@ -148,7 +188,9 @@ export interface RawPayment {
 }
 
 export interface RawExpense {
+  /** Bo'sh — adminning chiqimi. */
   employeeId: string;
+  name: string;
   amount: number;
   fromCash: boolean;
 }
@@ -368,6 +410,26 @@ export function buildDayReport(input: DayReportInput): DayReport {
     }
   }
 
+  // --- Mahsulot nomlari bo'yicha ---
+  const products = new Map<string, ProductRow>();
+  const product = (rawName: string | null): ProductRow => {
+    const name = (rawName ?? "").trim().replace(/\s+/g, " ") || "Nomsiz mahsulot";
+    const key = name.toLowerCase();
+    let row = products.get(key);
+    if (!row) {
+      row = { name, intake: emptyStage(), washed: emptyStage(), packed: emptyStage(), delivered: emptyStage() };
+      products.set(key, row);
+    }
+    return row;
+  };
+  for (const e of events) {
+    // Butun buyurtma bo'yicha yozuvlar (joyida yuvish, eski yakunlar) mahsulot emas.
+    if (!e.itemId) continue;
+    if (e.type === "washed") addToStage(product(e.itemName).washed, e);
+    else if (e.type === "packed") addToStage(product(e.itemName).packed, e);
+    else if (e.type === "delivered") addToStage(product(e.itemName).delivered, e);
+  }
+
   // --- To'lov turlari (chegirma, qarz, qisman) ---
   for (const p of input.payments) {
     if (!(p.shortfall > 0)) continue;
@@ -382,11 +444,22 @@ export function buildDayReport(input: DayReportInput): DayReport {
     }
   }
 
-  // --- Qo'ldagi naqddan qilingan chiqimlar ---
+  // --- Chiqimlar ---
+  // Hammasi kunlik kassadan ayiriladi; xodim qo'lidagi naqddan qilingani
+  // yana o'sha xodimning "qo'lida naqd" qoldig'idan ham ayiriladi.
+  const expenseItems: ExpenseItem[] = [];
   for (const x of input.expenses) {
-    if (!x.fromCash || !x.employeeId || !(x.amount > 0)) continue;
-    driver(x.employeeId).cashExpenses += x.amount;
+    if (!(x.amount > 0)) continue;
+    expenseItems.push({
+      name: x.name || "Chiqim",
+      who: x.employeeId ? nameOf(employees, x.employeeId) : null,
+      amount: x.amount,
+      fromCash: x.fromCash,
+    });
+    if (x.fromCash && x.employeeId) driver(x.employeeId).cashExpenses += x.amount;
   }
+  expenseItems.sort((a, b) => b.amount - a.amount);
+  const expensesTotal = expenseItems.reduce((sum, x) => sum + x.amount, 0);
 
   // --- Ochilgan va sexga olib kelingan buyurtmalar ---
   const dispatchers = new Map<string, DispatcherRow>();
@@ -423,6 +496,22 @@ export function buildDayReport(input: DayReportInput): DayReport {
     if (o.pickedUpAtKey === input.dateKey) {
       intakeOrders += 1;
       intakeItems += o.itemCount;
+      for (const item of o.items) {
+        addToStage(product(item.name).intake, {
+          type: "intake",
+          orderId: o.id,
+          orderNumber: o.orderNumber,
+          itemId: item.id,
+          itemName: item.name,
+          calcType: item.calcType,
+          qty: item.qty,
+          price: item.price,
+          employeeId: "",
+          collectedAmount: null,
+          cashAmount: null,
+          cardAmount: null,
+        });
+      }
       // Mijoz o'zi olib kelgan buyurtma dastavchikka yozilmaydi.
       if (o.pickedUpBy && o.intakeMethod !== "walk_in") {
         const row = driver(o.pickedUpBy);
@@ -454,6 +543,9 @@ export function buildDayReport(input: DayReportInput): DayReport {
     .map((d) => ({ ...d, orderNumbers: [...d.orderNumbers].sort((a, b) => a - b) }))
     .sort((a, b) => b.orderNumbers.length - a.orderNumbers.length || byName(a, b));
 
+  const activity = (p: ProductRow) => p.intake.items + p.washed.items + p.packed.items + p.delivered.items;
+  const productRows = [...products.values()].sort((a, b) => activity(b) - activity(a) || byName(a, b));
+
   // Tarifsiz guruh faqat haqiqatan bo'lsa ko'rinadi (u haqiqiy tarif emas).
   const none = tariffs.get(NO_TARIFF);
   if (none && none.washed.items + none.packed.items + none.delivered.items === 0) tariffs.delete(NO_TARIFF);
@@ -469,6 +561,7 @@ export function buildDayReport(input: DayReportInput): DayReport {
     delivered,
     onsiteDone,
     tariffs,
+    products: productRows,
     dispatchers: dispatcherRows,
     workers: workerRows,
     drivers: driverRows,
@@ -478,6 +571,8 @@ export function buildDayReport(input: DayReportInput): DayReport {
       card: Math.round(money.card),
       discount: Math.round(money.discount),
       debt: Math.round(money.debt),
+      expenses: { total: Math.round(expensesTotal), items: expenseItems },
+      net: Math.round(money.collected - expensesTotal),
     },
   };
 }
@@ -490,9 +585,18 @@ const keyOf = (v: unknown): string | null => (v instanceof Timestamp ? businessD
 
 export function toRawOrder(id: string, o: Record<string, unknown>): RawOrder {
   const itemTariffs = new Map<string, string>();
+  const items: RawOrderItem[] = [];
   if (Array.isArray(o.itemsMirror)) {
     for (const m of o.itemsMirror as Record<string, unknown>[]) {
-      if (m && typeof m.id === "string" && typeof m.tariff === "string") itemTariffs.set(m.id, m.tariff);
+      if (!m || typeof m.id !== "string") continue;
+      if (typeof m.tariff === "string") itemTariffs.set(m.id, m.tariff);
+      items.push({
+        id: m.id,
+        name: str(m.name),
+        calcType: typeof m.calcType === "string" ? m.calcType : null,
+        qty: num(m.qty),
+        price: num(m.price) ?? 0,
+      });
     }
   }
   return {
@@ -508,6 +612,7 @@ export function toRawOrder(id: string, o: Record<string, unknown>): RawOrder {
     itemCount: num(o.itemCount) ?? 0,
     totalPrice: num(o.totalPrice) ?? 0,
     itemTariffs,
+    items,
   };
 }
 
@@ -517,6 +622,7 @@ function toRawEvent(e: Record<string, unknown>): RawEvent {
     orderId: str(e.orderId),
     orderNumber: num(e.orderNumber) ?? 0,
     itemId: typeof e.itemId === "string" ? e.itemId : null,
+    itemName: typeof e.itemName === "string" ? e.itemName : null,
     calcType: typeof e.calcType === "string" ? e.calcType : null,
     qty: num(e.qty),
     price: num(e.price),
@@ -534,14 +640,21 @@ export async function computeDayReport(dateKey: string, now = new Date()): Promi
   const start = Timestamp.fromDate(range.start);
   const end = Timestamp.fromDate(range.end);
 
-  const [eventsSnap, createdSnap, pickedSnap, paymentsSnap, expenses, employees] = await Promise.all([
+  const [eventsSnap, createdSnap, pickedSnap, paymentsSnap, expenses, adminExpensesSnap, employees] = await Promise.all([
     dailyActivityEvents(dateKey).get(),
     db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
     db.collection("orders").where("pickedUpAt", ">=", start).where("pickedUpAt", "<", end).get(),
     db.collection("payments").where("dateKey", "==", dateKey).get(),
     loadEmployeeExpenses(dateKey),
+    // Adminning shu kunga yozilgan chiqimlari. Har oy takrorlanuvchilari
+    // (ijara va h.k.) kunlik kassaga kirmaydi — ular oylik hisobotda.
+    db.collection("expenses").where("date", ">=", start).where("date", "<", end).get(),
     loadEmployeeDirectory(),
   ]);
+  const adminExpenses: RawExpense[] = adminExpensesSnap.docs
+    .map((d) => d.data())
+    .filter((x) => !x.employeeId && x.recurring !== true)
+    .map((x) => ({ employeeId: "", name: str(x.name), amount: num(x.amount) ?? 0, fromCash: false }));
 
   const orders = new Map<string, RawOrder>();
   for (const doc of [...createdSnap.docs, ...pickedSnap.docs]) orders.set(doc.id, toRawOrder(doc.id, doc.data()));
@@ -567,7 +680,7 @@ export async function computeDayReport(dateKey: string, now = new Date()): Promi
       const p = d.data();
       return { employeeId: str(p.employeeId), kind: str(p.kind), shortfall: num(p.shortfall) ?? 0 };
     }),
-    expenses: expenses.map((x) => ({ employeeId: x.employeeId, amount: x.amount, fromCash: x.fromCash })),
+    expenses: [...expenses.map((x) => ({ employeeId: x.employeeId, name: x.name, amount: x.amount, fromCash: x.fromCash })), ...adminExpenses],
     employees,
   });
 }
