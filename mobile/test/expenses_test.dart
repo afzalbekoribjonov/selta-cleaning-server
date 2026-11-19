@@ -6,6 +6,7 @@ import 'package:selta_cleaning/core/services/employee_repository.dart';
 import 'package:selta_cleaning/core/services/expenses_repository.dart';
 import 'package:selta_cleaning/core/services/my_activity_repository.dart';
 import 'package:selta_cleaning/core/services/orders_repository.dart';
+import 'package:selta_cleaning/core/services/stats_repository.dart' show dateKeyOf;
 import 'package:selta_cleaning/core/services/warehouse_settings.dart';
 import 'package:selta_cleaning/core/sync/action_queue.dart';
 import 'package:selta_cleaning/core/sync/pending_action.dart';
@@ -37,7 +38,7 @@ PendingAction pendingExpense(String id, {String name = "Yoqilg'i", num amount = 
       body: {'expenseId': id, 'name': name, 'amount': amount, 'fromCash': fromCash, 'actionId': id},
       effect: const {'kind': 'expense.add'},
       label: 'Chiqim · $name',
-      createdAt: DateTime(2026, 10, 5, 15),
+      createdAt: DateTime.now(),
       failed: failed,
       error: failed ? 'Summa noto\'g\'ri' : null,
     );
@@ -49,7 +50,7 @@ Map<String, dynamic> activityJson({num collected = 300000, List<Map<String, dyna
     };
 
 Map<String, dynamic> serverExpense(String id, {String name = 'Texnik xizmat', num amount = 30000, bool fromCash = false}) =>
-    {'id': id, 'name': name, 'amount': amount, 'fromCash': fromCash, 'note': 'Damas', 'at': '2026-10-05T09:30:00.000Z'};
+    {'id': id, 'name': name, 'amount': amount, 'fromCash': fromCash, 'note': 'Damas', 'at': DateTime.now().toUtc().toIso8601String(), 'dateKey': dateKeyOf(DateTime.now())};
 
 void main() {
   group('mergeExpenses / cashInHand', () {
@@ -116,6 +117,7 @@ void main() {
               fetches++;
               return MyDailyActivity.fromJson(json ?? activityJson(expenses: [serverExpense('s1')]));
             }),
+            myExpensesProvider.overrideWith((ref, range) async => [ExpenseEntry.fromMap(serverExpense('s1'))]),
           ],
           child: MaterialApp(
             builder: (context, child) => MediaQuery(
@@ -130,6 +132,12 @@ void main() {
       return (queue: queue, fetches: () => fetches);
     }
 
+    /// Ro'yxat kalendar ostida — foydalanuvchi kabi pastga suriladi.
+    Future<void> scrollTo(WidgetTester tester, Finder target) async {
+      await tester.dragUntilVisible(target, find.byType(ListView).first, const Offset(0, -250));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets("ro'yxat va xulosa, kichik ekran va katta shriftda toshmaydi", (tester) async {
       await pumpScreen(
         tester,
@@ -138,10 +146,12 @@ void main() {
         queued: [pendingExpense('p1', name: 'Juda uzun nomli chiqim: avtoturargoh va yuvish', amount: 12345678)],
       );
       expect(tester.takeException(), isNull);
+      expect(find.text('Bugun sizga qaytariladi'), findsOneWidget, reason: "300 000 yig'ilgan, 12 345 678 naqddan chiqim");
+      await scrollTo(tester, find.text('Texnik xizmat'));
+      expect(tester.takeException(), isNull);
       expect(find.text('Texnik xizmat'), findsOneWidget);
       expect(find.text('Yuborilmoqda'), findsOneWidget);
-      expect(find.text('Naqddan'), findsOneWidget);
-      expect(find.text('Sizga qaytariladi'), findsOneWidget, reason: "300 000 yig'ilgan, 12 345 678 naqddan chiqim");
+      expect(find.text('Naqddan'), findsWidgets);
     });
 
     testWidgets("qo'shish: tur, summa, naqddan — navbatga tushadi va ro'yxatda chiqadi", (tester) async {
@@ -168,15 +178,22 @@ void main() {
       expect(action.body['name'], "Yoqilg'i");
       expect(action.body['amount'], 50000);
       expect(action.body['fromCash'], isTrue);
-      expect(find.text('Yuborilmoqda'), findsOneWidget);
-      expect(find.text('Topshirasiz'), findsOneWidget);
+      expect(find.text('Bugun topshirasiz'), findsOneWidget);
       expect(find.text("250 000 so'm"), findsOneWidget);
+      await scrollTo(tester, find.text('Yuborilmoqda'));
+      expect(find.text('Yuborilmoqda'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
     testWidgets("yuborilmagan chiqimni o'chirish navbatdan oladi", (tester) async {
       final (:queue, fetches: _) = await pumpScreen(tester, queued: [pendingExpense('p1')]);
-      await tester.tap(find.byTooltip("O'chirish").first);
+      await scrollTo(tester, find.text('Yuborilmoqda'));
+      // Navbatdagi (yuborilmagan) chiqim qatoridagi o'chirish tugmasi.
+      final pendingDelete = find.descendant(
+        of: find.ancestor(of: find.text('Yuborilmoqda'), matching: find.byType(Row)),
+        matching: find.byTooltip("O'chirish"),
+      );
+      await tester.tap(pendingDelete.first);
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, "O'chirish"));
       await tester.pumpAndSettle();
@@ -190,6 +207,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(fetches(), 2, reason: 'myDailyActivity qayta olindi');
       // Tasdiqlangan amal ro'yxatda bir marta qoladi (takrorlanmaydi).
+      await scrollTo(tester, find.text("Yoqilg'i"));
       expect(find.text("Yoqilg'i"), findsOneWidget);
     });
   });

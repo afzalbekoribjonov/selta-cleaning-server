@@ -5,7 +5,7 @@ import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart' show describeApiError;
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/services/stats_repository.dart' show dateKeyOf;
 import '../../core/services/supervisor_repository.dart';
 import '../../core/services/warehouse_settings.dart';
@@ -142,7 +142,7 @@ class _DeliveryPlannerScreenState extends ConsumerState<DeliveryPlannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final orders = ref.watch(ordersProvider).valueOrNull ?? const <Order>[];
+    final orders = ref.watch(activeOrdersProvider).valueOrNull ?? const <Order>[];
     _initFrom(orders);
     final threshold = ref.watch(warehouseReadyDaysProvider).valueOrNull ?? kDefaultWarehouseReadyDays;
     final now = DateTime.now();

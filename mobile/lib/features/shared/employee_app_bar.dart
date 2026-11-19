@@ -23,7 +23,11 @@ class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final String departmentLabel;
   final String employeeName;
 
-  const EmployeeAppBar({super.key, required this.departmentLabel, required this.employeeName});
+  /// Bo'limga xos qo'shimcha belgilar (masalan dastavchikning "Topshiriqlar"
+  /// va "Joyida yuvish" bo'limlari) — sinxron holat belgisidan oldin.
+  final List<Widget> extraActions;
+
+  const EmployeeAppBar({super.key, required this.departmentLabel, required this.employeeName, this.extraActions = const []});
 
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
@@ -32,6 +36,7 @@ class EmployeeAppBar extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return AppBar(
       actions: [
+        ...extraActions,
         const SyncStatusButton(),
         IconButton(
           onPressed: () => openGlobalSearch(context),

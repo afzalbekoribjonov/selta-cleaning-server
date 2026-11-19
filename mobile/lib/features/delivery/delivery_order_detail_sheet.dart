@@ -14,6 +14,7 @@ import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/launch_utils.dart';
 import '../dispatcher/widgets/order_card.dart';
+import '../shared/order_people.dart';
 import '../shared/items_pending_note.dart';
 import '../shared/order_copy.dart';
 import '../shared/catalog_item_sheet.dart';
@@ -230,7 +231,8 @@ class _DeliveryOrderDetailSheetState extends ConsumerState<_DeliveryOrderDetailS
                           _row(Icons.phone_rounded, formatPhoneUz(order.phone)),
                           _row(Icons.location_on_rounded, order.location),
                           if (order.dueDate != null) _row(Icons.event_rounded, 'Muddat: ${formatDateUz(order.dueDate!)}', color: order.isOverdue ? AppColors.danger : null),
-                          if (order.pickedUpByName != null) _row(Icons.local_shipping_rounded, 'Olib keldi: ${order.pickedUpByName}'),
+                          const Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Divider(height: 1, color: AppColors.border)),
+                          OrderPeopleRows(order: order),
                         ],
                       ),
                     ),

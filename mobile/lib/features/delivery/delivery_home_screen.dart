@@ -4,12 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'driver_tasks.dart';
+import '../shared/team_jobs_screen.dart';
 import '../shared/warnings_banner.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/badge_icon_button.dart';
 import '../../core/models/order.dart';
 import '../../core/services/employee_repository.dart';
 import '../../core/services/my_activity_repository.dart';
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
+import '../../core/services/auth_service.dart' show employeeClaimsProvider;
+import '../../core/services/orders_repository.dart' show myTeamOrdersProvider;
 import '../../core/services/warehouse_settings.dart';
 import '../../core/models/order_item.dart';
 import '../../core/sync/action_queue.dart';
@@ -21,7 +25,6 @@ import '../../core/widgets/filter_pill.dart';
 import '../../core/widgets/selta_loader.dart';
 import '../dispatcher/widgets/order_card.dart';
 import '../shared/employee_app_bar.dart';
-import '../shared/team_jobs_section.dart';
 import 'delivery_buckets.dart';
 import 'delivery_order_detail_sheet.dart';
 import '../../core/sync/fast_get.dart';
@@ -139,7 +142,7 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final fullName = ref.watch(currentEmployeeProvider).valueOrNull?['fullName'] as String? ?? '...';
-    final ordersAsync = ref.watch(ordersProvider);
+    final ordersAsync = ref.watch(activeOrdersProvider);
     final orders = ordersAsync.valueOrNull ?? const <Order>[];
     final warehouseDays = ref.warehouseReadyDays;
     final now = DateTime.now();
@@ -155,12 +158,16 @@ class _DeliveryHomeScreenState extends ConsumerState<DeliveryHomeScreen> {
     final (title, subtitle) = _tabTitles[_tab]!;
 
     return Scaffold(
-      appBar: EmployeeAppBar(departmentLabel: 'Dastavchik', employeeName: fullName),
+      appBar: EmployeeAppBar(
+        departmentLabel: 'Dastavchik',
+        employeeName: fullName,
+        // Topshiriqlar va joyida yuvish — alohida sahifalar (talab: bosh
+        // ekranda chalkashlik bor edi). Belgida nechta buyurtma borligi.
+        extraActions: const [_TasksIcon(), _TeamJobsIcon()],
+      ),
       body: Column(
         children: [
           const WarningsBanner(),
-          const DriverTaskBanner(),
-          const TeamJobsSection(),
           _SearchField(
             onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
           ),
@@ -458,7 +465,7 @@ class _DeliveredTab extends ConsumerWidget {
   /// Keshdagi to'liq buyurtma; yo'q bo'lsa (ancha eski, yakunlangan)
   /// jurnaldagi ma'lumotdan qisqa nusxa — kartani chizish uchun yetarli.
   static Order _orderFor(WidgetRef ref, DeliveredRow row) {
-    for (final o in ref.read(ordersProvider).valueOrNull ?? const <Order>[]) {
+    for (final o in ref.read(activeOrdersProvider).valueOrNull ?? const <Order>[]) {
       if (o.id == row.orderId) return row.pending ? o.copyWith(pendingSync: true) : o;
     }
     return Order(
@@ -622,3 +629,38 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+
+/// Nazoratchi bergan topshiriqlar — belgida ochiq buyurtmalar soni.
+class _TasksIcon extends ConsumerWidget {
+  const _TasksIcon();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final driverId = ref.watch(employeeClaimsProvider).valueOrNull?.employeeId;
+    final orders = ref.watch(activeOrdersProvider).valueOrNull ?? const <Order>[];
+    final count = driverId == null ? 0 : openAssignmentsFor(orders, driverId, DateTime.now()).length;
+    return BadgeIconButton(
+      icon: Icons.assignment_turned_in_rounded,
+      count: count,
+      tooltip: 'Topshiriqlar',
+      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DriverTasksScreen())),
+    );
+  }
+}
+
+/// Joyida yuvish jamoasidagi buyurtmalar — belgida soni.
+class _TeamJobsIcon extends ConsumerWidget {
+  const _TeamJobsIcon();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final employeeId = ref.watch(employeeClaimsProvider).valueOrNull?.employeeId;
+    final count = employeeId == null ? 0 : (ref.watch(myTeamOrdersProvider(employeeId)).valueOrNull?.length ?? 0);
+    return BadgeIconButton(
+      icon: Icons.home_repair_service_rounded,
+      count: count,
+      tooltip: 'Joyida yuvish',
+      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const TeamJobsScreen())),
+    );
+  }
+}

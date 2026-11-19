@@ -2,7 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../sync/action_queue.dart';
 import '../sync/pending_action.dart';
-import 'auth_service.dart' show apiClientProvider;
+import '../sync/cached_fetch.dart';
+import 'auth_service.dart' show apiClientProvider, authStateProvider;
+import 'local_store.dart';
+import 'stats_repository.dart' show dateKeyOf;
 
 /// Xodim ilovadan kiritgan chiqim (server: routes/expenses.ts).
 class ExpenseEntry {
@@ -15,6 +18,9 @@ class ExpenseEntry {
   /// naqddan ayiriladi.
   final bool fromCash;
   final DateTime? at;
+
+  /// Biznes kuni "YYYY-MM-DD" (server yozgan). Navbatdagida — qurilma sanasi.
+  final String? dateKey;
 
   /// Hali serverga yetib bormagan (oflayn navbatda).
   final bool pending;
@@ -29,6 +35,7 @@ class ExpenseEntry {
     required this.fromCash,
     required this.at,
     this.note,
+    this.dateKey,
     this.pending = false,
     this.error,
   });
@@ -42,7 +49,11 @@ class ExpenseEntry {
         note: m['note']?.toString(),
         fromCash: m['fromCash'] == true,
         at: DateTime.tryParse(m['at']?.toString() ?? '')?.toLocal(),
+        dateKey: m['dateKey']?.toString(),
       );
+
+  /// Chiqim kuni (kalendarda qaysi katakka tushishi).
+  String get dayKey => dateKey ?? dateKeyOf(at ?? DateTime.now());
 
   /// Navbatdagi `/addExpense` amalidan — serverdan javob kelguncha.
   factory ExpenseEntry.fromAction(PendingAction a) => ExpenseEntry(
@@ -52,6 +63,7 @@ class ExpenseEntry {
         note: a.body['note']?.toString(),
         fromCash: a.body['fromCash'] == true,
         at: a.createdAt,
+        dateKey: dateKeyOf(a.createdAt),
         pending: true,
         error: a.failed ? (a.error ?? 'Server rad etdi') : null,
       );
@@ -116,6 +128,29 @@ class ExpensesRepository {
     final token = await _ref.read(idTokenProvider)();
     await _ref.read(apiClientProvider).post('/deleteMyExpense', idToken: token, body: {'expenseId': expense.id});
   }
+
+  /// Davrdagi o'z chiqimlari (server: /myExpenses).
+  Future<Map<String, dynamic>> fetchRange(String from, String to) async {
+    final token = await _ref.read(idTokenProvider)();
+    return _ref.read(apiClientProvider).post('/myExpenses', idToken: token, body: {'from': from, 'to': to});
+  }
 }
+
+typedef ExpenseRange = ({String from, String to});
+
+/// Xodimning o'z chiqimlari tanlangan davrda (oy yoki oraliq). Internetsiz —
+/// shu davr uchun oxirgi olingan nusxa.
+final myExpensesProvider = FutureProvider.autoDispose.family<List<ExpenseEntry>, ExpenseRange>((ref, range) async {
+  ref.watch(authStateProvider);
+  final raw = await fetchWithCache(
+    ref.read(localStoreProvider),
+    'cache.myExpenses.${range.from}.${range.to}',
+    () => ref.read(expensesRepositoryProvider).fetchRange(range.from, range.to),
+    usable: (_) => true,
+  );
+  return [
+    for (final e in (raw['expenses'] as List? ?? const [])) ExpenseEntry.fromMap(Map<Object?, Object?>.from(e as Map)),
+  ];
+});
 
 final expensesRepositoryProvider = Provider<ExpensesRepository>(ExpensesRepository.new);

@@ -6,8 +6,21 @@ import { hashPin, isValidFourDigitPin } from "../lib/pin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { VALID_PRODUCT_CATEGORIES } from "./products";
 import { BUILTIN_DEPARTMENT_LABELS, SUPERVISOR } from "../lib/roles";
+import { invalidateStaffDirectory } from "./staff";
 
 export const employeeAdminRouter = Router();
+
+// Ism, bo'lim, mutaxassislik yoki holat o'zgarsa — ilovadagi xodimlar
+// ma'lumotnomasi (routes/staff.ts) keshi darhol yangilanadi.
+const STAFF_CHANGING = /^\/admin(Create|Update|Change|SetEmployeeSpecializations|SetEmployeePermission|Terminate|Restore|Delete)/;
+employeeAdminRouter.use((req, res, next) => {
+  if (STAFF_CHANGING.test(req.path)) {
+    res.on("finish", () => {
+      if (res.statusCode < 400) invalidateStaffDirectory();
+    });
+  }
+  next();
+});
 
 const FIXED_DEPARTMENTS = new Set(["dispatcher", "worker", "delivery", "qc", SUPERVISOR]);
 

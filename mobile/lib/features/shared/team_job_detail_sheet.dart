@@ -10,6 +10,7 @@ import '../../core/services/order_items_provider.dart';
 import '../../core/services/orders_repository.dart';
 import '../../core/utils/date_utils.dart';
 import 'catalog_item_sheet.dart';
+import 'order_people.dart';
 import 'comments_section.dart';
 import 'item_detail_row.dart';
 import 'items_pending_note.dart';
@@ -163,6 +164,16 @@ class _TeamJobDetailSheetState extends ConsumerState<_TeamJobDetailSheet> {
                             ),
                         ],
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: OrderPeopleRows(order: order),
                     ),
                     if (order.notedItems.isNotEmpty || order.estimatedPrice != null) ...[
                       const SizedBox(height: 16),

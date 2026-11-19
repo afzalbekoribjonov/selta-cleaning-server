@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/widgets/selta_loader.dart';
 import 'order_detail_sheet.dart';
 import 'widgets/order_card.dart';
+import '../shared/order_sorting.dart';
 import '../../core/widgets/load_error_note.dart';
 
 /// Xizmat turi bo'yicha filtr — talab: tarif filtrlari (Express/Premium/...)
@@ -57,33 +58,42 @@ class ActiveOrdersTab extends ConsumerStatefulWidget {
 class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
   String _search = '';
   _ServiceFilter _service = _ServiceFilter.all;
+  OrderSort _sort = OrderSort.newest;
 
   @override
   Widget build(BuildContext context) {
-    final ordersAsync = ref.watch(ordersProvider);
+    final ordersAsync = ref.watch(activeOrdersProvider);
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
-            decoration: InputDecoration(
-              hintText: "Faol buyurtmalardan: ism, telefon yoki #",
-              prefixIcon: const Icon(Icons.search_rounded, size: 20),
-              isDense: true,
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
+                  decoration: InputDecoration(
+                    hintText: "Faol buyurtmalardan: ism, telefon yoki #",
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    isDense: true,
+                    filled: true,
+                    fillColor: AppColors.surface,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
+                  ),
+                ),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-            ),
+              const SizedBox(width: 8),
+              OrderSortButton(value: _sort, onChanged: (v) => setState(() => _sort = v)),
+            ],
           ),
         ),
         Expanded(
@@ -110,16 +120,10 @@ class _ActiveOrdersTabState extends ConsumerState<ActiveOrdersTab> {
                 for (final f in _ServiceFilter.values) f: searched.where((o) => _matchesService(o, f)).length,
               };
 
-              final filtered = searched.where((o) => _matchesService(o, _service)).toList()
-                ..sort((a, b) {
-                  // Jamoa kutayotgan buyurtmalar doim tepada — ular
-                  // shoshilinch (jamoa hali yo'lga chiqmagan).
-                  final at = _needsTeam(a);
-                  final bt = _needsTeam(b);
-                  if (at != bt) return at ? -1 : 1;
-                  if (a.isOverdue != b.isOverdue) return a.isOverdue ? -1 : 1;
-                  return b.createdAt.compareTo(a.createdAt);
-                });
+              // Tanlangan saralash; jamoa kutayotgan joyida yuvish buyurtmalari
+              // baribir tepada — ular shoshilinch (jamoa hali yo'lga chiqmagan).
+              final sorted = sortOrders(searched.where((o) => _matchesService(o, _service)), _sort);
+              final filtered = [...sorted.where(_needsTeam), ...sorted.where((o) => !_needsTeam(o))];
 
               final unassigned = allOrders.where((o) => !o.isDone && _needsTeam(o)).length;
 

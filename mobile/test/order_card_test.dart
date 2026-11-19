@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:selta_cleaning/core/models/order.dart';
+import 'package:selta_cleaning/core/models/order_item.dart';
+import 'package:selta_cleaning/core/services/staff_directory.dart';
 import 'package:selta_cleaning/core/services/my_activity_repository.dart';
 import 'package:selta_cleaning/core/sync/pending_action.dart';
 import 'package:selta_cleaning/features/delivery/delivery_home_screen.dart';
@@ -167,5 +170,71 @@ void main() {
       );
       expect(rows, isEmpty);
     });
+  });
+
+  group('qayta yuvishga qaytgan mahsulot', () {
+    OrderItem it(int n, String status, {String? washedBy, String tariff = 'premium'}) => OrderItem(
+          id: 'i$n',
+          itemNumber: n,
+          name: n == 1 ? 'Gilam juda uzun nomli mahsulot' : 'Parda',
+          area: 6,
+          price: 90000,
+          qcStatus: 'passed',
+          status: status,
+          tariff: tariff,
+          washedBy: washedBy,
+        );
+
+    for (final width in [320.0, 412.0]) {
+      testWidgets('kartada kim yuvgani va tarif nuqtalari (${width.toInt()}px, katta shrift)', (tester) async {
+        final o = Order(
+          id: 'o9',
+          orderNumber: 1245,
+          customerName: 'Mijoz',
+          phone: '+998901234567',
+          location: 'Chilonzor',
+          serviceType: 'pickup',
+          status: 'brought_in',
+          createdBy: 'e',
+          createdAt: DateTime(2026, 10, 1),
+          totalPrice: 500000,
+          itemStatusCounts: const {'returned': 3, 'ready': 1},
+          itemsMirror: [
+            it(1, 'returned', washedBy: 'w1'),
+            it(2, 'returned', washedBy: 'w2', tariff: 'express'),
+            it(3, 'returned'),
+            it(4, 'ready', tariff: 'standart'),
+          ],
+        );
+        await pumpAt(
+          tester,
+          width,
+          ProviderScope(
+            overrides: [
+              staffDirectoryProvider.overrideWith((ref) async => const {
+                    'w1': StaffInfo(id: 'w1', fullName: 'Aliyev Vali', department: 'worker', departmentLabel: 'Ishchi'),
+                    'w2': StaffInfo(id: 'w2', fullName: 'Karimov Sardor', department: 'worker', departmentLabel: 'Ishchi'),
+                  }),
+            ],
+            child: OrderCard(order: o, onTap: () {}),
+          ),
+          textScale: 1.3,
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        expect(find.textContaining('Aliyev Vali', findRichText: true), findsOneWidget);
+        expect(find.textContaining('Karimov Sardor', findRichText: true), findsOneWidget);
+        // 3 tadan 2 tasi ko'rsatiladi, qolgani soni bilan.
+        expect(find.textContaining('va yana 1 ta'), findsOneWidget);
+        // Tarif nuqtalari: Premium 2, Express 1, Standart 1 — bitta qatorda.
+        expect(find.byTooltip('Premium'), findsOneWidget);
+        expect(find.byTooltip('Express'), findsOneWidget);
+        expect(find.byTooltip('Standart'), findsOneWidget);
+        final ys = [
+          for (final t in ['Premium', 'Express', 'Standart']) tester.getCenter(find.byTooltip(t)).dy,
+        ];
+        expect(ys.toSet(), hasLength(1));
+      });
+    }
   });
 }

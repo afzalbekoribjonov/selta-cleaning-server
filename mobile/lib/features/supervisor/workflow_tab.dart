@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/services/stats_repository.dart' show dateKeyOf;
 import '../../core/services/supervisor_repository.dart';
 import '../../core/services/warehouse_settings.dart';
@@ -41,7 +41,7 @@ class _WorkflowTabState extends ConsumerState<WorkflowTab> {
 
   @override
   Widget build(BuildContext context) {
-    final ordersAsync = ref.watch(ordersProvider);
+    final ordersAsync = ref.watch(activeOrdersProvider);
     final orders = ordersAsync.valueOrNull ?? const <Order>[];
     final counts = stageCounts(orders);
     final staff = ref.watch(supervisorStaffProvider(dateKeyOf(DateTime.now()))).valueOrNull ?? const <StaffMember>[];

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../shared/order_sorting.dart';
 import '../shared/warnings_banner.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/employee_repository.dart';
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/widgets/app_bottom_nav.dart';
 import '../../core/widgets/selta_loader.dart';
 import '../dispatcher/widgets/order_card.dart';
@@ -51,6 +52,8 @@ class WorkerHomeScreen extends ConsumerStatefulWidget {
 class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
   int _stageIndex = 0;
   String _search = '';
+  /// Navbat tartibi (eng eskisi birinchi) — ishchi uchun odatiy; xohlasa tarif bo'yicha.
+  OrderSort _sort = OrderSort.oldest;
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +65,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
     // keladigan (pickup) buyurtmalar navbatini yashirishi mumkin bo'lishi
     // kerak — standart holat true (avvalgi xatti-harakat).
     final canSeeWorkshopQueue = employeeAsync.value?['canSeeWorkshopQueue'] as bool? ?? true;
-    final ordersAsync = ref.watch(ordersProvider);
+    final ordersAsync = ref.watch(activeOrdersProvider);
     final stage = _workerStages[_stageIndex];
 
     if (!canSeeWorkshopQueue) {
@@ -97,18 +100,27 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
           const TeamJobsSection(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
-              decoration: InputDecoration(
-                hintText: "Shu bo'limdan: ism, telefon yoki #",
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                isDense: true,
-                filled: true,
-                fillColor: AppColors.surface,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: (v) => setState(() => _search = v.trim().toLowerCase()),
+                    decoration: InputDecoration(
+                      hintText: "Shu bo'limdan: ism, telefon yoki #",
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      isDense: true,
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+                      enabledBorder:
+                          OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OrderSortButton(value: _sort, onChanged: (v) => setState(() => _sort = v)),
+              ],
             ),
           ),
           Expanded(
@@ -132,7 +144,7 @@ class _WorkerHomeScreenState extends ConsumerState<WorkerHomeScreen> {
 
                 // Qidiruv faqat JORIY bosqichdan (talab). Butun bazadan
                 // qidirish — yuqori o'ngdagi umumiy qidiruvda.
-                filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+                filtered = sortOrders(filtered, _sort);
 
                 if (filtered.isEmpty) {
                   return Center(

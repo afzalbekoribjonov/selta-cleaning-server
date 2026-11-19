@@ -15,6 +15,7 @@ import '../../core/utils/money_utils.dart';
 import '../../core/utils/phone_format.dart';
 import '../delivery/driver_tasks.dart' show isAssignmentOpen;
 import '../dispatcher/order_detail_sheet.dart' show openOrderDetailSheet;
+import '../shared/order_people.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
 import '../shared/item_detail_row.dart';
@@ -150,7 +151,8 @@ class _CustomerCard extends StatelessWidget {
                   ),
               ],
             ),
-          const SizedBox(height: 6),
+          const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: AppColors.border)),
+          OrderPeopleRows(order: order),
           Row(
             children: [
               const Text('Summa: ', style: TextStyle(fontSize: 13, color: AppColors.grayDark)),

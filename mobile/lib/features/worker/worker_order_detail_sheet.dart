@@ -5,6 +5,7 @@ import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/order_items_provider.dart';
+import '../shared/order_people.dart';
 import '../shared/items_pending_note.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
@@ -79,7 +80,9 @@ class _WorkerOrderDetailSheet extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(order.customerName, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.grayDark)),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
+                    OrderPeopleRows(order: order),
+                    const SizedBox(height: 12),
                     _ItemsCard(order: order, itemsAsync: itemsAsync),
                     PrepaymentSection(order: order),
                     BonusSection(order: order),

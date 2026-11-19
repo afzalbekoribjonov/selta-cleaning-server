@@ -193,3 +193,65 @@ expensesRouter.post("/deleteMyExpense", withAuth, async (req: AuthedRequest, res
     sendError(res, err);
   }
 });
+
+const MAX_MY_EXPENSE_DAYS = 92;
+
+/**
+ * Xodimning o'z chiqimlari tanlangan davrda (oy yoki istalgan oraliq) —
+ * ilovadagi "Chiqimlar" sahifasi kalendar va diagramma uchun. Davr kunlari
+ * (`dateKey`) bo'yicha bitta so'rov; boshqa xodimlarniki serverda tashlanadi
+ * (davrdagi chiqimlar soni kam, qo'shimcha indeks shart emas).
+ */
+expensesRouter.post("/myExpenses", withAuth, async (req: AuthedRequest, res) => {
+  try {
+    const employeeId = req.auth!.employeeId ?? req.auth!.uid;
+    const today = businessDateString(new Date());
+    const from = typeof req.body?.from === "string" ? req.body.from : today;
+    const to = typeof req.body?.to === "string" ? req.body.to : from;
+    const isKey = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+    if (!isKey(from) || !isKey(to) || from > to) throw new ApiError(400, "invalid-argument", "Sana oralig'i noto'g'ri");
+    const days = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+    if (days > MAX_MY_EXPENSE_DAYS) throw new ApiError(400, "invalid-argument", `Oraliq ${MAX_MY_EXPENSE_DAYS} kundan oshmasin`);
+
+    const docs = await loadOwnExpenses(employeeId, from, to);
+    const expenses = docs
+      .map((d) => {
+        const e = d.data();
+        return {
+          id: d.id,
+          name: (e.name as string | undefined) ?? "Chiqim",
+          amount: (e.amount as number | undefined) ?? 0,
+          note: (e.note as string | null | undefined) ?? null,
+          fromCash: e.fromCash === true,
+          dateKey: (e.dateKey as string | undefined) ?? null,
+          at: e.date instanceof Timestamp ? e.date.toDate().toISOString() : null,
+        };
+      })
+      .sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
+    res.json({ from, to, expenses });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Xodimning o'z chiqimlari davrda. Asosiy yo'l — (employeeId, dateKey)
+ * indeksi: faqat o'z hujjatlari o'qiladi. Indeks hali joylanmagan bo'lsa
+ * (FAILED_PRECONDITION) — davrdagi hamma chiqim o'qilib, filtrlanadi.
+ */
+async function loadOwnExpenses(employeeId: string, from: string, to: string) {
+  try {
+    const snap = await db
+      .collection("expenses")
+      .where("employeeId", "==", employeeId)
+      .where("dateKey", ">=", from)
+      .where("dateKey", "<=", to)
+      .get();
+    return snap.docs;
+  } catch (err) {
+    if ((err as { code?: number }).code !== 9) throw err;
+    console.warn("myExpenses: (employeeId, dateKey) indeksi yo'q — zaxira so'rov");
+    const snap = await db.collection("expenses").where("dateKey", ">=", from).where("dateKey", "<=", to).get();
+    return snap.docs.filter((d) => d.data().employeeId === employeeId);
+  }
+}

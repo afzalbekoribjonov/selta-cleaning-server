@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/auth_service.dart' show describeApiError;
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/services/stats_repository.dart' show dateKeyOf;
 import '../../core/services/supervisor_repository.dart';
 import '../../core/widgets/employee_avatar.dart';
@@ -32,7 +32,7 @@ class _DeliveryPlanTabState extends ConsumerState<DeliveryPlanTab> {
     final now = DateTime.now();
     final today = dateKeyOf(now);
     final date = _tomorrow ? dateKeyOf(now.add(const Duration(days: 1))) : today;
-    final orders = ref.watch(ordersProvider).valueOrNull ?? const <Order>[];
+    final orders = ref.watch(activeOrdersProvider).valueOrNull ?? const <Order>[];
     final staffAsync = ref.watch(supervisorStaffProvider(today));
 
     var deliveries = 0, pickups = 0, freeDeliveries = 0, freePickups = 0;

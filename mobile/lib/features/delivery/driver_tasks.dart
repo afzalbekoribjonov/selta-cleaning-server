@@ -5,7 +5,7 @@ import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/services/stats_repository.dart' show dateKeyOf;
 import '../../core/utils/launch_utils.dart';
 import '../../core/utils/money_utils.dart';
@@ -69,7 +69,7 @@ class DriverTaskBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final driverId = ref.watch(employeeClaimsProvider).valueOrNull?.employeeId;
-    final orders = ref.watch(ordersProvider).valueOrNull ?? const <Order>[];
+    final orders = ref.watch(activeOrdersProvider).valueOrNull ?? const <Order>[];
     if (driverId == null) return const SizedBox.shrink();
     final tasks = openAssignmentsFor(orders, driverId, DateTime.now());
     if (tasks.isEmpty) return const SizedBox.shrink();
@@ -138,7 +138,7 @@ class DriverTasksScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final driverId = ref.watch(employeeClaimsProvider).valueOrNull?.employeeId ?? '';
-    final orders = ref.watch(ordersProvider).valueOrNull ?? const <Order>[];
+    final orders = ref.watch(activeOrdersProvider).valueOrNull ?? const <Order>[];
     final now = DateTime.now();
     final tasks = openAssignmentsFor(orders, driverId, now);
     final today = dateKeyOf(now);

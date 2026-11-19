@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/employee_repository.dart';
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/services/stats_repository.dart';
 import '../../core/sync/sync_status_button.dart';
 import '../../core/utils/date_utils.dart';
@@ -46,7 +46,7 @@ class _SupervisorHomeScreenState extends ConsumerState<SupervisorHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final orders = ref.watch(ordersProvider).valueOrNull ?? const <Order>[];
+    final orders = ref.watch(activeOrdersProvider).valueOrNull ?? const <Order>[];
     final counts = stageCounts(orders);
     final inWork = (counts['pending'] ?? 0) + (counts['washing'] ?? 0) + (counts['packing'] ?? 0) + (counts['returned'] ?? 0);
 

@@ -3,6 +3,7 @@ import 'dart:math';
 import '../../core/models/order.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/order_items_provider.dart';
+import '../shared/order_sorting.dart' show compareByTariff;
 
 /// Dastavchik bo'limlari — qaysi buyurtma qayerga tushadi va qanday
 /// saralanadi. Toza funksiyalar: faqat buyurtma xulosasidan
@@ -35,10 +36,11 @@ bool isFullyReady(Order o) {
   return remaining > 0 && readyItems(o) == remaining;
 }
 
-enum DeliverySort { all, date, distance, due, priceHigh, priceLow }
+enum DeliverySort { all, tariff, date, distance, due, priceHigh, priceLow }
 
 const deliverySortLabels = {
   DeliverySort.all: 'Barchasi',
+  DeliverySort.tariff: 'Tarif',
   DeliverySort.date: 'Sana',
   DeliverySort.distance: 'Masofa',
   DeliverySort.due: 'Topshirish kuni',
@@ -90,6 +92,9 @@ List<Order> sortDeliveryOrders(List<Order> orders, DeliverySort sort, {LatLng? f
     case DeliverySort.all:
       // Navbat tartibi — eng avval qabul qilingani birinchi.
       list.sort(byCreatedAsc);
+    case DeliverySort.tariff:
+      // Premium → Express → Comfort → Standart; bir xilida muddati yaqini.
+      list.sort(compareByTariff);
     case DeliverySort.date:
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     case DeliverySort.due:

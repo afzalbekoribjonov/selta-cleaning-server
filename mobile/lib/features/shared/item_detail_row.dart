@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
+import '../../core/services/staff_directory.dart';
 import '../../core/constants.dart';
 import '../../core/models/order_item.dart';
 import '../../core/services/tariff_settings.dart';
@@ -242,17 +243,9 @@ class ItemDetailRow extends ConsumerWidget {
                   style: const TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
-            // Talab: qaysi dastavchik yetkazgani ko'rinib turishi kerak.
-            if (item.isDone && item.deliveredByName != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 8, top: 3),
-                child: Text(
-                  'Yetkazdi: ${item.deliveredByName}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.grayDark, fontSize: 11.5, fontWeight: FontWeight.w600),
-                ),
-              ),
+            // Buyurtma tarixi (talab): har bir mahsulotni kim yuvdi, kim
+            // qadoqladi, kim topshirdi — ichki kartada ism bilan.
+            _WhoDidIt(item: item),
           ],
         ),
       ),
@@ -272,6 +265,49 @@ class _Badge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(8)),
       child: Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
+    );
+  }
+}
+
+/// "Yuvdi: Bobur · Qadoqladi: Sherzod · Topshirdi: Akmal". Hali bajarilmagan
+/// bosqich ko'rsatilmaydi; yuvish davom etayotgan bo'lsa — "Yuvmoqda".
+class _WhoDidIt extends ConsumerWidget {
+  final OrderItem item;
+  const _WhoDidIt({required this.item});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final staff = ref.watch(staffDirectoryProvider).valueOrNull;
+    final parts = <(String, String)>[];
+    final washer = staff.nameOf(item.washedBy);
+    if (washer != null) {
+      parts.add(('Yuvdi', washer));
+    } else if (item.status == 'washing' && item.washingBy != null) {
+      final w = staff.nameOf(item.washingBy);
+      if (w != null) parts.add(('Yuvmoqda', w));
+    }
+    final packer = staff.nameOf(item.packedBy);
+    if (packer != null) parts.add(('Qadoqladi', packer));
+    final deliverer = item.deliveredByName ?? staff.nameOf(item.deliveredBy);
+    if (item.isDone && deliverer != null) parts.add(('Topshirdi', deliverer));
+    if (parts.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, top: 4),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 2,
+        children: [
+          for (final (label, name) in parts)
+            Text.rich(
+              TextSpan(children: [
+                TextSpan(text: '$label: '),
+                TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.ink)),
+              ]),
+              style: const TextStyle(color: AppColors.grayDark, fontSize: 11.5, fontWeight: FontWeight.w600),
+            ),
+        ],
+      ),
     );
   }
 }

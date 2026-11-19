@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/auth_service.dart' show describeApiError;
-import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/services/stats_repository.dart' show dateKeyOf;
 import '../../core/services/supervisor_repository.dart';
 import '../../core/widgets/employee_avatar.dart';
@@ -54,7 +54,7 @@ class _AssignDriverSheetState extends ConsumerState<_AssignDriverSheet> {
       _error = null;
     });
     try {
-      final orders = ref.read(ordersProvider).valueOrNull ?? const <Order>[];
+      final orders = ref.read(activeOrdersProvider).valueOrNull ?? const <Order>[];
       // Mahsulotlar tanlanmasa — hozir tayyorlarining hammasi (server
       // ham shunday qiladi); oldin aniq mahsulotlar tanlangan bo'lsa,
       // ularning hali tayyorlari saqlanadi.
@@ -88,7 +88,7 @@ class _AssignDriverSheetState extends ConsumerState<_AssignDriverSheet> {
     final today = dateKeyOf(now);
     final tomorrow = dateKeyOf(now.add(const Duration(days: 1)));
     final staffAsync = ref.watch(supervisorStaffProvider(today));
-    final orders = ref.watch(ordersProvider).valueOrNull ?? const <Order>[];
+    final orders = ref.watch(activeOrdersProvider).valueOrNull ?? const <Order>[];
     final kind = planKindOf(widget.order);
 
     return Container(

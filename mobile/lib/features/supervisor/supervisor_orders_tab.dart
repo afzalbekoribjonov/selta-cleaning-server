@@ -6,12 +6,14 @@ import '../../app/theme.dart';
 import '../../core/models/order.dart';
 import '../../core/services/order_items_provider.dart' show effectiveDueDate;
 import '../../core/services/orders_repository.dart';
+import '../../core/services/active_orders.dart';
 import '../../core/services/stats_repository.dart' show dateKeyOf;
 import '../../core/widgets/filter_pill.dart';
 import '../../core/widgets/selta_loader.dart';
 import '../delivery/driver_tasks.dart' show isAssignmentOpen;
 import '../dispatcher/widgets/order_card.dart';
 import 'supervisor_order_sheet.dart';
+import '../shared/order_sorting.dart';
 import 'supervisor_widgets.dart' show dayLabelUz;
 import 'supervisor_workflow.dart' show orderMatchesQuery;
 
@@ -36,6 +38,7 @@ class _SupervisorOrdersTabState extends ConsumerState<SupervisorOrdersTab> {
   _Filter _filter = _Filter.active;
   String _search = '';
   int _shown = _pageSize;
+  OrderSort _sort = OrderSort.newest;
 
   // Yakunlanganlar sahifalari.
   final List<Order> _done = [];
@@ -149,7 +152,7 @@ class _SupervisorOrdersTabState extends ConsumerState<SupervisorOrdersTab> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final ordersAsync = ref.watch(ordersProvider);
+    final ordersAsync = ref.watch(activeOrdersProvider);
     final live = ordersAsync.valueOrNull ?? const <Order>[];
 
     final List<Order> source;
@@ -162,7 +165,7 @@ class _SupervisorOrdersTabState extends ConsumerState<SupervisorOrdersTab> {
       }
       source = byId.values.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } else {
-      source = live.where((o) => _matches(_filter, o, now)).toList();
+      source = sortOrders(live.where((o) => _matches(_filter, o, now)), _sort);
     }
 
     final remote = _remote;
@@ -209,21 +212,37 @@ class _SupervisorOrdersTabState extends ConsumerState<SupervisorOrdersTab> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-          child: TextField(
-            onChanged: (v) => setState(() {
-              _search = v.trim().toLowerCase();
-              _shown = _pageSize;
-              _remote = null;
-            }),
-            onSubmitted: (_) {
-              if (_searchable) _searchRemote();
-            },
-            textInputAction: TextInputAction.search,
-            decoration: const InputDecoration(
-              hintText: 'Mijoz, #raqam, telefon yoki manzil',
-              prefixIcon: Icon(Icons.search_rounded, size: 20),
-              isDense: true,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  onChanged: (v) => setState(() {
+                    _search = v.trim().toLowerCase();
+                    _shown = _pageSize;
+                    _remote = null;
+                  }),
+                  onSubmitted: (_) {
+                    if (_searchable) _searchRemote();
+                  },
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(
+                    hintText: 'Mijoz, #raqam, telefon yoki manzil',
+                    prefixIcon: Icon(Icons.search_rounded, size: 20),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              if (_filter != _Filter.done) ...[
+                const SizedBox(width: 8),
+                OrderSortButton(
+                  value: _sort,
+                  onChanged: (v) => setState(() {
+                    _sort = v;
+                    _shown = _pageSize;
+                  }),
+                ),
+              ],
+            ],
           ),
         ),
         if (_searchable && _remote == null)

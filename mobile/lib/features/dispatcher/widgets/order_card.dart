@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/constants.dart';
@@ -7,6 +8,8 @@ import '../../../core/services/order_items_provider.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/utils/money_utils.dart';
 import '../../../core/utils/phone_format.dart';
+import '../../../core/services/staff_directory.dart';
+import '../../shared/order_sorting.dart' show TariffDots, tariffCountsOf;
 
 /// Ro'yxatdagi buyurtma kartasi — barcha bo'limlarda bir xil "ixcham"
 /// ramka; o'rtadagi qatorlar ([facts]) bo'limga qarab o'zgaradi.
@@ -102,6 +105,15 @@ class OrderCard extends StatelessWidget {
                     if ((order.lastCommentText ?? '').trim().isNotEmpty) ...[
                       const SizedBox(height: 8),
                       _LastComment(order: order, onTap: onCommentTap ?? onTap),
+                    ],
+                    if ((order.itemsMirror ?? const []).any((i) => i.status == 'returned')) ...[
+                      const SizedBox(height: 8),
+                      _ReturnedNotice(order: order),
+                    ],
+                    // Tarif ko'rsatkichlari — kartaning eng pastida, bir qatorda.
+                    if (tariffCountsOf(order).isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      TariffDots(order: order),
                     ],
                   ],
                 ),
@@ -498,6 +510,64 @@ class _Pill extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+/// Qayta yuvishga qaytarilgan mahsulotlar va ularni KIM YUVGANI — har bir
+/// buyurtma kartasida (talab), ichki kartaga kirmasdan ko'rinib turadi.
+class _ReturnedNotice extends ConsumerWidget {
+  final Order order;
+  const _ReturnedNotice({required this.order});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final staff = ref.watch(staffDirectoryProvider).valueOrNull;
+    final returned = [for (final i in order.itemsMirror ?? const []) if (i.status == 'returned') i];
+    final shown = returned.take(2).toList();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.danger.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final i in shown)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: [
+                  const Icon(Icons.replay_rounded, size: 14, color: AppColors.danger),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(children: [
+                        TextSpan(text: '${i.subId(order.orderNumber)} ${i.name} · ', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        const TextSpan(text: 'yuvgan: '),
+                        TextSpan(
+                          text: staff.nameOf(i.washedBy ?? i.washingBy) ?? "noma'lum",
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: AppColors.danger),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (returned.length > shown.length)
+            Text(
+              "va yana ${returned.length - shown.length} ta qayta yuvishda",
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.danger),
+            ),
+        ],
       ),
     );
   }

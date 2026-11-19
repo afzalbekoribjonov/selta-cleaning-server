@@ -9,6 +9,7 @@ import 'package:selta_cleaning/core/services/connectivity_service.dart';
 import 'package:selta_cleaning/core/services/employee_repository.dart';
 import 'package:selta_cleaning/core/services/my_activity_repository.dart';
 import 'package:selta_cleaning/core/services/orders_repository.dart';
+import 'package:selta_cleaning/core/services/staff_directory.dart';
 import 'package:selta_cleaning/core/sync/action_queue.dart';
 import 'package:selta_cleaning/core/sync/pending_action.dart';
 import 'package:selta_cleaning/features/delivery/delivery_home_screen.dart';
@@ -44,7 +45,22 @@ void main() {
     o('washing', counts: const {'washing': 2}),
   ];
 
-  Future<void> pump(WidgetTester tester) async {
+  final teamJob = Order(
+    id: 'team1',
+    orderNumber: 4321,
+    customerName: 'Joyida mijoz',
+    phone: '+998901112233',
+    location: 'Yunusobod 4-mavze',
+    serviceType: 'onsite',
+    status: 'in_progress',
+    createdBy: 'e',
+    createdAt: DateTime(2026, 10, 1),
+    totalPrice: 900000,
+    tariff: 'express',
+    assignedTeam: const ['e1', 'w7'],
+  );
+
+  Future<void> pump(WidgetTester tester, {List<Order> team = const []}) async {
     tester.view.physicalSize = const Size(360 * 3, 760 * 3);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
@@ -57,7 +73,18 @@ void main() {
           employeeClaimsProvider.overrideWith(
             (ref) async => const EmployeeClaims(employeeId: 'e1', role: 'delivery', department: 'delivery'),
           ),
-          myTeamOrdersProvider.overrideWith((ref, id) => const AsyncData(<Order>[])),
+          myTeamOrdersProvider.overrideWith((ref, id) => AsyncData(team)),
+          staffDirectoryProvider.overrideWith((ref) async => const {
+                'e1': StaffInfo(id: 'e1', fullName: 'Dastavchik Test', department: 'delivery', departmentLabel: 'Dastavchik'),
+                'w7': StaffInfo(
+                  id: 'w7',
+                  fullName: 'Yuvuvchi Aliyev',
+                  department: 'worker',
+                  departmentLabel: 'Ishchi',
+                  specializations: ['gilam', 'parda'],
+                  canPack: true,
+                ),
+              }),
           actionQueueProvider.overrideWith(_EmptyQueue.new),
           photoQueueProvider.overrideWith(_NoPhotos.new),
           connectivityProvider.overrideWith((ref) => Stream.value(true)),
@@ -135,6 +162,28 @@ void main() {
     // "Yangi" bo'limida — boshqa bo'limdagi buyurtma chiqmaydi.
     expect(find.textContaining('Mijoz ready1'), findsNothing);
     expect(find.text("Bu bo'limda buyurtma yo'q"), findsOneWidget);
+  });
+
+  testWidgets("Joyida yuvish — yuqoridagi belgi soni bilan, alohida sahifada jamoa kasbi bilan", (tester) async {
+    await pump(tester, team: [teamJob]);
+    expect(tester.takeException(), isNull);
+    // Bosh ekranda joyida yuvish bo'limi yo'q — faqat yuqoridagi belgi.
+    expect(find.text('Joyida mijoz'), findsNothing);
+    final badge = find.descendant(of: find.byTooltip('Joyida yuvish — 1 ta'), matching: find.text('1'));
+    expect(badge, findsOneWidget);
+
+    await tester.tap(badge);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Joyida mijoz'), findsOneWidget);
+    expect(find.text('Yuvuvchi Aliyev'), findsOneWidget);
+    expect(find.textContaining('Ishchi · Gilam, Parda'), findsOneWidget);
+  });
+
+  testWidgets("Topshiriqlar belgisi — topshiriq yo'q bo'lsa son ko'rinmaydi", (tester) async {
+    await pump(tester);
+    expect(find.byTooltip('Topshiriqlar'), findsOneWidget);
+    expect(find.descendant(of: find.byTooltip('Topshiriqlar'), matching: find.byType(Text)), findsNothing);
   });
 }
 

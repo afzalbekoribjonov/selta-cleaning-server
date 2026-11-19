@@ -23,6 +23,7 @@ import { receiptRouter } from "./routes/receipt";
 import { photosRouter } from "./routes/photos";
 import { startTelegramBot, telegramRouter } from "./routes/telegram";
 import { workRouter } from "./routes/work";
+import { staffRouter } from "./routes/staff";
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use("/", paymentsRouter);
 app.use("/", supervisorRouter);
 app.use("/", telegramRouter);
 app.use("/", workRouter);
+app.use("/", staffRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 8080;
 app.listen(port, () => {

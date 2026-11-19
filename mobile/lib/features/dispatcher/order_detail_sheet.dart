@@ -14,6 +14,7 @@ import '../../core/services/catalog_repository.dart' show orderSourcesProvider;
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/money_utils.dart';
 import '../../core/utils/phone_format.dart';
+import '../shared/order_people.dart';
 import '../shared/items_pending_note.dart';
 import '../shared/catalog_item_sheet.dart';
 import '../shared/comments_section.dart';
@@ -202,7 +203,8 @@ class _InfoCard extends StatelessWidget {
               'Muddat: ${formatDateUz(order.dueDate!)}',
               color: order.isOverdue ? AppColors.danger : null,
             ),
-          _row(Icons.access_time_rounded, 'Qabul qilindi: ${formatDateTimeUz(order.createdAt)}'),
+          const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(height: 1, color: AppColors.border)),
+          OrderPeopleRows(order: order),
         ],
       ),
     );
