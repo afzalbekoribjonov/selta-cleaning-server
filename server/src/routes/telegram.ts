@@ -13,7 +13,7 @@ import {
 } from "../lib/telegram/access";
 import { httpTransport, TelegramApi, type TgUpdate } from "../lib/telegram/api";
 import { createBot, type Bot } from "../lib/telegram/bot";
-import { loadDayReport } from "../lib/telegram/dayReport";
+import { loadRangeReport } from "../lib/telegram/dayReport";
 import { findOrderByNumber, getOrderView } from "../lib/telegram/orderLookup";
 
 /**
@@ -46,7 +46,7 @@ const bot: Bot | null = api
       loadUsers: () => loadBotUsers(),
       bindUser: bindBotUser,
       setUserLang: setBotUserLang,
-      loadReport: loadDayReport,
+      loadReport: loadRangeReport,
       findOrderByNumber,
       getOrder: getOrderView,
       loadEmployees: loadEmployeeDirectory,

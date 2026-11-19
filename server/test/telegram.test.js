@@ -317,7 +317,7 @@ test("hisobot xabarlari: 7 ta, har biri o'z qatorida, nollar yashirilmaydi, HTML
   assert.match(washed, /<b>Comfort<\/b> — 0 ta\n {4}m² — 0\n {4}metr — 0\n {4}kg — 0\n {4}dona — 0/);
   assert.match(washed, /<b>Hajm<\/b>\n {4}m² — 6,5\n {4}metr — 4\n {4}kg — 0\n {4}dona — 2/);
   assert.match(dispatchers, /<b>Madina Sobirova<\/b> — <b>2 ta<\/b>\n {4}#1201, #1210/);
-  assert.match(dispatchers, /<b>Zarina Ahmedova<\/b>\n {4}Bugun buyurtma ochmadi/);
+  assert.match(dispatchers, /<b>Zarina Ahmedova<\/b>\n {4}Buyurtma ochmadi/);
   assert.match(workers, /<b>Bobur Aliyev<\/b>\nYuvdi — <b>2 ta<\/b> · 255 000 so'm\n {4}hajm — 6,5 m² \+ 4 metr\n {4}Express — 1 ta · 6,5 m² · 195 000 so'm/);
   assert.match(tariffs, /<b>PREMIUM<\/b>\nYuvildi — 0 ta\nQadoqlandi — 0 ta\nYetkazildi — <b>1 ta<\/b> · 70 000 so'm\n {4}hajm — 3,5 kg/);
   assert.match(drivers, /<b>Akmal Qodirov<\/b>[\s\S]* {4}chegirma — 20 000 so'm \(1 ta\)[\s\S]*<b>Qo'lida naqd — 40 000 so'm<\/b>/);
@@ -432,6 +432,7 @@ function makeBot(overrides = {}) {
     bound: [],
     langs: [],
     reportCalls: 0,
+    ranges: [],
   };
   docs.set('orders/ord1', orderDoc());
   const bot = createBot({
@@ -439,9 +440,10 @@ function makeBot(overrides = {}) {
     loadUsers: async () => state.users,
     bindUser: async (key, from) => state.bound.push({ key, id: from.id }),
     setUserLang: async (key, lang) => state.langs.push({ key, lang }),
-    loadReport: async () => {
+    loadReport: async (from, to) => {
       state.reportCalls += 1;
-      return buildDayReport(sampleInput());
+      state.ranges.push([from, to]);
+      return buildDayReport({ ...sampleInput(), fromKey: from, dateKey: to });
     },
     findOrderByNumber: orderLookup.findOrderByNumber,
     getOrder: orderLookup.getOrderView,
@@ -470,6 +472,7 @@ test("ro'yxatda yo'q hisob va guruh — hech qanday javob yo'q", async () => {
   await bot.handleUpdate(msg('/start', { id: 1, first_name: 'Begona', username: 'stranger' }));
   await bot.handleUpdate(msg('/hisobot', { id: 2 }));
   await bot.handleUpdate(press('h:latn:2026-11-06', 5, { id: 3, username: 'stranger' }));
+  await bot.handleUpdate(press('hp:today', 5, { id: 3, username: 'stranger' }));
   await bot.handleUpdate(msg('/start', { id: 4242, username: 'boss' }, 'group'));
   assert.equal(calls.length, 0);
 });
@@ -489,51 +492,120 @@ test("/start: hisob bog'lanadi, salom va shaxsiy buyruqlar menyusi", async () =>
   assert.deepEqual(menu.params.scope, { type: 'chat', chat_id: 4242 });
 });
 
-test("/hisobot: yozuv tanlanadi, 6 ta hisobot alohida yuboriladi", async () => {
+test("/hisobot: davr menyusi, tayyor davr va yozuvni almashtirish", async () => {
   const { bot, calls, state } = makeBot();
   await bot.handleUpdate(msg('/hisobot'));
-  const prompt = sent(calls)[0];
-  const buttons = prompt.params.reply_markup.inline_keyboard[0].map((b) => b.callback_data);
-  assert.deepEqual(buttons, [`h:latn:${businessDateString(at(14, 35))}`, `h:cyrl:${businessDateString(at(14, 35))}`]);
+  const menu = sent(calls)[0];
+  const data = menu.params.reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.deepEqual(data, ['hp:today', 'hp:yday', 'hp:week', 'hp:lweek', 'hp:month', 'hp:lmonth', 'hc:', 'hl']);
+  assert.match(menu.params.text, /Qaysi davr uchun/);
 
+  // Yozuvni kirillga almashtirish — menyu kirillda qayta chiziladi va eslab qolinadi.
   calls.length = 0;
-  await bot.handleUpdate(press(`h:cyrl:${DAY}`, 100));
-  // Hisobot ketayotganda yana bosilsa — ikkinchisi boshlanmaydi.
-  await bot.handleUpdate(press(`h:cyrl:${DAY}`, 100));
-  await bot.idle();
-
-  assert.equal(state.reportCalls, 1);
+  await bot.handleUpdate(press('hl', 100));
   assert.deepEqual(state.langs, [{ key: 'u1', lang: 'cyrl' }]);
-  const answers = calls.filter((c) => c.method === 'answerCallbackQuery');
-  assert.equal(answers.length, 2);
-  assert.match(answers[1].params.text, /Ҳисобот тайёрланмоқда/);
+  const redrawn = calls.find((c) => c.method === 'editMessageText');
+  assert.match(redrawn.params.text, /Қайси давр учун/);
+  assert.match(redrawn.params.reply_markup.inline_keyboard[0][0].text, /Бугун/);
 
+  // "Shu hafta" — dushanbadan bugungacha (6-noyabr — juma).
+  calls.length = 0;
+  await bot.handleUpdate(press('hp:week', 100));
+  // Hisobot ketayotganda yana bosilsa — ikkinchisi boshlanmaydi.
+  await bot.handleUpdate(press('hp:week', 100));
+  await bot.idle();
+  assert.deepEqual(state.ranges, [['2026-11-02', '2026-11-06']]);
+  const answers = calls.filter((c) => c.method === 'answerCallbackQuery');
+  assert.match(answers[1].params.text, /Ҳисобот тайёрланмоқда/);
   const reports = sent(calls);
   assert.ok(reports.length >= 7, `xabarlar: ${reports.length}`);
-  assert.match(reports[0].params.text, /КУНЛИК ҲИСОБОТ/);
+  assert.match(reports[0].params.text, /ДАВР ҲИСОБОТИ/);
+  assert.match(reports[0].params.text, /2–6-ноябр, 2026 · 5 кун/);
   assert.match(reports[reports.length - 1].params.text, /МАҲСУЛОТЛАР БЎЙИЧА/);
-  const edits = calls.filter((c) => c.method === 'editMessageText').map((c) => c.params.text);
-  assert.match(edits[0], /тайёрланмоқда/);
-  assert.match(edits[edits.length - 1], /Ҳисобот юборилди/);
+  const edits = calls.filter((c) => c.method === 'editMessageText');
+  assert.match(edits[0].params.text, /тайёрланмоқда/);
+  const done = edits[edits.length - 1];
+  assert.match(done.params.text, /Ҳисобот юборилди/);
+  assert.deepEqual(done.params.reply_markup.inline_keyboard.flat().map((b) => b.callback_data), ['hr:2026-11-02:2026-11-06', 'hb']);
 });
 
-test("/hisobot sana bilan: kecha, sana; kelajak — rad", async () => {
-  const { bot, calls } = makeBot();
+test("/hisobot: tayyor davrlar to'g'ri hisoblanadi (oy, o'tgan oy, o'tgan hafta, kecha)", async () => {
+  const { bot, state } = makeBot();
+  for (const preset of ['today', 'yday', 'lweek', 'month', 'lmonth']) {
+    await bot.handleUpdate(press(`hp:${preset}`, 100));
+    await bot.idle();
+  }
+  assert.deepEqual(state.ranges, [
+    ['2026-11-06', '2026-11-06'],
+    ['2026-11-05', '2026-11-05'],
+    ['2026-10-26', '2026-11-01'],
+    ['2026-11-01', '2026-11-06'],
+    ['2026-10-01', '2026-10-31'],
+  ]);
+});
+
+test("/hisobot: kalendar — boshlanish, tugash, butun oy; kelajak va juda uzun oraliq rad", async () => {
+  const { bot, calls, state } = makeBot();
+  await bot.handleUpdate(press('hc:', 100));
+  let view = calls.find((c) => c.method === 'editMessageText');
+  let kb = view.params.reply_markup.inline_keyboard;
+  assert.match(kb[0][1].text, /Noyabr 2026/);
+  assert.equal(kb[0][2].callback_data, 'hn', 'kelajak oyga o\'tib bo\'lmaydi');
+  assert.deepEqual(kb[1].map((b) => b.text), ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya']);
+  // 1-noyabr 2026 — yakshanba: birinchi qatorda 6 ta bo'sh katak.
+  assert.equal(kb[2].filter((b) => b.text === ' ').length, 6);
+  assert.equal(kb[2][6].callback_data, 'hd:2026-11-01');
+  const cells = kb.slice(2, -1).flat();
+  assert.equal(cells.find((b) => b.callback_data === 'hd:2026-11-07'), undefined, 'kelajak kun bosilmaydi');
+  assert.deepEqual(kb[kb.length - 1].map((b) => b.callback_data), ['hm:2026-11', 'hb']);
+
+  // Boshlanish tanlanadi -> kalendar belgisi bilan qayta chiziladi.
+  calls.length = 0;
+  await bot.handleUpdate(press('hd:2026-11-03', 100));
+  view = calls.find((c) => c.method === 'editMessageText');
+  assert.match(view.params.text, /Boshlanish: <b>3-noyabr, 2026/);
+  kb = view.params.reply_markup.inline_keyboard;
+  assert.ok(kb.flat().some((b) => b.text === '[3]' && b.callback_data === 'hd:2026-11-03:2026-11-03'));
+  // O'tgan oyga o'tish boshlanishni saqlaydi.
+  assert.equal(kb[0][0].callback_data, 'hc:2026-10:2026-11-03');
+
+  // Tugash oldinroq tanlansa ham tartib to'g'rilanadi.
+  await bot.handleUpdate(press('hd:2026-11-03:2026-10-28', 100));
+  await bot.idle();
+  assert.deepEqual(state.ranges.pop(), ['2026-10-28', '2026-11-03']);
+
+  await bot.handleUpdate(press('hm:2026-10', 100));
+  await bot.idle();
+  assert.deepEqual(state.ranges.pop(), ['2026-10-01', '2026-10-31']);
+
+  calls.length = 0;
+  await bot.handleUpdate(press('hd:2026-11-05:2026-12-01', 100));
+  await bot.handleUpdate(press('hd:2026-01-01:2026-11-05', 100));
+  const alerts = calls.filter((c) => c.method === 'answerCallbackQuery').map((c) => c.params.text);
+  assert.match(alerts[0], /Kelajakdagi/);
+  assert.match(alerts[1], /92 kundan/);
+  assert.equal(state.ranges.length, 0);
+});
+
+test("/hisobot sana bilan: kecha, sana — darhol; noto'g'ri — rad", async () => {
+  const { bot, calls, state } = makeBot();
   await bot.handleUpdate(msg('/hisobot kecha'));
-  assert.match(sent(calls)[0].params.reply_markup.inline_keyboard[0][0].callback_data, /^h:latn:2026-11-05$/);
+  await bot.idle();
   await bot.handleUpdate(msg('/hisobot 01.11.2026'));
-  assert.match(sent(calls)[1].params.text, /1-noyabr kungi hisobot/);
+  await bot.idle();
+  assert.deepEqual(state.ranges, [['2026-11-05', '2026-11-05'], ['2026-11-01', '2026-11-01']]);
+  calls.length = 0;
   await bot.handleUpdate(msg('/hisobot 2027-01-01'));
-  assert.match(sent(calls)[2].params.text, /Sana noto'g'ri/);
+  assert.match(sent(calls)[0].params.text, /Sana noto'g'ri/);
 });
 
-test("hisobot xatosi — tushunarli xabar va qayta urinish tugmasi, bot ishlayveradi", async () => {
+test("hisobot xatosi — tushunarli xabar va qayta urinish tugmasi; eski tugma ham ishlaydi", async () => {
   const { bot, calls } = makeBot({ loadReport: async () => { throw new Error('quota'); } });
   await bot.handleUpdate(press(`h:latn:${DAY}`, 100));
   await bot.idle();
   const last = calls.filter((c) => c.method === 'editMessageText').pop();
   assert.match(last.params.text, /tayyorlab bo'lmadi/);
-  assert.equal(last.params.reply_markup.inline_keyboard[0][0].callback_data, `h:latn:${DAY}`);
+  assert.equal(last.params.reply_markup.inline_keyboard[0][0].callback_data, `hr:${DAY}:${DAY}`);
   calls.length = 0;
   await bot.handleUpdate(msg('/start'));
   assert.equal(sent(calls).length, 1);

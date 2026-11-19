@@ -184,6 +184,7 @@ paymentsRouter.post("/deliverOrderItems", withAuth, async (req: AuthedRequest, r
           itemNumber: (item.itemNumber as number | undefined) ?? null,
           itemName: (item.name as string) ?? "Mahsulot",
           calcType: (item.calcType as string | undefined) ?? null,
+          tariff: (item.tariff as string | undefined) ?? null,
           qty: (item.qty as number | undefined) ?? null,
           price: (item.price as number | undefined) ?? null,
           collectedAmount: shares[i],

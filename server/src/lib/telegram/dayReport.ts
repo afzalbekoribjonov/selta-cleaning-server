@@ -3,7 +3,6 @@ import { db } from "../admin";
 import { businessDateString, businessDayRangeUtc } from "../businessTime";
 import { cashPartOf, dailyActivityEvents } from "../dailyActivity";
 import { loadEmployeeDirectory, type EmployeeInfo } from "../employeeNames";
-import { loadEmployeeExpenses } from "../expenses";
 import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../orderSummary";
 import { TARIFF_KEYS } from "../tariffConfig";
 
@@ -101,6 +100,10 @@ export interface DriverRow {
 }
 
 export interface DayReport {
+  /** Oraliq boshi (bitta kunda — o'sha kun). */
+  fromKey: string;
+  /** Oraliq oxiri; `dateKey` bilan bir xil (eski nom saqlangan). */
+  toKey: string;
   dateKey: string;
   generatedAt: Date;
   isToday: boolean;
@@ -146,6 +149,8 @@ export interface RawEvent {
   orderNumber: number;
   itemId: string | null;
   itemName: string | null;
+  /** Hodisaning o'zida yozilgan tarif (yangi yozuvlar); bo'lmasa buyurtmadan. */
+  tariff?: string | null;
   calcType: string | null;
   qty: number | null;
   price: number | null;
@@ -196,6 +201,9 @@ export interface RawExpense {
 }
 
 export interface DayReportInput {
+  /** Oraliq boshi; berilmasa — `dateKey` (bitta kun). */
+  fromKey?: string;
+  /** Oraliq oxiri. */
   dateKey: string;
   now: Date;
   events: RawEvent[];
@@ -249,6 +257,8 @@ const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompar
 
 export function buildDayReport(input: DayReportInput): DayReport {
   const { events, orders, employees } = input;
+  const fromKey = input.fromKey ?? input.dateKey;
+  const inRange = (key: string | null) => key !== null && key >= fromKey && key <= input.dateKey;
 
   const tariffs = new Map<string, TariffStages>();
   for (const t of REPORT_TARIFFS) tariffs.set(t, emptyTariffStages());
@@ -261,6 +271,7 @@ export function buildDayReport(input: DayReportInput): DayReport {
     return s;
   };
   const tariffOfEvent = (e: RawEvent) => {
+    if (e.tariff) return normalizeTariff(e.tariff);
     const order = orders.get(e.orderId);
     return normalizeTariff((e.itemId && order?.itemTariffs.get(e.itemId)) ?? order?.tariff);
   };
@@ -486,14 +497,14 @@ export function buildDayReport(input: DayReportInput): DayReport {
   let intakeOrders = 0;
   let intakeItems = 0;
   for (const o of orders.values()) {
-    if (o.createdAtKey === input.dateKey) {
+    if (inRange(o.createdAtKey)) {
       createdOrders += 1;
       createdTotal += o.totalPrice;
       const row = dispatcher(o.createdBy);
       row.orderNumbers.push(o.orderNumber);
       row.total += o.totalPrice;
     }
-    if (o.pickedUpAtKey === input.dateKey) {
+    if (inRange(o.pickedUpAtKey)) {
       intakeOrders += 1;
       intakeItems += o.itemCount;
       for (const item of o.items) {
@@ -551,6 +562,8 @@ export function buildDayReport(input: DayReportInput): DayReport {
   if (none && none.washed.items + none.packed.items + none.delivered.items === 0) tariffs.delete(NO_TARIFF);
 
   return {
+    fromKey,
+    toKey: input.dateKey,
     dateKey: input.dateKey,
     generatedAt: input.now,
     isToday: input.dateKey === businessDateString(input.now),
@@ -623,6 +636,7 @@ function toRawEvent(e: Record<string, unknown>): RawEvent {
     orderNumber: num(e.orderNumber) ?? 0,
     itemId: typeof e.itemId === "string" ? e.itemId : null,
     itemName: typeof e.itemName === "string" ? e.itemName : null,
+    tariff: typeof e.tariff === "string" ? e.tariff : null,
     calcType: typeof e.calcType === "string" ? e.calcType : null,
     qty: num(e.qty),
     price: num(e.price),
@@ -633,24 +647,47 @@ function toRawEvent(e: Record<string, unknown>): RawEvent {
   };
 }
 
-/** Bitta kunning hisobotini bazadan o'qib hisoblaydi (keshsiz). */
-export async function computeDayReport(dateKey: string, now = new Date()): Promise<DayReport> {
-  const range = businessDayRangeUtc(dateKey);
-  if (!range) throw new Error(`Noto'g'ri sana: ${dateKey}`);
-  const start = Timestamp.fromDate(range.start);
-  const end = Timestamp.fromDate(range.end);
+/** "2026-11-01".."2026-11-03" — ikkala chet ham kiradi. */
+export function dateKeysInRange(fromKey: string, toKey: string): string[] {
+  const keys: string[] = [];
+  for (let t = Date.parse(`${fromKey}T00:00:00Z`); t <= Date.parse(`${toKey}T00:00:00Z`); t += 86_400_000) {
+    keys.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return keys;
+}
 
-  const [eventsSnap, createdSnap, pickedSnap, paymentsSnap, expenses, adminExpensesSnap, employees] = await Promise.all([
-    dailyActivityEvents(dateKey).get(),
+/** Hisobot oralig'i chegarasi (kun): o'qishlar soni shunga bog'liq. */
+export const MAX_REPORT_DAYS = 92;
+
+/** Oraliq hisobotini bazadan o'qib hisoblaydi (keshsiz). Bitta kun — from = to. */
+export async function computeRangeReport(fromKey: string, toKey: string, now = new Date()): Promise<DayReport> {
+  const first = businessDayRangeUtc(fromKey);
+  const last = businessDayRangeUtc(toKey);
+  if (!first || !last || fromKey > toKey) throw new Error(`Noto'g'ri oraliq: ${fromKey}..${toKey}`);
+  const days = dateKeysInRange(fromKey, toKey);
+  if (days.length > MAX_REPORT_DAYS) throw new Error(`Oraliq ${MAX_REPORT_DAYS} kundan oshmasin`);
+  const start = Timestamp.fromDate(first.start);
+  const end = Timestamp.fromDate(last.end);
+
+  const eventSnaps: FirebaseFirestore.QuerySnapshot[] = [];
+  for (let i = 0; i < days.length; i += 10) {
+    eventSnaps.push(...(await Promise.all(days.slice(i, i + 10).map((d) => dailyActivityEvents(d).get()))));
+  }
+
+  const [createdSnap, pickedSnap, paymentsSnap, staffExpensesSnap, adminExpensesSnap, employees] = await Promise.all([
     db.collection("orders").where("createdAt", ">=", start).where("createdAt", "<", end).get(),
     db.collection("orders").where("pickedUpAt", ">=", start).where("pickedUpAt", "<", end).get(),
-    db.collection("payments").where("dateKey", "==", dateKey).get(),
-    loadEmployeeExpenses(dateKey),
-    // Adminning shu kunga yozilgan chiqimlari. Har oy takrorlanuvchilari
+    db.collection("payments").where("dateKey", ">=", fromKey).where("dateKey", "<=", toKey).get(),
+    db.collection("expenses").where("dateKey", ">=", fromKey).where("dateKey", "<=", toKey).get(),
+    // Adminning shu davrga yozilgan chiqimlari. Har oy takrorlanuvchilari
     // (ijara va h.k.) kunlik kassaga kirmaydi — ular oylik hisobotda.
     db.collection("expenses").where("date", ">=", start).where("date", "<", end).get(),
     loadEmployeeDirectory(),
   ]);
+  const staffExpenses: RawExpense[] = staffExpensesSnap.docs
+    .map((d) => d.data())
+    .filter((x) => typeof x.employeeId === "string" && x.employeeId)
+    .map((x) => ({ employeeId: str(x.employeeId), name: str(x.name) || "Chiqim", amount: num(x.amount) ?? 0, fromCash: x.fromCash === true }));
   const adminExpenses: RawExpense[] = adminExpensesSnap.docs
     .map((d) => d.data())
     .filter((x) => !x.employeeId && x.recurring !== true)
@@ -659,10 +696,12 @@ export async function computeDayReport(dateKey: string, now = new Date()): Promi
   const orders = new Map<string, RawOrder>();
   for (const doc of [...createdSnap.docs, ...pickedSnap.docs]) orders.set(doc.id, toRawOrder(doc.id, doc.data()));
 
-  const events = eventsSnap.docs.map((d) => toRawEvent(d.data()));
+  const events = eventSnaps.flatMap((snap) => snap.docs.map((d) => toRawEvent(d.data())));
 
-  // Tarif uchun: hodisadagi buyurtmalardan hali o'qilmaganlari (bittadan o'qish).
-  const missing = [...new Set(events.map((e) => e.orderId))].filter((id) => id && !orders.has(id)).slice(0, 400);
+  // Tarif uchun: tarifi yozilmagan (eski) hodisalardagi buyurtmalardan hali o'qilmaganlari.
+  const missing = [...new Set(events.filter((e) => !e.tariff).map((e) => e.orderId))]
+    .filter((id) => id && !orders.has(id))
+    .slice(0, 600);
   for (let i = 0; i < missing.length; i += 100) {
     const chunk = missing.slice(i, i + 100);
     const snaps = await db.getAll(...chunk.map((id) => db.collection("orders").doc(id)));
@@ -672,7 +711,8 @@ export async function computeDayReport(dateKey: string, now = new Date()): Promi
   }
 
   return buildDayReport({
-    dateKey,
+    fromKey,
+    dateKey: toKey,
     now,
     events,
     orders,
@@ -680,35 +720,45 @@ export async function computeDayReport(dateKey: string, now = new Date()): Promi
       const p = d.data();
       return { employeeId: str(p.employeeId), kind: str(p.kind), shortfall: num(p.shortfall) ?? 0 };
     }),
-    expenses: [...expenses.map((x) => ({ employeeId: x.employeeId, name: x.name, amount: x.amount, fromCash: x.fromCash })), ...adminExpenses],
+    expenses: [...staffExpenses, ...adminExpenses],
     employees,
   });
 }
 
-// Bugungi hisobot 1 daqiqa, o'tgan kun 10 daqiqa keshlanadi; bir vaqtdagi
-// so'rovlar bitta o'qishni kutadi.
+/** Bitta kun (eski nom saqlangan). */
+export function computeDayReport(dateKey: string, now = new Date()): Promise<DayReport> {
+  return computeRangeReport(dateKey, dateKey, now);
+}
+
+// Bugunni o'z ichiga olgan hisobot 1 daqiqa, o'tgan davr 10 daqiqa
+// keshlanadi; bir vaqtdagi so'rovlar bitta o'qishni kutadi.
 const TODAY_TTL_MS = 60_000;
 const PAST_TTL_MS = 10 * 60_000;
 const reportCache = new Map<string, { at: number; report: DayReport }>();
 const inFlight = new Map<string, Promise<DayReport>>();
 
-export async function loadDayReport(dateKey: string): Promise<DayReport> {
+export async function loadRangeReport(fromKey: string, toKey: string): Promise<DayReport> {
+  const key = `${fromKey}_${toKey}`;
   const now = Date.now();
-  const ttl = dateKey === businessDateString(new Date(now)) ? TODAY_TTL_MS : PAST_TTL_MS;
-  const hit = reportCache.get(dateKey);
+  const ttl = toKey >= businessDateString(new Date(now)) ? TODAY_TTL_MS : PAST_TTL_MS;
+  const hit = reportCache.get(key);
   if (hit && now - hit.at < ttl) return hit.report;
 
-  const pending = inFlight.get(dateKey);
+  const pending = inFlight.get(key);
   if (pending) return pending;
 
-  const promise = computeDayReport(dateKey)
+  const promise = computeRangeReport(fromKey, toKey)
     .then((report) => {
-      reportCache.set(dateKey, { at: Date.now(), report });
-      // Kesh o'smasin: eng ko'pi 7 kun.
-      if (reportCache.size > 7) reportCache.delete(reportCache.keys().next().value as string);
+      reportCache.set(key, { at: Date.now(), report });
+      // Kesh o'smasin.
+      if (reportCache.size > 12) reportCache.delete(reportCache.keys().next().value as string);
       return report;
     })
-    .finally(() => inFlight.delete(dateKey));
-  inFlight.set(dateKey, promise);
+    .finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
   return promise;
+}
+
+export function loadDayReport(dateKey: string): Promise<DayReport> {
+  return loadRangeReport(dateKey, dateKey);
 }

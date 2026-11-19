@@ -5,7 +5,8 @@ import type { InlineKeyboard, TelegramApi, TgCallbackQuery, TgMessage, TgUpdate,
 import type { DayReport } from "./dayReport";
 import { findItem, renderItem, renderOrder, type OrderView } from "./orderLookup";
 import { renderDayReport } from "./reportMessages";
-import { dateTime, dayMonth, esc, inScript, type Script } from "./text";
+import { calendarView, monthRange, normalizeRange, periodMenu, presetRange, PRESETS, type Preset, type Range } from "./reportPeriod";
+import { dateTime, esc, inScript, periodLong, type Script } from "./text";
 
 /**
  * Bot mantig'i. Barcha tashqi narsa (Telegram, Firestore) `BotDeps`
@@ -24,7 +25,8 @@ export interface BotDeps {
   loadUsers(): Promise<BotUser[]>;
   bindUser(key: string, from: TgUser): Promise<void>;
   setUserLang(key: string, lang: Script): Promise<void>;
-  loadReport(dateKey: string): Promise<DayReport>;
+  /** Oraliq hisoboti (bitta kun — from = to). */
+  loadReport(fromKey: string, toKey: string): Promise<DayReport>;
   findOrderByNumber(orderNumber: number): Promise<OrderView | null>;
   getOrder(orderId: string, force?: boolean): Promise<OrderView | null>;
   loadEmployees(): Promise<Map<string, EmployeeInfo>>;
@@ -95,8 +97,7 @@ export function createBot(deps: BotDeps): Bot {
       ].join("\n"),
       [
         "<b>Buyruqlar</b>",
-        "/hisobot — bugungi hisobot",
-        "/hisobot kecha — kechagi hisobot",
+        "/hisobot — hisobot: bugun, kecha, hafta, oy yoki kalendardan istalgan davr",
         "/id — buyurtmani ID raqami orqali topish",
       ].join("\n"),
       "<i>Hisobotni lotin yoki kirill yozuvida olishingiz mumkin.</i>",
@@ -120,25 +121,29 @@ export function createBot(deps: BotDeps): Bot {
     }
   }
 
-  /** "/hisobot", "/hisobot kecha", "/hisobot 2026-11-05", "/hisobot 05.11.2026". */
-  function parseReportDate(arg: string): string | null | "invalid" {
-    const now = deps.now();
-    const today = businessDateString(now);
+  /**
+   * "/hisobot kecha", "/hisobot 2026-11-05", "/hisobot 05.11.2026" — to'g'ridan-
+   * to'g'ri davr; argumentsiz — davr menyusi. null — argument yo'q.
+   */
+  function parseReportArg(arg: string): Range | "invalid" | null {
+    const today = businessDateString(deps.now());
     const a = arg.trim().toLowerCase();
-    if (!a || a === "bugun" || a === "бугун") return today;
-    if (a === "kecha" || a === "кеча") return businessDateString(new Date(businessDayRangeUtc(today)!.start.getTime() - 12 * 3_600_000));
+    if (!a) return null;
+    if (a === "bugun" || a === "бугун") return presetRange("today", today);
+    if (a === "kecha" || a === "кеча") return presetRange("yday", today);
+    if (a === "oy" || a === "ой") return presetRange("month", today);
     let key: string | null = null;
     const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(a);
     const dotted = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(a);
     if (iso) key = a;
     else if (dotted) key = `${dotted[3]}-${dotted[2].padStart(2, "0")}-${dotted[1].padStart(2, "0")}`;
     if (!key || !businessDayRangeUtc(key) || key > today) return "invalid";
-    return key;
+    return { from: key, to: key };
   }
 
   async function onReportCommand(chatId: number, arg: string, user: BotUser) {
-    const dateKey = parseReportDate(arg);
-    if (dateKey === "invalid" || dateKey === null) {
+    const range = parseReportArg(arg);
+    if (range === "invalid") {
       await say(
         chatId,
         "⚠️ Sana noto'g'ri. Masalan: <code>/hisobot</code>, <code>/hisobot kecha</code> yoki <code>/hisobot 05.11.2026</code>.",
@@ -146,17 +151,31 @@ export function createBot(deps: BotDeps): Bot {
       );
       return;
     }
-    const today = businessDateString(deps.now());
-    const label = dateKey === today ? "Bugungi" : `${dayMonth(new Date(businessDayRangeUtc(dateKey)!.start.getTime() + 12 * 3_600_000))} kungi`;
-    await deps.api.sendMessage(chatId, inScript(`📊 <b>${label} hisobot</b>\nQaysi yozuvda yuboray?`, user.lang), [
-      [
-        { text: "🇺🇿 O'zbekcha (lotin)", callback_data: `h:latn:${dateKey}` },
-        { text: "🇺🇿 Ўзбекча (кирилл)", callback_data: `h:cyrl:${dateKey}` },
-      ],
-    ]);
+    if (range) {
+      const prompt = await deps.api.sendMessage(chatId, inScript("⏳ <b>Hisobot tayyorlanmoqda…</b>", user.lang));
+      startReport(chatId, prompt.message_id, user, range);
+      return;
+    }
+    const menu = periodMenu(user.lang);
+    await deps.api.sendMessage(chatId, menu.text, menu.keyboard);
   }
 
-  async function sendReport(chatId: number, promptId: number | null, script: Script, dateKey: string) {
+  /** Hisobotni fonda boshlaydi (shu chatda bittadan). false — allaqachon ketmoqda. */
+  function startReport(chatId: number, promptId: number, user: BotUser, range: Range): boolean {
+    if (reportsRunning.has(chatId)) return false;
+    reportsRunning.add(chatId);
+    runInBackground(async () => {
+      try {
+        await sendReport(chatId, promptId, user.lang, range);
+      } finally {
+        reportsRunning.delete(chatId);
+      }
+    });
+    return true;
+  }
+
+  async function sendReport(chatId: number, promptId: number | null, script: Script, range: Range) {
+    const period = periodLong(range.from, range.to);
     const edit = async (text: string, keyboard?: InlineKeyboard) => {
       if (promptId === null) return;
       try {
@@ -165,17 +184,19 @@ export function createBot(deps: BotDeps): Bot {
         log("hisobot so'rovini tahrirlab bo'lmadi", err);
       }
     };
+    const again = `hr:${range.from}:${range.to}`;
 
-    await edit("⏳ <b>Hisobot tayyorlanmoqda…</b>\nBir necha soniya kuting.");
+    await edit(`⏳ <b>Hisobot tayyorlanmoqda…</b>\n<i>${period}</i>\n\nBir necha soniya kuting.`);
     await deps.api.typing(chatId);
 
     let messages: string[][];
     try {
-      messages = renderDayReport(await deps.loadReport(dateKey), script);
+      messages = renderDayReport(await deps.loadReport(range.from, range.to), script);
     } catch (err) {
-      log(`hisobotni tayyorlab bo'lmadi (${dateKey})`, err);
-      await edit("⚠️ <b>Hisobotni tayyorlab bo'lmadi.</b>\nBirozdan keyin qayta urinib ko'ring.", [
-        [{ text: inScript("🔄 Qayta urinish", script), callback_data: `h:${script}:${dateKey}` }],
+      log(`hisobotni tayyorlab bo'lmadi (${range.from}..${range.to})`, err);
+      await edit(`⚠️ <b>Hisobotni tayyorlab bo'lmadi.</b>\n<i>${period}</i>\n\nBirozdan keyin qayta urinib ko'ring.`, [
+        [{ text: inScript("🔄 Qayta urinish", script), callback_data: again }],
+        [{ text: inScript("📅 Boshqa davr", script), callback_data: "hb" }],
       ]);
       return;
     }
@@ -197,9 +218,12 @@ export function createBot(deps: BotDeps): Bot {
     const at = dateTime(deps.now());
     await edit(
       failed === 0
-        ? `✅ <b>Hisobot yuborildi</b> · ${at}`
-        : `⚠️ Hisobotning ${failed} ta xabari yuborilmadi · ${at}`,
-      failed === 0 ? undefined : [[{ text: inScript("🔄 Qayta yuborish", script), callback_data: `h:${script}:${dateKey}` }]],
+        ? `✅ <b>Hisobot yuborildi</b>\n<i>${period}</i>\n\nTayyorlandi: ${at}`
+        : `⚠️ Hisobotning ${failed} ta xabari yuborilmadi\n<i>${period}</i>`,
+      [
+        [{ text: inScript(failed === 0 ? "🔄 Yangilash" : "🔄 Qayta yuborish", script), callback_data: again }],
+        [{ text: inScript("📅 Boshqa davr", script), callback_data: "hb" }],
+      ],
     );
   }
 
@@ -253,7 +277,7 @@ export function createBot(deps: BotDeps): Bot {
   async function help(chatId: number, user: BotUser) {
     await say(
       chatId,
-      "ℹ️ <b>Buyruqlar</b>\n/hisobot — bugungi hisobot\n/hisobot kecha — kechagi hisobot\n/id — buyurtmani ID raqami orqali topish",
+      "ℹ️ <b>Buyruqlar</b>\n/hisobot — hisobot (istalgan kun, hafta, oy yoki oraliq)\n/id — buyurtmani ID raqami orqali topish",
       user.lang,
     );
   }
@@ -312,6 +336,89 @@ export function createBot(deps: BotDeps): Bot {
 
   // -------------------------------------------------------- TUGMALAR
 
+  async function onReportCallback(cb: TgCallbackQuery, data: string, chatId: number, messageId: number, user: BotUser) {
+    const today = businessDateString(deps.now());
+    const show = async (view: { text: string; keyboard: InlineKeyboard }) => {
+      await deps.api.answerCallback(cb.id);
+      await deps.api.editMessage(chatId, messageId, view.text, view.keyboard);
+    };
+    const run = async (range: Range | "future" | "too-long" | null) => {
+      if (range === "future") {
+        await deps.api.answerCallback(cb.id, inScript("Kelajakdagi kunni tanlab bo'lmaydi", user.lang));
+        return;
+      }
+      if (range === "too-long" || range === null) {
+        await deps.api.answerCallback(cb.id, inScript("Oraliq 92 kundan oshmasin", user.lang));
+        return;
+      }
+      if (!startReport(chatId, messageId, user, range)) {
+        await deps.api.answerCallback(cb.id, inScript("⏳ Hisobot tayyorlanmoqda…", user.lang));
+        return;
+      }
+      await deps.api.answerCallback(cb.id);
+    };
+
+    // Eski tugmalar (avvalgi xabarlarda): "h:latn:2026-11-05".
+    const legacy = /^h:(latn|cyrl):(\d{4}-\d{2}-\d{2})$/.exec(data);
+    if (legacy) {
+      setLang(user, legacy[1] as Script);
+      await run(normalizeRange(legacy[2], legacy[2], today));
+      return;
+    }
+
+    const [kind, a, b] = data.split(":");
+    switch (kind) {
+      case "hp":
+        if ((PRESETS as readonly string[]).includes(a)) await run(presetRange(a as Preset, today));
+        else await deps.api.answerCallback(cb.id);
+        return;
+      case "hr":
+        await run(normalizeRange(a ?? "", b ?? "", today));
+        return;
+      case "hm": {
+        const range = /^\d{4}-\d{2}$/.test(a ?? "") ? monthRange(a, today) : null;
+        await run(range ?? "future");
+        return;
+      }
+      case "hd": {
+        if (!b) {
+          const start = normalizeRange(a ?? "", a ?? "", today);
+          if (start === null || typeof start === "string") {
+            await deps.api.answerCallback(cb.id);
+            return;
+          }
+          await show(calendarView(start.from.slice(0, 7), today, user.lang, start.from));
+          return;
+        }
+        await run(normalizeRange(a ?? "", b, today));
+        return;
+      }
+      case "hc": {
+        const month = /^\d{4}-\d{2}$/.test(a ?? "") && `${a}-01` <= today ? a : today.slice(0, 7);
+        const start = b && normalizeRange(b, b, today);
+        await show(calendarView(month, today, user.lang, start && typeof start !== "string" ? start.from : null));
+        return;
+      }
+      case "hb":
+        await show(periodMenu(user.lang));
+        return;
+      case "hl":
+        setLang(user, user.lang === "cyrl" ? "latn" : "cyrl");
+        await show(periodMenu(user.lang));
+        return;
+      default:
+        await deps.api.answerCallback(cb.id);
+    }
+  }
+
+  /** Yozuv tanlovini eslab qoladi (keyingi /id va hisobotlar ham shu yozuvda). */
+  function setLang(user: BotUser, lang: Script) {
+    if (user.lang === lang) return;
+    user.lang = lang;
+    deps.setUserLang(user.key, lang).catch((err) => log("yozuv tanlovini saqlab bo'lmadi", err));
+  }
+
+
   async function onCallback(cb: TgCallbackQuery, user: BotUser) {
     const data = cb.data ?? "";
     const message = cb.message;
@@ -321,29 +428,9 @@ export function createBot(deps: BotDeps): Bot {
     }
     const chatId = message.chat.id;
 
-    // --- Hisobot ---
-    const report = /^h:(latn|cyrl):(\d{4}-\d{2}-\d{2})$/.exec(data);
-    if (report) {
-      const script = report[1] as Script;
-      const dateKey = report[2];
-      if (reportsRunning.has(chatId)) {
-        await deps.api.answerCallback(cb.id, inScript("⏳ Hisobot tayyorlanmoqda…", script));
-        return;
-      }
-      await deps.api.answerCallback(cb.id);
-      reportsRunning.add(chatId);
-      if (user.lang !== script) {
-        user.lang = script;
-        deps.setUserLang(user.key, script).catch((err) => log("yozuv tanlovini saqlab bo'lmadi", err));
-      }
-      // Fonda: shu chatdagi boshqa tugmalar hisobotni kutib qolmasin.
-      runInBackground(async () => {
-        try {
-          await sendReport(chatId, message.message_id, script, dateKey);
-        } finally {
-          reportsRunning.delete(chatId);
-        }
-      });
+    // --- Hisobot: davr menyusi, kalendar va yuborish ---
+    if (/^h[pcdmrbln]/.test(data) || data.startsWith("h:")) {
+      await onReportCallback(cb, data, chatId, message.message_id, user);
       return;
     }
 

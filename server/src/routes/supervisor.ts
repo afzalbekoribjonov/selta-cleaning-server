@@ -6,6 +6,7 @@ import { businessDateString, businessDayRangeUtc, parseDateKey } from "../lib/bu
 import { notifyEmployee, notifyLater } from "../lib/notifications";
 import { BUILTIN_DEPARTMENT_LABELS, canManageWorkflow } from "../lib/roles";
 import { buildDailyActivity, computeActivityRows, resolveDateKey } from "./employeeActivity";
+import { issueWarning, MAX_WARNING_LENGTH, WarningTargetError } from "../lib/warnings";
 
 /**
  * Nazoratchi (supervisor) amallari — ish jarayonini boshqarish.
@@ -28,9 +29,6 @@ export const supervisorRouter = Router();
 const MAX_STOPS = 60;
 /** Topshiriq qancha kun oldinga rejalashtirilishi mumkin. */
 const MAX_DAYS_AHEAD = 14;
-const MAX_WARNING_LENGTH = 500;
-/** Xodim hujjatida saqlanadigan o'qilmagan ogohlantirishlar. */
-const MAX_PENDING_WARNINGS = 10;
 
 function requireSupervisor(req: AuthedRequest) {
   if (!canManageWorkflow(req.auth?.role)) {
@@ -330,34 +328,11 @@ supervisorRouter.post("/supervisorWarnEmployee", withAuth, async (req: AuthedReq
     }
 
     const recorderName = await nameOf(recorderId);
-    const employeeRef = db.collection("employees").doc(employeeId);
-    const warningRef = db.collection("warnings").doc();
-    const at = Timestamp.now();
-
-    const employeeName = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(employeeRef);
-      const employee = snap.data();
-      if (!snap.exists || employee?.status !== "active") {
-        throw new ApiError(404, "not-found", "Xodim topilmadi yoki ishdan bo'shatilgan");
-      }
-      const name = (employee.fullName as string | undefined) ?? "Xodim";
-      tx.set(warningRef, {
-        employeeId,
-        employeeName: name,
-        text,
-        createdBy: recorderId,
-        createdByName: recorderName,
-        createdAt: at,
-        ackAt: null,
-      });
-      const pending = Array.isArray(employee.pendingWarnings) ? (employee.pendingWarnings as unknown[]) : [];
-      const next = [...pending, { id: warningRef.id, text, byName: recorderName, at }].slice(-MAX_PENDING_WARNINGS);
-      tx.update(employeeRef, { pendingWarnings: next });
-      return name;
+    const result = await issueWarning({ employeeId, text, createdBy: recorderId, createdByName: recorderName }).catch((err) => {
+      if (err instanceof WarningTargetError) throw new ApiError(404, "not-found", err.message);
+      throw err;
     });
-
-    notifyLater(notifyEmployee(employeeId, "Ogohlantirish", text, { type: "warning", warningId: warningRef.id }));
-    res.json({ ok: true, warningId: warningRef.id, employeeName });
+    res.json({ ok: true, ...result });
   } catch (err) {
     sendError(res, err);
   }

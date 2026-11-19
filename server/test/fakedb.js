@@ -45,9 +45,14 @@ function snapOf(key) {
 }
 
 function ref(key) {
+  const parts = key.split('/');
   return {
     key,
-    id: key.split('/').pop(),
+    id: parts[parts.length - 1],
+    // Haqiqiy SDK kabi: ref.parent — jamlanma, ref.parent.parent — ota hujjat.
+    get parent() {
+      return { id: parts[parts.length - 2], parent: parts.length > 2 ? ref(parts.slice(0, -2).join('/')) : null };
+    },
     get: async () => snapOf(key),
     delete: async () => docs.delete(key),
     set: async (data, opts) => applyUpdate(key, data, !!(opts && opts.merge)),
@@ -122,8 +127,30 @@ function collection(collPath) {
   return { ...query([], null, undefined), doc: (id) => ref(`${collPath}/${id ?? 'auto' + ++autoId}`) };
 }
 
+/** Istalgan chuqurlikdagi shu nomli jamlanmalar (collectionGroup). */
+function collectionGroup(name) {
+  const query = (filters) => {
+    const list = () =>
+      [...docs.keys()]
+        .filter((k) => {
+          const parts = k.split('/');
+          return parts.length % 2 === 0 && parts[parts.length - 2] === name && filters.every((f) => matches(docs.get(k), f));
+        })
+        .map(snapOf);
+    return {
+      get: async () => {
+        const d = list();
+        return { docs: d, size: d.length, empty: d.length === 0 };
+      },
+      where: (f, op, v) => query([...filters, [f, op, v]]),
+    };
+  };
+  return query([]);
+}
+
 const db = {
   collection,
+  collectionGroup,
   runTransaction: async (fn) =>
     fn({
       get: async (r) => (r._list ? { docs: r._list(), size: r._list().length } : snapOf(r.key)),

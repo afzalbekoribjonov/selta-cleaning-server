@@ -28,7 +28,7 @@ import { businessDateString } from "./businessTime";
  * kunlik hisobda bir marta sanaladi — bu ataylab, chunki savol "bugun
  * nechta mahsulot yuvildi", "nechta yuvish amali bo'ldi" emas.
  */
-export type DailyActivityType = "washed" | "packed" | "delivered" | "onsite_done" | "settled" | "prepaid";
+export type DailyActivityType = "washed" | "packed" | "delivered" | "onsite_done" | "settled" | "prepaid" | "returned";
 
 export interface DailyActivityInput {
   type: DailyActivityType;
@@ -44,6 +44,18 @@ export interface DailyActivityInput {
   itemName?: string | null;
   /** O'lchov turi ("sqm" / "kg" / ...) — hajmni birlik bo'yicha yig'ish uchun. */
   calcType?: string | null;
+  /**
+   * Mahsulot tarifi — tarif bo'yicha hisobot va ishbay hisobi buyurtmani
+   * qayta o'qimasdan chiqishi uchun. Bu maydon qo'shilishidan oldingi
+   * yozuvlarda yo'q: o'quvchi tarifni buyurtmadagi nusxadan oladi.
+   */
+  tariff?: string | null;
+  /**
+   * `returned` (qayta yuvishga qaytarildi) uchun: `employeeId` — mahsulotni
+   * YUVGAN xodim (javobgar), `recordedBy` — qaytargan xodim, `note` — sabab.
+   */
+  recordedBy?: string | null;
+  note?: string | null;
   qty?: number | null;
   price?: number | null;
   /** Dastavchik mijozdan olgan summa, agar alohida kiritilgan bo'lsa. */
@@ -92,6 +104,9 @@ export function buildDailyActivityDoc(at: Date, event: DailyActivityInput) {
     itemNumber: event.itemNumber ?? null,
     itemName: event.itemName ?? null,
     calcType: event.calcType ?? null,
+    tariff: event.tariff ?? null,
+    recordedBy: event.recordedBy ?? null,
+    note: event.note ?? null,
     qty: event.qty ?? null,
     price: event.price ?? null,
     collectedAmount: event.collectedAmount ?? null,

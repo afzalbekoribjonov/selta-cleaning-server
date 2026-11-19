@@ -71,6 +71,27 @@ export function dateTime(date: Date): string {
 }
 
 /** "2026-11-06" -> "6-noyabr, 2026 · Payshanba". */
+/** Oy nomi: "noyabr". */
+export function monthName(month1: number): string {
+  return MONTHS[month1 - 1] ?? "";
+}
+
+/** Oraliq qisqa: "6-noyabr", "1–19-noyabr", "28-oktabr – 3-noyabr". */
+export function periodShort(fromKey: string, toKey: string): string {
+  const [fy, fm, fd] = fromKey.split("-").map(Number);
+  const [ty, tm, td] = toKey.split("-").map(Number);
+  if (fromKey === toKey) return `${td}-${MONTHS[tm - 1]}`;
+  if (fy === ty && fm === tm) return `${fd}–${td}-${MONTHS[tm - 1]}`;
+  return `${fd}-${MONTHS[fm - 1]}${fy !== ty ? ` ${fy}` : ""} – ${td}-${MONTHS[tm - 1]}`;
+}
+
+/** Oraliq to'liq: bitta kunda "6-noyabr, 2026 · Juma", aks holda "1–19-noyabr, 2026 · 19 kun". */
+export function periodLong(fromKey: string, toKey: string): string {
+  if (fromKey === toKey) return longDateOfKey(toKey);
+  const days = Math.round((Date.parse(`${toKey}T00:00:00Z`) - Date.parse(`${fromKey}T00:00:00Z`)) / 86_400_000) + 1;
+  return `${periodShort(fromKey, toKey)}, ${toKey.slice(0, 4)} · ${days} kun`;
+}
+
 export function longDateOfKey(dateKey: string): string {
   const [y, m, d] = dateKey.split("-").map(Number);
   const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];

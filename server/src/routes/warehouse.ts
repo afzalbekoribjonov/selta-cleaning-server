@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
+import { invalidateWarehouseDays } from "../lib/warehouse";
 
 export const warehouseRouter = Router();
 
@@ -37,6 +38,7 @@ warehouseRouter.post("/adminUpdateWarehouseSettings", withAuth, requireAdmin, as
       { readyDays, updatedBy: req.auth!.employeeId ?? req.auth!.uid, updatedAt: new Date() },
       { merge: true },
     );
+    invalidateWarehouseDays();
     res.json({ ok: true, readyDays });
   } catch (err) {
     sendError(res, err);

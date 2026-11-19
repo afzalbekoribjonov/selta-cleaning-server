@@ -8,6 +8,7 @@ import { UNIT_BY_CALC_TYPE, unitAmountOf } from "../lib/orderSummary";
 import { cashPartOf } from "../lib/dailyActivity";
 import { loadEmployeeExpenses } from "../lib/expenses";
 import { loadEmployeeNames } from "../lib/employeeNames";
+import { loadWarehouseReadyDays, warehouseItemCount } from "../lib/warehouse";
 
 export const statsRouter = Router();
 
@@ -84,7 +85,8 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
     const isToday = dateKey === businessDateString(new Date());
     const range = businessDayRangeUtc(dateKey)!;
 
-    const [activeSnap, intakeSnap, eventsSnap, expenses] = await Promise.all([
+    const now = new Date();
+    const [activeSnap, intakeSnap, eventsSnap, expenses, warehouseDays] = await Promise.all([
       // "Joriy holat" (hozir yuvilmoqda, tayyor, o'lchanmagan) faqat BUGUN
       // uchun ma'noli — o'tgan kunda u holat saqlanmagan. Boshqa kunda bu
       // og'ir so'rov umuman bajarilmaydi.
@@ -98,6 +100,7 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
         .get(),
       db.collection("dailyActivity").doc(dateKey).collection("events").get(),
       loadEmployeeExpenses(dateKey),
+      loadWarehouseReadyDays(),
     ]);
 
     // --- 1. Bugun sexga keldi ---
@@ -230,7 +233,8 @@ statsRouter.post("/employeeDailyStats", withAuth, async (req: AuthedRequest, res
         washingItemCount += washing;
         washingOrders.push({ ...base, itemCount: washing });
       }
-      const ready = counts.ready ?? 0;
+      // Omborga tushgan mahsulotlar "yetkazishga tayyor" emas — ular faqat Omborxonada.
+      const ready = Math.max(0, (counts.ready ?? 0) - warehouseItemCount(order, warehouseDays, now));
       if (ready > 0) {
         readyItemCount += ready;
         readyOrders.push({ ...base, itemCount: ready });

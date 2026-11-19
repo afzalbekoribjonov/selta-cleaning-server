@@ -1,6 +1,6 @@
 import type { DayReport, DriverRow, Stage, Units, WorkerRow } from "./dayReport";
 import { NO_TARIFF, REPORT_TARIFFS, UNIT_KEYS } from "./dayReport";
-import { dayMonth, esc, hhmm, inScript, int, longDateOfKey, money, packBlocks, qty, type Script } from "./text";
+import { esc, hhmm, inScript, int, money, packBlocks, periodLong, periodShort, qty, type Script } from "./text";
 
 /**
  * Kunlik hisobotning yettita xabari. Har biri alohida yuboriladi (talab);
@@ -65,18 +65,13 @@ function orderIds(numbers: Iterable<number>): string {
     .join(", ");
 }
 
-function dateOfKey(dateKey: string): Date {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  // Biznes kuni yarmi (UTC+5 bo'yicha 12:00) — kun hech qachon siljimaydi.
-  return new Date(Date.UTC(y, m - 1, d, 7));
-}
-
 function stamp(r: DayReport): string {
-  return r.isToday ? `${hhmm(r.generatedAt)} holatiga` : "kun yakuni";
+  if (r.isToday) return `${hhmm(r.generatedAt)} holatiga`;
+  return r.fromKey === r.toKey ? "kun yakuni" : "davr yakuni";
 }
 
 function header(icon: string, title: string, r: DayReport): string {
-  return `${icon} <b>${title}</b>\n<i>${dayMonth(dateOfKey(r.dateKey))} · ${stamp(r)}</i>`;
+  return `${icon} <b>${title}</b>\n<i>${periodShort(r.fromKey, r.toKey)} · ${stamp(r)}</i>`;
 }
 
 function departmentNote(department: string, expected: string): string {
@@ -93,7 +88,8 @@ function countAndPrice(stage: Stage): string {
 // -------------------------------------------------------------- 1. UMUMIY
 
 function summaryMessage(r: DayReport): string[] {
-  const head = `📊 <b>KUNLIK HISOBOT</b>\n<i>${longDateOfKey(r.dateKey)}</i>\n<i>${stamp(r)}</i>`;
+  const title = r.fromKey === r.toKey ? "KUNLIK HISOBOT" : "DAVR HISOBOTI";
+  const head = `📊 <b>${title}</b>\n<i>${periodLong(r.fromKey, r.toKey)}</i>\n<i>${stamp(r)}</i>`;
 
   const orders = [
     "<b>Buyurtmalar</b>",
@@ -160,7 +156,7 @@ function dispatchersMessage(r: DayReport): string[] {
   const intro = row("Jami ochilgan buyurtmalar", `<b>${int(r.created.orders)} ta</b>`);
   const blocks = r.dispatchers.map((d) => {
     const note = d.isDispatcher ? "" : ` <i>(${d.name === "Admin" ? "admin" : "boshqa bo'lim"})</i>`;
-    if (d.orderNumbers.length === 0) return `<b>${esc(d.name)}</b>${note}\n${IN}Bugun buyurtma ochmadi`;
+    if (d.orderNumbers.length === 0) return `<b>${esc(d.name)}</b>${note}\n${IN}Buyurtma ochmadi`;
     return `<b>${esc(d.name)}</b>${note} — <b>${int(d.orderNumbers.length)} ta</b>\n${IN}${orderIds(d.orderNumbers)}`;
   });
   if (blocks.length === 0) blocks.push("Faol sotuv menejeri yo'q");
@@ -315,7 +311,7 @@ function productsMessage(r: DayReport): string[] {
       productStage("Yetkazildi", p.delivered),
     ].join("\n"),
   );
-  if (blocks.length === 0) blocks.push("Bugun mahsulotlar bo'yicha harakat yo'q");
+  if (blocks.length === 0) blocks.push("Bu davrda mahsulotlar bo'yicha harakat yo'q");
   return packBlocks([
     header("📦", "MAHSULOTLAR BO'YICHA", r),
     "<i>Sexga kelganlar narxi — hozirgi o'lchov bo'yicha; o'lchanmaganlari narxsiz.</i>",

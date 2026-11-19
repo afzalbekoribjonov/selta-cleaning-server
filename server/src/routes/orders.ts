@@ -16,6 +16,7 @@ import { diffItem, itemSnapshot, recordItemEvent } from "../lib/itemHistory";
 import { deleteImageKitFiles } from "../lib/imagekit";
 import { photoFileIdsOf } from "../lib/itemPhotos";
 import { SUPERVISOR, canManageWorkflow } from "../lib/roles";
+import { issueWarning, rewashWarningText } from "../lib/warnings";
 
 /**
  * Buyurtma butunlay tugagach ("done") itemlar tahrirlanmaydi. Pickup
@@ -482,6 +483,7 @@ ordersRouter.post("/changeOrderStatus", withAuth, async (req: AuthedRequest, res
           serviceType,
           employeeId,
           itemName: serviceType === "onsite" ? "Joyida yuvish" : "Butun buyurtma",
+          tariff: (order.tariff as string | undefined) ?? null,
           price: orderPrice,
           collectedAmount: collected,
         });
@@ -631,6 +633,9 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
 
     let orderNumber = 0;
     let itemName = "";
+    let itemNumber: number | null = null;
+    /** Qayta yuvishga qaytarilganda — mahsulotni yuvgan (javobgar) xodim. */
+    let returnedWasher: string | null = null;
     const now = new Date();
 
     await db.runTransaction(async (tx) => {
@@ -646,6 +651,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
       const item = itemSnap.data()!;
       orderNumber = order.orderNumber;
       itemName = (item.name as string) ?? "Mahsulot";
+      itemNumber = (item.itemNumber as number | undefined) ?? null;
       if (order.serviceType !== "pickup") {
         throw new ApiError(400, "invalid-argument", "Item-darajasidagi holat faqat olib kelish buyurtmalarida mavjud");
       }
@@ -681,6 +687,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         itemNumber: (item.itemNumber as number | undefined) ?? null,
         itemName,
         calcType: (item.calcType as string | undefined) ?? null,
+        tariff: (item.tariff as string | undefined) ?? null,
         qty: (item.qty as number | undefined) ?? null,
         price: (item.price as number | undefined) ?? null,
       });
@@ -755,6 +762,18 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         itemUpdate.qcBy = employeeId;
         itemUpdate.qcAt = FieldValue.serverTimestamp();
         itemUpdate.qcNote = qcNote ?? null;
+        // Qayta yuvish — mahsulotni YUVGAN xodim hisobiga yoziladi (maosh va
+        // statistika sahifasidagi "qayta yuvishga qaytganlar" ko'rsatkichi).
+        returnedWasher = (item.washedBy as string | undefined) ?? (item.washingBy as string | undefined) ?? null;
+        if (returnedWasher) {
+          logDailyActivity(tx, now, {
+            ...activityBase(),
+            type: "returned",
+            employeeId: returnedWasher,
+            recordedBy: employeeId,
+            note: typeof qcNote === "string" && qcNote.trim() ? qcNote.trim().slice(0, 300) : null,
+          });
+        }
       }
       if (toStatus === "done") {
         itemUpdate.deliveredBy = employeeId;
@@ -830,6 +849,22 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
     } else if (toStatus === "returned") {
       const body = `#${orderNumber} — ${itemName} sifat nazoratidan o'tmadi${qcNote ? `: ${qcNote}` : ""}`;
       notifyLater(notifyDepartment("worker", "Qayta ishlov kerak", body, { orderId }));
+      // Mahsulotni yuvgan xodimga jiddiy ogohlantirish (o'zi qaytargan bo'lsa ham —
+      // bu sifat yozuvi). Muvaffaqiyatsiz bo'lsa holat o'zgarishi bekor qilinmaydi.
+      if (returnedWasher) {
+        const washer = returnedWasher;
+        const subId = `${orderNumber}/${itemNumber ?? "?"}`;
+        void (async () => {
+            const byName = (await db.collection("employees").doc(recorderId).get()).data()?.fullName as string | undefined;
+            await issueWarning({
+              employeeId: washer,
+              text: rewashWarningText(subId, itemName, typeof qcNote === "string" ? qcNote : null),
+              createdBy: recorderId,
+              createdByName: byName ?? (role === "admin" ? "Admin" : "Sifat nazorati"),
+              kind: "rewash",
+            });
+          })().catch((err) => console.error("Qayta yuvish ogohlantirishini yuborib bo'lmadi:", err));
+      }
     }
 
     res.json({ ok: true });
