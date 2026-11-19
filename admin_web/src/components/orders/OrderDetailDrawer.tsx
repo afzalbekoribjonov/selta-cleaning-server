@@ -434,7 +434,7 @@ function OverviewTab({
         <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[13px]">
           <Fact label="Xizmat turi">{order.serviceType === 'onsite' ? 'Joyida yuvish' : 'Olib kelish'}</Fact>
           <Fact label="Qabul qilindi">{formatDateTimeUz(order.createdAt)}</Fact>
-          {order.createdBy && <Fact label="Qabul qildi">{actorName(employees, order.createdBy, null)}</Fact>}
+          {order.createdBy && <Fact label="Sotuv menejeri">{actorName(employees, order.createdBy, null)}</Fact>}
           {order.intakeMethod === 'walk_in' ? (
             <Fact label="Qabul usuli">Mijoz o'zi olib keldi</Fact>
           ) : (

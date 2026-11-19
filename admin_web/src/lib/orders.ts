@@ -64,6 +64,12 @@ export interface Order {
   // mahsulot o'zgarganda buyurtma hujjatiga yozib qo'yadi.
   itemCount: number | null
   itemTariffs: string[]
+  /**
+   * Har bir mahsulotning holati, tarifi va tayyor bo'lgan payti — buyurtma
+   * hujjatidagi `itemsMirror` nusxasidan (qo'shimcha o'qishsiz). Omborxona
+   * hisobi va kartadagi tarif nuqtalari uchun.
+   */
+  itemMarks: { status: string | null; tariff: string | null; readyAt: Date | null }[]
   earliestPendingDueDate: Date | null
   zeroPriceItemCount: number
   itemStatusCounts: Record<string, number>
@@ -163,6 +169,13 @@ function toOrder(snap: QueryDocumentSnapshot | DocumentSnapshot): Order {
     // ko'rsatish o'rniga "noma'lum" deb muomala qila oladi.
     itemCount: data.itemStatusCounts === undefined ? null : (data.itemCount ?? 0),
     itemTariffs: data.itemTariffs ?? [],
+    itemMarks: Array.isArray(data.itemsMirror)
+      ? (data.itemsMirror as Record<string, unknown>[]).map((m) => ({
+          status: typeof m.status === 'string' ? m.status : null,
+          tariff: typeof m.tariff === 'string' ? m.tariff : null,
+          readyAt: ((m.packedAt ?? m.washedAt) as Timestamp | undefined)?.toDate?.() ?? null,
+        }))
+      : [],
     earliestPendingDueDate: (data.earliestPendingDueDate as Timestamp | undefined)?.toDate() ?? null,
     zeroPriceItemCount: data.zeroPriceItemCount ?? 0,
     itemStatusCounts: data.itemStatusCounts ?? {},

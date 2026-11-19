@@ -31,7 +31,7 @@ export function Panel({
     <section className={cn('min-w-0 rounded-2xl border border-border bg-surface shadow-sm', className)}>
       {(title || actions) && (
         <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 pt-4 sm:px-5 sm:pt-5">
-          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+          <div className="flex min-w-0 flex-1 basis-56 items-start gap-2.5">
             {Icon && (
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
                 <Icon size={18} />

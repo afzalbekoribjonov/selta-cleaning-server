@@ -12,9 +12,12 @@ import {
   Ruler,
   Sparkles,
   Undo2,
+  Warehouse,
   type LucideIcon,
 } from 'lucide-react'
 import { useActiveOrders } from '@/hooks/useRecentOrders'
+import { useWarehouseDays } from '@/hooks/useWarehouseDays'
+import { warehouseItemCount } from '@/lib/warehouse'
 import { isOrderOverdue } from '@/lib/order-tariffs'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/ui/Panel'
@@ -53,12 +56,16 @@ const TONE: Record<Stage['tone'], string> = {
  */
 export function PipelineOverview() {
   const { orders, loading } = useActiveOrders()
+  const warehouseDays = useWarehouseDays()
 
   const { stages, total } = useMemo(() => {
     const active = orders ?? []
     const pickup = active.filter((o) => o.serviceType === 'pickup')
     const sum = (status: string) => pickup.reduce((s, o) => s + (o.itemStatusCounts[status] ?? 0), 0)
     const unmeasured = pickup.reduce((s, o) => s + (o.zeroPriceItemCount ?? 0), 0)
+    // Omborga tushgan mahsulotlar "Tayyor"da sanalmaydi — alohida bosqich.
+    const now = new Date()
+    const inWarehouse = pickup.reduce((s, o) => s + warehouseItemCount(o, warehouseDays, now), 0)
     const list: Stage[] = [
       { key: 'new', label: 'Olib ketilmagan', hint: 'mijozdan', value: pickup.filter((o) => o.status === 'new').length, unit: 'buyurtma', icon: CircleDashed, tone: 'blue', to: '/orders?status=order:new&service=pickup' },
       { key: 'picked', label: "Yo'lda", hint: 'sexga kelmoqda', value: pickup.filter((o) => o.status === 'picked_up').length, unit: 'buyurtma', icon: Car, tone: 'teal', to: '/orders?status=order:picked_up' },
@@ -67,12 +74,13 @@ export function PipelineOverview() {
       { key: 'washing', label: 'Yuvilmoqda', hint: 'sexda', value: sum('washing'), unit: 'mahsulot', icon: Droplets, tone: 'blue', to: '/orders?status=item:washing' },
       { key: 'packing', label: 'Upakovkada', hint: 'sexda', value: sum('packing'), unit: 'mahsulot', icon: PackageCheck, tone: 'amber', to: '/orders?status=item:packing' },
       { key: 'returned', label: 'Qayta ishlovda', hint: 'sifatdan qaytgan', value: sum('returned'), unit: 'mahsulot', icon: Undo2, tone: 'red', to: '/orders?status=item:returned', hideWhenZero: true },
-      { key: 'ready', label: 'Tayyor', hint: 'yetkazishga tayyor', value: sum('ready'), unit: 'mahsulot', icon: Sparkles, tone: 'green', to: '/orders?status=item:ready' },
+      { key: 'ready', label: 'Tayyor', hint: 'yetkazishga tayyor', value: Math.max(0, sum('ready') - inWarehouse), unit: 'mahsulot', icon: Sparkles, tone: 'green', to: '/orders?status=item:ready' },
+      { key: 'warehouse', label: 'Omborda', hint: `${warehouseDays}+ kun olib ketilmagan`, value: inWarehouse, unit: 'mahsulot', icon: Warehouse, tone: 'gray', to: '/orders?status=item:warehouse', hideWhenZero: true },
       { key: 'onsite', label: 'Joyida yuvish', hint: 'faol ishlar', value: active.filter((o) => o.serviceType === 'onsite').length, unit: 'buyurtma', icon: House, tone: 'violet', to: '/orders?service=onsite' },
       { key: 'overdue', label: 'Kechikkan', hint: "muddati o'tgan", value: active.filter((o) => isOrderOverdue(o)).length, unit: 'buyurtma', icon: AlertTriangle, tone: 'red', to: '/orders?overdue=1' },
     ]
     return { stages: list.filter((s) => !(s.hideWhenZero && s.value === 0)), total: active.length }
-  }, [orders])
+  }, [orders, warehouseDays])
 
   return (
     <Panel
@@ -94,20 +102,24 @@ export function PipelineOverview() {
               key={s.key}
               to={s.to}
               className={cn(
-                'group flex min-w-0 items-start gap-2.5 rounded-xl border border-border px-3 py-2.5 transition-all hover:border-brand-primary/40 hover:shadow-sm',
+                'group flex min-w-0 flex-col gap-1 rounded-xl border border-border px-3 py-2.5 transition-all hover:border-brand-primary/40 hover:shadow-sm',
                 s.value === 0 && 'opacity-60',
                 (s.key === 'overdue' || s.key === 'unmeasured') && s.value > 0 && 'border-danger/30 bg-danger-bg/30',
               )}
             >
-              <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', TONE[s.tone])}>
-                <s.icon size={17} />
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-baseline gap-x-1">
+              {/* Belgi raqam yonida — nom butun kenglikdan foydalanadi (telefonda
+                  "O'lchanmagan" kabi uzun nom katakdan chiqib ketmaydi). */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-1">
                   <span className="font-heading text-xl font-extrabold leading-tight tabular-nums text-ink">{s.value}</span>
                   <span className="text-[11px] font-semibold text-gray-dark">{s.unit}</span>
                 </div>
-                <div className="text-[12.5px] font-bold leading-snug text-ink">{s.label}</div>
+                <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE[s.tone])}>
+                  <s.icon size={16} />
+                </div>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[12.5px] font-bold leading-snug text-ink [overflow-wrap:anywhere]">{s.label}</div>
                 <div className="text-[11px] leading-snug text-gray-dark">{s.hint}</div>
               </div>
             </Link>

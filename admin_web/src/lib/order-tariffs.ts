@@ -50,3 +50,33 @@ export function dueLabel(due: Date): string {
   if (d > 1) return `${d} kun qoldi`
   return `${Math.abs(d)} kun kechikdi`
 }
+
+/** Tarif ustuvorligi: Premium va Express muddati bir xil, lekin Premium oldinda. */
+export const TARIFF_RANK: Record<string, number> = { premium: 0, express: 1, comfort: 2, standart: 3 }
+export const TARIFF_DISPLAY_ORDER = ['premium', 'express', 'comfort', 'standart']
+
+const normTariff = (t: string | null | undefined) => (t === 'standard' ? 'standart' : (t ?? ''))
+
+/**
+ * Kartadagi tarif ko'rsatkichlari: {premium: 1, express: 2}. Faol
+ * buyurtmada — topshirilmagan mahsulotlar, yakunlanganda — hammasi.
+ * Mahsulotsiz (joyida yuvish) — buyurtma tarifi, soni 0.
+ */
+export function tariffCountsOf(order: Order): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const m of order.itemMarks) {
+    if (order.status !== 'done' && m.status === 'done') continue
+    const t = normTariff(m.tariff ?? order.tariff)
+    if (t in TARIFF_RANK) counts[t] = (counts[t] ?? 0) + 1
+  }
+  if (Object.keys(counts).length === 0 && order.itemMarks.length === 0) {
+    const t = normTariff(order.tariff)
+    if (t in TARIFF_RANK) counts[t] = 0
+    else for (const x of order.itemTariffs) if (x in TARIFF_RANK) counts[x] = 0
+  }
+  return counts
+}
+
+export function bestTariffRank(order: Order): number {
+  return Math.min(99, ...Object.keys(tariffCountsOf(order)).map((t) => TARIFF_RANK[t] ?? 99))
+}

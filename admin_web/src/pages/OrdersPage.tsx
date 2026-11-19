@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Loader2, MessageSquare, Ruler, Search, X } from 'lucide-react'
 import { useActiveOrders } from '@/hooks/useRecentOrders'
 import { fetchOrdersPage, searchOrders, type Order, type QueryDocumentSnapshot } from '@/lib/orders'
-import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
+import { bestTariffRank, effectiveDueDate, isOrderOverdue, tariffCountsOf } from '@/lib/order-tariffs'
+import { useWarehouseDays } from '@/hooks/useWarehouseDays'
 import {
   ITEM_STATUS_OPTIONS,
   ORDER_STATUS_OPTIONS,
@@ -22,9 +23,10 @@ import { OrderDetailDrawer } from '@/components/orders/OrderDetailDrawer'
 import { OrderSummaryCard } from '@/components/orders/OrderSummaryCard'
 import { OrderProgress } from '@/components/orders/OrderProgress'
 
-type SortKey = 'latest' | 'earliest' | 'due' | 'expensive' | 'cheap'
+type SortKey = 'latest' | 'earliest' | 'tariff' | 'due' | 'expensive' | 'cheap'
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'latest', label: 'Oxirgilar' },
+  { key: 'tariff', label: 'Tarif (Premium birinchi)' },
   { key: 'earliest', label: 'Boshidagilar' },
   { key: 'due', label: 'Muddati yaqin' },
   { key: 'expensive', label: 'Eng qimmat' },
@@ -86,6 +88,7 @@ function useOrderFilters() {
 
 export default function OrdersPage() {
   const [filters, update] = useOrderFilters()
+  const warehouseDays = useWarehouseDays()
   const { view, status: statusFilter, service, month: monthFilter, sort: sortBy, overdue: overdueOnly, unmeasured: unmeasuredOnly } = filters
   const [search, setSearch] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -176,7 +179,7 @@ export default function OrdersPage() {
       for (const o of local) byId.set(o.id, o)
       list = [...byId.values()]
     }
-    if (activeStatus) list = list.filter((o) => orderMatchesStatus(o, activeStatus))
+    if (activeStatus) list = list.filter((o) => orderMatchesStatus(o, activeStatus, warehouseDays))
     if (service) list = list.filter((o) => o.serviceType === service)
     if (monthFilter) {
       list = list.filter((o) => `${o.createdAt.getFullYear()}-${String(o.createdAt.getMonth() + 1).padStart(2, '0')}` === monthFilter)
@@ -189,6 +192,9 @@ export default function OrdersPage() {
       switch (sortBy) {
         case 'earliest':
           return a.createdAt.getTime() - b.createdAt.getTime()
+        case 'tariff':
+          // Premium → Express → Comfort → Standart; bir xil tarifda — muddati yaqini.
+          return bestTariffRank(a) - bestTariffRank(b) || dueMs(a) - dueMs(b)
         case 'due':
           return dueMs(a) - dueMs(b)
         case 'expensive':
@@ -199,13 +205,13 @@ export default function OrdersPage() {
           return b.createdAt.getTime() - a.createdAt.getTime()
       }
     })
-  }, [baseOrders, search, remoteResults, activeStatus, service, monthFilter, overdueOnly, unmeasuredOnly, sortBy])
+  }, [baseOrders, search, remoteResults, activeStatus, service, monthFilter, overdueOnly, unmeasuredOnly, sortBy, warehouseDays])
 
   /** Mahsulot holati bo'yicha filtrlanganda — mos kelgan mahsulotlar jami. */
   const matchedItemsTotal = useMemo(() => {
     if (!activeStatus || activeStatus.scope !== 'item') return null
-    return filtered.reduce((sum, o) => sum + (matchedItemCount(o, activeStatus) ?? 0), 0)
-  }, [filtered, activeStatus])
+    return filtered.reduce((sum, o) => sum + (matchedItemCount(o, activeStatus, warehouseDays) ?? 0), 0)
+  }, [filtered, activeStatus, warehouseDays])
 
   const anyFilter = !!(activeStatus || service || monthFilter || overdueOnly || unmeasuredOnly)
   const showLoader = view === 'active' ? loading : allOrders.length === 0 && loadingMore
@@ -356,7 +362,7 @@ export default function OrdersPage() {
                 <OrderSummaryCard
                   key={o.id}
                   order={o}
-                  matchedCount={matchedItemCount(o, activeStatus)}
+                  matchedCount={matchedItemCount(o, activeStatus, warehouseDays)}
                   matchedLabel={activeStatus ? statusLabel(activeStatus.status) : undefined}
                   onClick={() => setSelectedOrder(o)}
                 />
@@ -388,7 +394,7 @@ export default function OrdersPage() {
                     <OrderRow
                       key={o.id}
                       order={o}
-                      matched={matchedItemCount(o, activeStatus)}
+                      matched={matchedItemCount(o, activeStatus, warehouseDays)}
                       matchedLabel={activeStatus ? statusLabel(activeStatus.status) : undefined}
                       onOpen={() => setSelectedOrder(o)}
                     />
@@ -477,7 +483,7 @@ function OrderRow({
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-semibold text-ink">{o.itemCount ?? '—'} ta</span>
-              <TariffDots tariffs={distinctTariffs(o)} />
+              <TariffDots counts={tariffCountsOf(o)} />
             </div>
             {units.length > 0 && (
               <div className="text-xs tabular-nums text-gray-dark">{units.map((u) => `${formatQty(u.amount, u.unit)} ${u.label}`).join(' · ')}</div>

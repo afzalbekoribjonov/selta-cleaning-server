@@ -63,6 +63,7 @@ export function OrderItemCard({
   const steps = [
     { key: 'added', label: "Qo'shildi", by: item.addedBy, role: item.addedByDepartment, at: item.createdAt },
     { key: 'washed', label: 'Yuvildi', by: item.washedBy, role: 'worker', at: item.washedAt },
+    ...(item.rewashedBy ? [{ key: 'rewashed', label: 'Qayta yuvdi', by: item.rewashedBy, role: 'worker', at: item.rewashedAt }] : []),
     { key: 'packed', label: 'Upakovka', by: item.packedBy, role: 'worker', at: item.packedAt },
     { key: 'delivered', label: 'Yetkazildi', by: item.deliveredBy, role: 'delivery', at: item.deliveredAt },
   ]
@@ -109,6 +110,11 @@ export function OrderItemCard({
             {formatDateUz(item.dueDate)} · {dueLabel(item.dueDate)}
           </span>
         )}
+        {item.returnCount > 0 && (
+          <span className="rounded-full bg-danger-bg px-2 py-0.5 text-[11px] font-bold text-danger">
+            {item.returnCount === 1 ? 'Qayta yuvishga qaytgan' : `${item.returnCount} marta qayta yuvishga qaytgan`}
+          </span>
+        )}
         {warehouseDays !== null && (
           <span className="rounded-full bg-[#fdf0e6] px-2 py-0.5 text-[11px] font-bold text-[#dd6b20]">
             Omborda · {warehouseDays} kun
@@ -153,12 +159,22 @@ export function OrderItemCard({
 
       {/* Kim va qachon — bosqichlar */}
       {isPickupItem && (
-        <ol className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        <ol className={cn('mt-3 grid grid-cols-2 gap-1.5', steps.length > 4 ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}>
           {steps.map((s) => {
             const reached = !!s.at
             return (
-              <li key={s.key} className={cn('min-w-0 rounded-xl px-2.5 py-1.5', reached ? 'bg-success-bg/60' : 'bg-bg')}>
-                <div className={cn('text-[10.5px] font-bold uppercase tracking-wide', reached ? 'text-success' : 'text-gray')}>{s.label}</div>
+              <li
+                key={s.key}
+                className={cn('min-w-0 rounded-xl px-2.5 py-1.5', !reached ? 'bg-bg' : s.key === 'rewashed' ? 'bg-warning-bg/70' : 'bg-success-bg/60')}
+              >
+                <div
+                  className={cn(
+                    'text-[10.5px] font-bold uppercase tracking-wide',
+                    !reached ? 'text-gray' : s.key === 'rewashed' ? 'text-warning' : 'text-success',
+                  )}
+                >
+                  {s.label}
+                </div>
                 {reached ? (
                   <>
                     <div className="text-[11.5px] font-semibold leading-snug text-ink [overflow-wrap:anywhere]">

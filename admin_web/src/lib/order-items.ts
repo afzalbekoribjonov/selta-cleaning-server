@@ -37,6 +37,11 @@ export interface OrderItem {
   addedByDepartment: string | null
   washedBy: string | null
   washedAt: Date | null
+  /** Sifat nazoratidan qaytgach qayta yuvgan (haq to'lanmaydi). */
+  rewashedBy: string | null
+  rewashedAt: Date | null
+  /** Necha marta qayta yuvishga qaytarilgan. */
+  returnCount: number
   packedBy: string | null
   packedAt: Date | null
   deliveredBy: string | null
@@ -76,6 +81,9 @@ export function mapOrderItem(id: string, d: Record<string, unknown>): OrderItem 
     addedByDepartment: str(d.addedByDepartment),
     washedBy: str(d.washedBy),
     washedAt: date(d.washedAt),
+    rewashedBy: str(d.rewashedBy),
+    rewashedAt: date(d.rewashedAt),
+    returnCount: num(d.returnCount) ?? 0,
     packedBy: str(d.packedBy),
     packedAt: date(d.packedAt),
     deliveredBy: str(d.deliveredBy),

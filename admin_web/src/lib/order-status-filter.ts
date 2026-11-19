@@ -1,5 +1,6 @@
 import { STATUS_CONFIG } from './status-config'
 import type { Order } from './orders'
+import { warehouseItemCount } from './warehouse'
 
 /**
  * Buyurtmalar ro'yxatidagi holat filtri.
@@ -27,10 +28,14 @@ export interface StatusFilterOption {
 const ITEM_STATUSES = ['pending', 'washing', 'packing', 'ready', 'returned', 'done'] as const
 const ORDER_STATUSES = ['new', 'picked_up', 'brought_in', 'team_assigned', 'in_progress', 'done'] as const
 
-export const ITEM_STATUS_OPTIONS: StatusFilterOption[] = ITEM_STATUSES.map((s) => ({
-  value: `item:${s}`,
-  label: STATUS_CONFIG[s]?.label ?? s,
-}))
+/**
+ * "Omborda" — tayyor bo'lganiga chegara kundan oshgan mahsulotlar. Ular
+ * "Tayyor"da sanalmaydi (faol ro'yxatlar va ko'rsatkichlardan chiqadi).
+ */
+export const ITEM_STATUS_OPTIONS: StatusFilterOption[] = ITEM_STATUSES.flatMap((s) => {
+  const option = { value: `item:${s}`, label: STATUS_CONFIG[s]?.label ?? s }
+  return s === 'ready' ? [option, { value: 'item:warehouse', label: 'Omborda' }] : [option]
+})
 
 export const ORDER_STATUS_OPTIONS: StatusFilterOption[] = ORDER_STATUSES.map((s) => ({
   value: `order:${s}`,
@@ -43,9 +48,16 @@ export function parseStatusFilter(value: string): { scope: FilterScope; status: 
   return { scope, status }
 }
 
-export function orderMatchesStatus(order: Order, filter: { scope: FilterScope; status: string }): boolean {
+/** Mahsulot holatidagi soni; "Tayyor" — ombordagilarsiz, "Omborda" — faqat ular. */
+function itemCountFor(order: Order, status: string, warehouseDays: number): number {
+  if (status === 'warehouse') return warehouseItemCount(order, warehouseDays)
+  const n = order.itemStatusCounts[status] ?? 0
+  return status === 'ready' ? Math.max(0, n - warehouseItemCount(order, warehouseDays)) : n
+}
+
+export function orderMatchesStatus(order: Order, filter: { scope: FilterScope; status: string }, warehouseDays: number): boolean {
   if (filter.scope === 'order') return order.status === filter.status
-  return (order.itemStatusCounts[filter.status] ?? 0) > 0
+  return itemCountFor(order, filter.status, warehouseDays) > 0
 }
 
 /**
@@ -53,9 +65,9 @@ export function orderMatchesStatus(order: Order, filter: { scope: FilterScope; s
  * mahsulot mos kelgani. Ro'yxatda ko'rsatiladi, aks holda foydalanuvchi
  * buyurtma nima uchun ro'yxatga tushganini bilmaydi.
  */
-export function matchedItemCount(order: Order, filter: { scope: FilterScope; status: string } | null): number | null {
+export function matchedItemCount(order: Order, filter: { scope: FilterScope; status: string } | null, warehouseDays: number): number | null {
   if (!filter || filter.scope !== 'item') return null
-  return order.itemStatusCounts[filter.status] ?? 0
+  return itemCountFor(order, filter.status, warehouseDays)
 }
 
 export function statusLabel(status: string): string {

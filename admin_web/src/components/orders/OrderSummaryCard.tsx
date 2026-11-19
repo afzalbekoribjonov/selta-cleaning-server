@@ -1,6 +1,6 @@
 import { AlertTriangle, ChevronRight, MessageSquare } from 'lucide-react'
 import { type Order } from '@/lib/orders'
-import { distinctTariffs, effectiveDueDate, isOrderOverdue } from '@/lib/order-tariffs'
+import { effectiveDueDate, isOrderOverdue, tariffCountsOf } from '@/lib/order-tariffs'
 import { formatDateUz } from '@/lib/date-utils'
 import { formatMoney, formatQty, unitList } from '@/lib/units'
 import { cn } from '@/lib/utils'
@@ -83,13 +83,18 @@ export function OrderSummaryCard({
           )}
           {order.zeroPriceItemCount > 0 && <span className="font-bold text-danger">{order.zeroPriceItemCount} o'lchanmagan</span>}
           {order.debtTotal > 0 && <span className="font-bold text-danger">Qarz {formatMoney(order.debtTotal)}</span>}
-          <TariffDots tariffs={distinctTariffs(order)} />
+
           {order.status !== 'done' && (
             <span className={cn('ml-auto flex items-center gap-1 font-bold', overdue ? 'text-danger' : 'text-ink')}>
               {overdue && <AlertTriangle size={12} />}
               {dueDate ? formatDateUz(dueDate) : '—'}
             </span>
           )}
+        </span>
+
+        {/* Tarif ko'rsatkichlari — kartaning eng pastida, bitta qatorda. */}
+        <span className="mt-2 flex border-t border-dashed border-border pt-2">
+          <TariffDots counts={tariffCountsOf(order)} />
         </span>
       </span>
 

@@ -90,7 +90,7 @@ export function WorkRatesCard({ products }: { products: Product[] }) {
   return (
     <section id="ishbay" ref={sectionRef} className="scroll-mt-20 rounded-2xl border border-border bg-surface shadow-sm">
       <header className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
-        <div className="flex min-w-0 flex-1 items-start gap-2.5">
+        <div className="flex min-w-0 flex-1 basis-64 items-start gap-2.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
             <Coins size={18} />
           </div>

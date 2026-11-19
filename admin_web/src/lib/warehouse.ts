@@ -34,3 +34,18 @@ export function readyDaysOf(readyAt: Date | null, now: Date = new Date()): numbe
   const day = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
   return Math.floor((day(now) - day(readyAt)) / 86_400_000)
 }
+
+/**
+ * Buyurtmaning omborga tushgan mahsulotlari soni: "Tayyor" holatida va
+ * tayyor bo'lganiga `days` kun yoki ko'proq (server lib/warehouse.ts va
+ * ilova bilan bir xil). Bunday mahsulotlar faol ro'yxat va
+ * ko'rsatkichlarda sanalmaydi — faqat Omborxonada.
+ */
+export function warehouseItemCount(
+  order: { serviceType: string; status: string; itemMarks: { status: string | null; readyAt: Date | null }[] },
+  days: number,
+  now: Date = new Date(),
+): number {
+  if (order.serviceType !== 'pickup' || order.status === 'done') return 0
+  return order.itemMarks.filter((m) => m.status === 'ready' && (readyDaysOf(m.readyAt, now) ?? -1) >= days).length
+}
