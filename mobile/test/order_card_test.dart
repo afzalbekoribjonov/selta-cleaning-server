@@ -173,7 +173,8 @@ void main() {
   });
 
   group('qayta yuvishga qaytgan mahsulot', () {
-    OrderItem it(int n, String status, {String? washedBy, String tariff = 'premium'}) => OrderItem(
+
+    OrderItem it(int n, String status, {String? washedBy, String? rewashedBy, String tariff = 'premium'}) => OrderItem(
           id: 'i$n',
           itemNumber: n,
           name: n == 1 ? 'Gilam juda uzun nomli mahsulot' : 'Parda',
@@ -183,7 +184,42 @@ void main() {
           status: status,
           tariff: tariff,
           washedBy: washedBy,
+          rewashedBy: rewashedBy,
+          returnCount: rewashedBy == null ? 0 : 1,
         );
+
+    testWidgets('qayta yuvilgandan keyin yana qaytsa — qayta yuvgan xodim ko\'rsatiladi', (tester) async {
+      final o = Order(
+        id: 'o8',
+        orderNumber: 1300,
+        customerName: 'Mijoz',
+        phone: '+998901234567',
+        location: 'Chilonzor',
+        serviceType: 'pickup',
+        status: 'brought_in',
+        createdBy: 'e',
+        createdAt: DateTime(2026, 10, 1),
+        totalPrice: 100000,
+        itemStatusCounts: const {'returned': 1},
+        itemsMirror: [it(1, 'returned', washedBy: 'w1', rewashedBy: 'w2')],
+      );
+      await pumpAt(
+        tester,
+        360,
+        ProviderScope(
+          overrides: [
+            staffDirectoryProvider.overrideWith((ref) async => const {
+                  'w1': StaffInfo(id: 'w1', fullName: 'Aliyev Vali', department: 'worker', departmentLabel: 'Ishchi'),
+                  'w2': StaffInfo(id: 'w2', fullName: 'Karimov Sardor', department: 'worker', departmentLabel: 'Ishchi'),
+                }),
+          ],
+          child: OrderCard(order: o, onTap: () {}),
+        ),
+      );
+      await tester.pump();
+      expect(find.textContaining('Karimov Sardor', findRichText: true), findsOneWidget);
+      expect(find.textContaining('Aliyev Vali', findRichText: true), findsNothing);
+    });
 
     for (final width in [320.0, 412.0]) {
       testWidgets('kartada kim yuvgani va tarif nuqtalari (${width.toInt()}px, katta shrift)', (tester) async {

@@ -286,6 +286,8 @@ class _WhoDidIt extends ConsumerWidget {
       final w = staff.nameOf(item.washingBy);
       if (w != null) parts.add(('Yuvmoqda', w));
     }
+    final rewasher = staff.nameOf(item.rewashedBy);
+    if (rewasher != null) parts.add(('Qayta yuvdi', rewasher));
     final packer = staff.nameOf(item.packedBy);
     if (packer != null) parts.add(('Qadoqladi', packer));
     final deliverer = item.deliveredByName ?? staff.nameOf(item.deliveredBy);

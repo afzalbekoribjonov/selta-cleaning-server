@@ -550,7 +550,8 @@ class _ReturnedNotice extends ConsumerWidget {
                         TextSpan(text: '${i.subId(order.orderNumber)} ${i.name} · ', style: const TextStyle(fontWeight: FontWeight.w700)),
                         const TextSpan(text: 'yuvgan: '),
                         TextSpan(
-                          text: staff.nameOf(i.washedBy ?? i.washingBy) ?? "noma'lum",
+                          // Qayta yuvilgandan keyin yana qaytsa — qayta yuvgan javobgar.
+                          text: staff.nameOf(i.rewashedBy ?? i.washedBy ?? i.washingBy) ?? "noma'lum",
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                       ]),

@@ -823,6 +823,10 @@ class OrdersRepository {
     }
     // Server qoidasi bilan bir xil (routes/orders.ts changeItemStatus):
     // "tayyor" — sifat nazoratidan o'tdi, "qaytarildi" — o'tmadi.
+    // Qaytgan mahsulotni yuvish — QAYTA yuvish: asl yuvgan o'zgarmaydi.
+    // (Birinchi yuvish har doim qaytarishdan oldin, shuning uchun qaytgan
+    // mahsulotning keyingi har bir "yuvildi"si — qayta yuvish.)
+    final rewash = toStatus == 'packing' && (existing?.returnCount ?? 0) > 0;
     final changed = existing?.copyWith(
       status: toStatus,
       qcStatus: toStatus == 'ready'
@@ -832,7 +836,9 @@ class OrdersRepository {
               : null,
       qcNote: toStatus == 'returned' ? qcNote : null,
       washingBy: toStatus == 'washing' ? performer : null,
-      washedBy: toStatus == 'packing' ? performer : null,
+      washedBy: toStatus == 'packing' && !rewash ? performer : null,
+      rewashedBy: rewash ? performer : null,
+      returnCount: toStatus == 'returned' ? existing.returnCount + 1 : null,
       // Omborxona hisobi shu paytdan boshlanadi — oflayn ham to'g'ri tursin.
       packedBy: toStatus == 'ready' ? performer : null,
       packedAt: toStatus == 'ready' ? DateTime.now() : null,

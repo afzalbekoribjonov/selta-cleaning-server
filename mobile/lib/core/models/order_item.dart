@@ -39,6 +39,13 @@ class OrderItem {
   final String? washedBy;
   final DateTime? washedAt;
 
+  /// Sifat nazoratidan qaytgach QAYTA yuvgan xodim (asl yuvgan — [washedBy]).
+  /// Qayta yuvish uchun haq to'lanmaydi (server: changeItemStatus).
+  final String? rewashedBy;
+
+  /// Necha marta qayta yuvishga qaytarilgan.
+  final int returnCount;
+
   /// Upakovka tugab "Tayyor" bo'lgan payt (server: changeItemStatus,
   /// packing -> ready). Omborxona shu paytdan hisoblanadi.
   final String? packedBy;
@@ -83,6 +90,8 @@ class OrderItem {
     this.washingBy,
     this.washedBy,
     this.washedAt,
+    this.rewashedBy,
+    this.returnCount = 0,
     this.packedBy,
     this.packedAt,
     this.deliveredBy,
@@ -112,6 +121,8 @@ class OrderItem {
     String? status,
     String? washingBy,
     String? washedBy,
+    String? rewashedBy,
+    int? returnCount,
     String? packedBy,
     DateTime? packedAt,
     String? deliveredBy,
@@ -146,6 +157,8 @@ class OrderItem {
       washingBy: washingBy ?? this.washingBy,
       washedBy: washedBy ?? this.washedBy,
       washedAt: washedAt,
+      rewashedBy: rewashedBy ?? this.rewashedBy,
+      returnCount: returnCount ?? this.returnCount,
       packedBy: packedBy ?? this.packedBy,
       packedAt: packedAt ?? this.packedAt,
       deliveredBy: deliveredBy ?? this.deliveredBy,
@@ -188,6 +201,8 @@ class OrderItem {
       washingBy: data['washingBy']?.toString(),
       washedBy: data['washedBy']?.toString(),
       washedAt: (data['washedAt'] as Timestamp?)?.toDate(),
+      rewashedBy: data['rewashedBy']?.toString(),
+      returnCount: (data['returnCount'] as num?)?.toInt() ?? 0,
       packedBy: data['packedBy']?.toString(),
       packedAt: (data['packedAt'] as Timestamp?)?.toDate(),
       deliveredBy: data['deliveredBy']?.toString(),
