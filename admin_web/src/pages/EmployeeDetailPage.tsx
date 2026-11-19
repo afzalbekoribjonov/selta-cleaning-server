@@ -17,13 +17,6 @@ import {
   CalendarDays,
   ClipboardList,
   ReceiptText,
-  Receipt,
-  PiggyBank,
-  Printer,
-  FileSpreadsheet,
-  Images,
-  ImagePlus,
-  ImageMinus,
   ArrowRight,
 } from 'lucide-react'
 import { apiPost } from '@/lib/api'
@@ -47,13 +40,7 @@ import { TasksSection } from '@/components/employees/TasksSection'
 import { AdvancesSection } from '@/components/employees/AdvancesSection'
 import { WarningsSection } from '@/components/employees/WarningsSection'
 import { SpecializationsSection } from '@/components/employees/SpecializationsSection'
-import { OrderPermissionSection } from '@/components/employees/OrderPermissionSection'
-import { OnsiteWashingPermissionSection } from '@/components/employees/OnsiteWashingPermissionSection'
-import { StatsPermissionSection } from '@/components/employees/StatsPermissionSection'
-import { FinancePermissionSection } from '@/components/employees/FinancePermissionSection'
-import { WarehousePermissionSection } from '@/components/employees/WarehousePermissionSection'
-import { PermissionToggleSection } from '@/components/employees/PermissionToggleSection'
-import { WorkshopVisibilitySection } from '@/components/employees/WorkshopVisibilitySection'
+import { PermissionsCard } from '@/components/employees/PermissionsCard'
 import { DeliverySelfAddedSection } from '@/components/employees/DeliverySelfAddedSection'
 
 function formatMoney(value: number): string {
@@ -281,79 +268,7 @@ export default function EmployeeDetailPage() {
       {dept.isCustom && <TasksSection employee={employee} />}
       {employee.department === 'worker' && <SpecializationsSection employee={employee} />}
       {employee.department === 'delivery' && <DeliverySelfAddedSection employeeId={employee.id} />}
-      {employee.department !== 'dispatcher' && <OrderPermissionSection employee={employee} />}
-      {(employee.department === 'worker' || employee.department === 'delivery') && (
-        <OnsiteWashingPermissionSection employee={employee} />
-      )}
-      {/* Kunlik ko'rsatkichlar — bo'limdan qat'i nazar istalgan xodimga
-          berilishi mumkin (server ham bo'limni tekshirmaydi). */}
-      <StatsPermissionSection employee={employee} />
-      <FinancePermissionSection employee={employee} />
-      <WarehousePermissionSection employee={employee} />
-      <PermissionToggleSection
-        employee={employee}
-        permission="canAddExpenses"
-        icon={Receipt}
-        title="Chiqim qo'shish"
-        description="Ilovadan yoqilg'i, texnik xizmat kabi chiqimlarni kiritish"
-        grantText={"ilovada chiqim kirita oladi. \"Qo'limdagi naqddan\" belgilangan chiqim o'sha kuni u topshiradigan naqddan ayiriladi."}
-        revokeText="endi ilovada chiqim kirita olmaydi. Avval kiritganlari saqlanib qoladi."
-      />
-      <PermissionToggleSection
-        employee={employee}
-        permission="canTakePrepayment"
-        icon={PiggyBank}
-        title="Oldindan to'lov"
-        description="Buyurtma topshirilishidan oldin mijozdan qisman yoki to'liq to'lov qabul qilish"
-        grantText="buyurtma kartasida oldindan to'lov qabul qila oladi. Summa o'sha kuni uning kassasiga tushadi va topshirishda narxdan ayiriladi."
-        revokeText="endi oldindan to'lov qabul qila olmaydi. Avval qabul qilinganlari saqlanib qoladi."
-      />
-      <PermissionToggleSection
-        employee={employee}
-        permission="canPrintReceipts"
-        icon={Printer}
-        title="Chek chiqarish"
-        description="Ilovada buyurtma chekini Bluetooth printerda chop etish"
-        grantText="buyurtma kartasida chekni ko'rib, Bluetooth printerda chop eta oladi."
-        revokeText="endi chek chiqara olmaydi."
-      />
-      <PermissionToggleSection
-        employee={employee}
-        permission="canPrintDailyReport"
-        icon={FileSpreadsheet}
-        title="Kunlik hisobot cheki"
-        description="Xodimlar bo'yicha kunlik hisobotni chekda chop etish"
-        grantText="kunlik hisobot chekini (barcha xodimlar ishi, qo'ldagi pullar) ko'rib, chop eta oladi."
-        revokeText="endi kunlik hisobot chekini ko'ra olmaydi."
-      />
-      <PermissionToggleSection
-        employee={employee}
-        permission="canViewPhotos"
-        icon={Images}
-        title="Mahsulot rasmlarini ko'rish"
-        description="Buyurtmadagi mahsulotlarning eski va tayyor holat rasmlarini ko'rish"
-        grantText="mahsulotlarning eski va tayyor holat rasmlarini ko'ra oladi."
-        revokeText="endi mahsulot rasmlarini ko'ra olmaydi."
-      />
-      <PermissionToggleSection
-        employee={employee}
-        permission="canUploadPhotos"
-        icon={ImagePlus}
-        title="Mahsulot rasmini saqlash"
-        description="Kamera yoki galereyadan rasm qo'shish (har holatga 2 tagacha)"
-        grantText="mahsulotlarga eski va tayyor holat rasmlarini qo'sha oladi."
-        revokeText="endi mahsulotlarga rasm qo'sha olmaydi."
-      />
-      <PermissionToggleSection
-        employee={employee}
-        permission="canDeletePhotos"
-        icon={ImageMinus}
-        title="Mahsulot rasmini o'chirish"
-        description="Saqlangan rasmlarni butunlay o'chirish"
-        grantText="mahsulotlarning saqlangan rasmlarini o'chira oladi."
-        revokeText="endi mahsulot rasmlarini o'chira olmaydi."
-      />
-      {employee.department === 'worker' && <WorkshopVisibilitySection employee={employee} />}
+      <PermissionsCard employee={employee} />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 [&>*]:min-w-0">
         <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5 xl:col-span-2">
