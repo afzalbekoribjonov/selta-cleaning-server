@@ -18,6 +18,12 @@ export interface WorkLine {
   count: number
   amount: number
   price: number
+  productId?: string | null
+  /**
+   * Yuvish/qadoqlash qatorida — mahsulotning 1 birlik ishbay narxi
+   * (Mahsulotlar bo'limidan); `null` — narx kiritilmagan.
+   */
+  rate?: number | null
 }
 
 export interface EmployeeWork {
@@ -25,6 +31,8 @@ export interface EmployeeWork {
   packed: WorkLine[]
   delivered: WorkLine[]
   returned: WorkLine[]
+  /** Qaytgan mahsulotni qayta yuvgani — haq to'lanmaydi, "Yuvildi"ga qo'shilmaydi. */
+  rewashed: WorkLine[]
   deliveredMoney: { value: number; collected: number; cash: number; card: number; orders: number }
   onsite: { orders: number; revenue: number; collected: number }
   onsiteTeam: { orders: number; revenue: number }
@@ -74,6 +82,7 @@ export interface ProductStat {
   packed: WorkLine | null
   delivered: WorkLine | null
   returned: WorkLine | null
+  rewashed: WorkLine | null
 }
 
 export interface WorkPeriod {
@@ -90,25 +99,22 @@ export function fetchWorkPeriod(range: DateRange, force = false): Promise<WorkPe
   return apiPost<WorkPeriod>('/adminWorkPeriod', { from: range.from, to: range.to, ...(force ? { force: true } : {}) })
 }
 
-/** salaryCalc.ts UNIT_RATE_KEYS bilan bir xil. */
-export const UNIT_RATE_KEYS: Record<Unit, string> = {
-  sqm: 'pricePerSqm',
-  meter: 'pricePerMeter',
-  kg: 'pricePerKg',
-  dona: 'pricePerPiece',
-}
+const UNIT_ORDER: Unit[] = ['sqm', 'meter', 'kg', 'dona']
 
-export type Stage = 'washed' | 'packed' | 'delivered' | 'returned'
+export type Stage = 'washed' | 'packed' | 'delivered' | 'returned' | 'rewashed'
+
+/** Mahsulot narxlari bo'yicha ishbay hisoblanadigan usullar (server: salaryCalc.ts). */
+export const PIECEWORK_METHODS = new Set(['washing', 'finishing'])
 
 /**
- * Qator uchun ishbay narxi (1 birlik uchun) — faqat shu bosqich maosh
- * usuliga kirsa: yuvish usulida yuvilgani, pardozlashda qadoqlangani.
+ * Qator uchun ishbay narxi (1 birlik): `undefined` — bu bosqich xodim
+ * maoshiga kirmaydi; `null` — mahsulotga narx kiritilmagan; son — narx.
+ * Ishbay usulida xodim o'zi yuvgan VA qadoqlaganiga haq oladi.
  */
-export function unitRateFor(salary: SalaryConfig | null, stage: Stage, unit: Unit): number | null {
-  if (!salary) return null
-  const paid = (salary.method === 'washing' && stage === 'washed') || (salary.method === 'finishing' && stage === 'packed')
-  if (!paid) return null
-  return salary.params[UNIT_RATE_KEYS[unit]] ?? 0
+export function pieceRate(salary: SalaryConfig | null, stage: Stage, line: WorkLine): number | null | undefined {
+  if (!salary || !PIECEWORK_METHODS.has(salary.method)) return undefined
+  if (stage !== 'washed' && stage !== 'packed') return undefined
+  return line.rate ?? null
 }
 
 /** Bosqich bo'yicha birliklar jami: { sqm: 45.5, dona: 3 }. */
@@ -122,7 +128,7 @@ export const countOf = (lines: WorkLine[]): number => lines.reduce((s, l) => s +
 
 export function hasAnyWork(w: EmployeeWork): boolean {
   return (
-    countOf(w.washed) + countOf(w.packed) + countOf(w.delivered) + countOf(w.returned) > 0 ||
+    countOf(w.washed) + countOf(w.packed) + countOf(w.delivered) + countOf(w.returned) + countOf(w.rewashed ?? []) > 0 ||
     w.created.orders + w.pickedUp.orders + w.onsite.orders + w.onsiteTeam.orders + w.deliveredMoney.orders > 0
   )
 }
@@ -136,7 +142,7 @@ export const tariffMeta = (t: string) => TARIFF_CONFIG[t] ?? NO_TARIFF
 /** "45,5 m² · 12 metr · 3 dona" — birliklar qo'shilmaydi. */
 export function unitsText(lines: WorkLine[]): string {
   const totals = unitTotals(lines)
-  return (Object.keys(UNIT_RATE_KEYS) as Unit[])
+  return UNIT_ORDER
     .filter((u) => (totals[u] ?? 0) > 0)
     .map((u) => `${formatQty(totals[u]!, u)} ${UNIT_LABELS[u]}`)
     .join(' · ')

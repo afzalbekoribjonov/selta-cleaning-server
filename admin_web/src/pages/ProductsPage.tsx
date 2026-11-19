@@ -7,6 +7,7 @@ import { CALC_TYPE_CONFIG, PRODUCT_CATEGORY_CONFIG, type Product, type CalcType,
 import { TARIFF_CONFIG } from '@/lib/status-config'
 import { Spinner } from '@/components/ui/Spinner'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
+import { WorkRatesCard } from '@/components/products/WorkRatesCard'
 
 function formatMoney(value: number): string {
   return `${Math.round(value).toLocaleString('uz-UZ').replace(/,/g, ' ')} so'm`
@@ -179,6 +180,8 @@ export default function ProductsPage() {
           </>
         )}
       </section>
+
+      {!loading && products && <WorkRatesCard products={products} />}
 
       {formOpen && <ProductFormDialog onClose={() => setFormOpen(false)} />}
       {editTarget && <ProductFormDialog product={editTarget} onClose={() => setEditTarget(null)} />}

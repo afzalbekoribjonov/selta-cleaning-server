@@ -25,7 +25,8 @@ import { TARIFF_KEYS } from "./tariffConfig";
  * mahsulotlarini o'qirdi.
  */
 
-export const WORK_SUMMARY_VERSION = 1;
+/** 2: qayta yuvish alohida (`rewashed`), qatorlarda productId. */
+export const WORK_SUMMARY_VERSION = 2;
 /** Shu kundan yangi kunlar keshlanmaydi (buyurtmalar hali o'lchanayotgan bo'ladi). */
 export const FRESH_DAYS = 7;
 
@@ -43,6 +44,8 @@ export interface WorkLine {
   amount: number;
   /** Mahsulotlar narxi (mijoz to'laydigan). */
   price: number;
+  /** Katalogdagi mahsulot — ishbay narxi shu bo'yicha topiladi (eski yozuvlarda yo'q). */
+  productId?: string | null;
 }
 
 export type Lines = Record<string, WorkLine>;
@@ -53,6 +56,8 @@ export interface EmployeeWork {
   delivered: Lines;
   /** Shu xodim YUVGAN, keyin qayta yuvishga qaytarilgan mahsulotlar. */
   returned: Lines;
+  /** Qaytgan mahsulotni qayta yuvgani — haq to'lanmaydi, "Yuvildi"ga qo'shilmaydi. */
+  rewashed: Lines;
   /** Topshirish pullari: mahsulotlar narxi va mijozdan olingan. */
   deliveredMoney: { value: number; collected: number; cash: number; card: number; orders: number };
   /** Joyida yuvishni o'zi yakunlagan (pulini olgan) buyurtmalar. */
@@ -91,6 +96,7 @@ export function emptyWork(): EmployeeWork {
     packed: {},
     delivered: {},
     returned: {},
+    rewashed: {},
     deliveredMoney: { value: 0, collected: 0, cash: 0, card: 0, orders: 0 },
     onsite: { orders: 0, revenue: 0, collected: 0 },
     onsiteTeam: { orders: 0, revenue: 0 },
@@ -112,6 +118,7 @@ export function addLine(lines: Lines, line: WorkLine): void {
     cur.count += line.count;
     cur.amount = round2(cur.amount + line.amount);
     cur.price += line.price;
+    if (!cur.productId && line.productId) cur.productId = line.productId;
   } else {
     lines[key] = { ...line, amount: round2(line.amount) };
   }
@@ -127,6 +134,7 @@ export function mergeWork(into: EmployeeWork, from: EmployeeWork): void {
   mergeLines(into.packed, from.packed);
   mergeLines(into.delivered, from.delivered);
   mergeLines(into.returned, from.returned);
+  mergeLines(into.rewashed, from.rewashed ?? {});
   for (const k of ["value", "collected", "cash", "card", "orders"] as const) into.deliveredMoney[k] += from.deliveredMoney[k];
   for (const k of ["orders", "revenue", "collected"] as const) into.onsite[k] += from.onsite[k];
   into.onsiteTeam.orders += from.onsiteTeam.orders;
@@ -158,19 +166,25 @@ interface OrderInfo {
   team: string[];
   /** itemId -> tarif */
   itemTariffs: Map<string, string>;
+  /** itemId -> katalogdagi mahsulot */
+  itemProducts: Map<string, string>;
 }
 
 function orderInfo(o: Record<string, unknown>): OrderInfo {
   const itemTariffs = new Map<string, string>();
+  const itemProducts = new Map<string, string>();
   if (Array.isArray(o.itemsMirror)) {
     for (const m of o.itemsMirror as Record<string, unknown>[]) {
-      if (m && typeof m.id === "string" && typeof m.tariff === "string") itemTariffs.set(m.id, m.tariff);
+      if (!m || typeof m.id !== "string") continue;
+      if (typeof m.tariff === "string") itemTariffs.set(m.id, m.tariff);
+      if (typeof m.productId === "string") itemProducts.set(m.id, m.productId);
     }
   }
   return {
     tariff: typeof o.tariff === "string" ? o.tariff : null,
     team: Array.isArray(o.assignedTeam) ? (o.assignedTeam as unknown[]).filter((x): x is string => typeof x === "string") : [],
     itemTariffs,
+    itemProducts,
   };
 }
 
@@ -240,6 +254,8 @@ export function buildDayWork(
     const tariff = normalizeTariff(
       typeof e.tariff === "string" ? e.tariff : (itemId && info(orderId).itemTariffs.get(itemId)) ?? info(orderId).tariff,
     );
+    // Katalogdagi mahsulot: yangi hodisada bor, eskisida — buyurtma nusxasidan (bo'lsa).
+    const productId = typeof e.productId === "string" && e.productId ? e.productId : itemId ? info(orderId).itemProducts.get(itemId) : undefined;
     const line = (): WorkLine => ({
       name: cleanName(e.itemName),
       tariff,
@@ -247,6 +263,7 @@ export function buildDayWork(
       count: 1,
       amount: unitAmountOf(calcType, num(e.qty)),
       price,
+      ...(productId ? { productId } : {}),
     });
 
     if (!employeeId) continue;
@@ -259,6 +276,9 @@ export function buildDayWork(
         break;
       case "returned":
         if (itemId) addLine(work(employeeId).returned, line());
+        break;
+      case "rewashed":
+        if (itemId) addLine(work(employeeId).rewashed, line());
         break;
       case "delivered": {
         const w = work(employeeId);

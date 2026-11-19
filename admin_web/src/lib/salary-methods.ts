@@ -3,26 +3,14 @@ export interface SalaryField {
   key: string
   label: string
   hint?: string
-  /** Birlik narxlari bitta guruhda (ixcham 2 ustun) ko'rsatiladi. */
-  rate?: boolean
 }
-
-/**
- * Ishbay birlik narxlari — m², metr, kg va dona bir-biriga qo'shilmaydi,
- * shuning uchun har biri alohida narx (server: lib/salaryCalc.ts UNIT_RATE_KEYS).
- * Avval faqat m² bor edi — metr/kg/dona mahsulotlar uchun maosh 0 chiqardi.
- */
-const unitRates = (sqmHint: string): SalaryField[] => [
-  { key: 'pricePerSqm', label: '1 m²', hint: sqmHint, rate: true },
-  { key: 'pricePerMeter', label: '1 metr', rate: true },
-  { key: 'pricePerKg', label: '1 kg', rate: true },
-  { key: 'pricePerPiece', label: '1 dona', rate: true },
-]
 
 export interface SalaryMethodInfo {
   label: string
   description: string
   fields: SalaryField[]
+  /** Ishbay narxlari mahsulotda (Mahsulotlar bo'limi) — xodimga kiritilmaydi. */
+  piecework?: boolean
 }
 
 export const SALARY_METHODS: Record<string, SalaryMethodInfo> = {
@@ -48,15 +36,17 @@ export const SALARY_METHODS: Record<string, SalaryMethodInfo> = {
       { key: 'percentOfCashCollected', label: "Yig'ilgan puldan (%)" },
     ],
   },
-  finishing: {
-    label: 'Pardozlash',
-    description: 'Qadoqlagan hajmi × birlik narxi (m², metr, kg, dona)',
-    fields: unitRates('500 – 1500'),
-  },
   washing: {
-    label: 'Yuvish',
-    description: 'Baza + yuvgan hajmi × birlik narxi (m², metr, kg, dona)',
-    fields: [{ key: 'baseAmount', label: "Baza summa (so'm)" }, ...unitRates('1000 – 2000')],
+    label: 'Fiksa + ishbay',
+    description: "Oylik fiksa + yuvgan va qadoqlagan hajmi × mahsulot narxi",
+    fields: [{ key: 'baseAmount', label: "Oylik fiksa (so'm)", hint: "0 bo'lsa — faqat ishbay" }],
+    piecework: true,
+  },
+  finishing: {
+    label: 'Ishbay',
+    description: 'Yuvgan va qadoqlagan hajmi × mahsulot narxi',
+    fields: [],
+    piecework: true,
   },
   furniture_onsite_percent: {
     label: 'Mebel / joyida yuvish',
@@ -75,7 +65,7 @@ export const SALARY_METHODS: Record<string, SalaryMethodInfo> = {
  */
 export const DEPARTMENT_SALARY_METHODS: Record<string, string[]> = {
   dispatcher: ['fixed', 'fixed_percent'],
-  worker: ['fixed', 'fixed_percent', 'washing', 'finishing', 'furniture_onsite_percent'],
+  worker: ['washing', 'finishing', 'fixed', 'furniture_onsite_percent'],
   delivery: ['fixed', 'fixed_percent', 'delivery'],
   qc: ['fixed', 'fixed_percent'],
   supervisor: ['fixed', 'fixed_percent'],

@@ -2,8 +2,19 @@ import { Router } from "express";
 import { FieldValue } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
+import { invalidateProductRates, MAX_WORK_RATE } from "../lib/productRates";
 
 export const productsRouter = Router();
+
+// Nom o'zgarsa yoki mahsulot o'chsa — ishbay narxlari keshi (lib/productRates.ts) yangilanadi.
+productsRouter.use((req, res, next) => {
+  if (/^\/admin(Create|Update|Delete)Product$|^\/adminSetProductWorkRates$/.test(req.path)) {
+    res.on("finish", () => {
+      if (res.statusCode < 400) invalidateProductRates();
+    });
+  }
+  next();
+});
 
 const CALC_TYPES = new Set(["sqm", "meter", "kg", "count", "size"]);
 const VALID_TARIFFS = new Set(["express", "comfort", "standart", "premium"]);
@@ -159,6 +170,55 @@ productsRouter.post("/adminSetConditionSurcharges", withAuth, requireAdmin, asyn
     );
 
     res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+/**
+ * Ishbay narxlari — mahsulot bo'yicha, bir yo'la bir nechta mahsulot:
+ * `{ rates: { [productId]: { wash, pack } } }`. Qiymat — 1 birlik
+ * (mahsulot hisoblash turiga qarab m², metr, kg yoki dona) uchun so'm;
+ * `null` yoki 0 — narx olib tashlanadi (ishbay hisoblanmaydi).
+ */
+productsRouter.post("/adminSetProductWorkRates", withAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  try {
+    const raw = req.body?.rates;
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      throw new ApiError(400, "invalid-argument", "rates obyekt bo'lishi kerak");
+    }
+    const entries = Object.entries(raw as Record<string, unknown>);
+    if (entries.length === 0) throw new ApiError(400, "invalid-argument", "O'zgarish yo'q");
+    if (entries.length > 300) throw new ApiError(400, "invalid-argument", "Bir yo'la 300 tadan ko'p mahsulot");
+
+    const clean = (v: unknown, label: string): number | null => {
+      if (v === null || v === undefined || v === 0) return null;
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > MAX_WORK_RATE) {
+        throw new ApiError(400, "invalid-argument", `${label} narxi 0 dan ${MAX_WORK_RATE} gacha bo'lishi kerak`);
+      }
+      return Math.round(v * 100) / 100;
+    };
+    const updates = entries.map(([productId, value]) => {
+      if (!productId || productId.includes("/")) throw new ApiError(400, "invalid-argument", "productId noto'g'ri");
+      const r = (value ?? {}) as Record<string, unknown>;
+      return { productId, wash: clean(r.wash, "Yuvish"), pack: clean(r.pack, "Qadoqlash") };
+    });
+
+    const refs = updates.map((u) => db.collection("products").doc(u.productId));
+    const snaps = await db.getAll(...refs);
+    const missing = snaps.filter((s) => !s.exists).map((s) => s.id);
+    if (missing.length > 0) throw new ApiError(404, "not-found", "Mahsulot topilmadi");
+
+    const batch = db.batch();
+    updates.forEach((u, i) => {
+      batch.update(refs[i], {
+        workRates: { wash: u.wash, pack: u.pack },
+        workRatesUpdatedAt: FieldValue.serverTimestamp(),
+        workRatesUpdatedBy: req.auth!.uid,
+      });
+    });
+    await batch.commit();
+    res.json({ ok: true, updated: updates.length });
   } catch (err) {
     sendError(res, err);
   }

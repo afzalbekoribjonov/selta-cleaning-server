@@ -29,6 +29,7 @@ export function EmployeeWorkCard({
   const worked = hasAnyWork(w)
   const method = e.salary ? (SALARY_METHODS[e.salary.method]?.label ?? e.salary.method) : null
   const returnedCount = countOf(w.returned)
+  const rewashed = w.rewashed ?? []
 
   const summary: { label: string; value: string; tone?: 'danger' }[] = []
   if (w.washed.length) summary.push({ label: 'Yuvdi', value: unitsText(w.washed) })
@@ -37,6 +38,7 @@ export function EmployeeWorkCard({
   if (w.created.orders) summary.push({ label: 'Ochdi', value: `${w.created.orders} ta buyurtma` })
   if (w.pickedUp.orders) summary.push({ label: 'Olib keldi', value: `${w.pickedUp.orders} ta buyurtma` })
   if (w.onsite.orders || w.onsiteTeam.orders) summary.push({ label: 'Joyida', value: `${Math.max(w.onsite.orders, w.onsiteTeam.orders)} ta` })
+  if (rewashed.length) summary.push({ label: 'Qayta yuvdi', value: unitsText(rewashed) })
   if (returnedCount) summary.push({ label: 'Qayta yuvishga', value: `${returnedCount} ta`, tone: 'danger' })
 
   const payAmount = e.pay ? (
@@ -218,6 +220,19 @@ export function EmployeeWorkCard({
               </div>
             </Block>
           )}
+          {rewashed.length > 0 && (
+            <Block
+              title={
+                <span className="inline-flex items-center gap-1.5">
+                  Qayta yuvdi
+                  <span className="rounded-full bg-warning-bg px-2 py-0.5 text-[10px] font-bold text-warning">haq to'lanmaydi</span>
+                </span>
+              }
+              hint={unitsText(rewashed)}
+            >
+              <WorkLinesTable lines={rewashed} />
+            </Block>
+          )}
           {w.returned.length > 0 && (
             <Block
               title={
@@ -293,15 +308,26 @@ function PayBreakdown({ pay, isMonth, onConfigure }: { pay: NonNullable<WorkEmpl
         </button>
       </div>
       <dl className="space-y-1.5 text-sm">
-        {pay.lines.map((l, i) => (
-          <div key={i} className="flex items-start justify-between gap-3">
-            <dt className="min-w-0">
-              <div className="font-semibold text-ink">{l.label}</div>
-              <div className="text-xs text-gray-dark">{l.detail}</div>
-            </dt>
-            <dd className="shrink-0 whitespace-nowrap font-bold text-ink">{formatMoney(l.amount)}</dd>
-          </div>
-        ))}
+        {pay.lines.map((l, i) => {
+          // Server: mahsulotga ishbay narxi kiritilmagan qator (salaryCalc.ts pieceLines).
+          const missingRate = l.label.endsWith('narxi kiritilmagan')
+          return (
+            <div key={i} className={cn('flex items-start justify-between gap-3', missingRate && '-mx-2 rounded-lg bg-warning-bg px-2 py-1.5')}>
+              <dt className="min-w-0">
+                <div className={cn('font-semibold', missingRate ? 'text-warning' : 'text-ink')}>{l.label}</div>
+                <div className="text-xs text-gray-dark">
+                  {l.detail}
+                  {missingRate && (
+                    <Link to="/products#ishbay" className="ml-1 font-bold text-brand-primary hover:underline">
+                      Ochish
+                    </Link>
+                  )}
+                </div>
+              </dt>
+              <dd className="shrink-0 whitespace-nowrap font-bold text-ink">{formatMoney(l.amount)}</dd>
+            </div>
+          )
+        })}
         {pay.base > 0 && (
           <div className="flex items-start justify-between gap-3">
             <dt className="min-w-0">

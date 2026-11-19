@@ -204,6 +204,14 @@ export function seedDemoStore(store: Map<string, Data>) {
     ['Yostiq', 'count', 'boshqa', PRICE.count],
     ['Adyol', 'kg', 'boshqa', PRICE.kg],
   ]
+  // Ishbay narxlari (1 birlik): yuvish, qadoqlash. Adyolda qadoqlash ataylab yo'q — ogohlantirish ko'rinsin.
+  const workRates: Record<string, { wash: number | null; pack: number | null }> = {
+    Gilam: { wash: 1500, pack: 500 },
+    "Gilam (qo'lda to'qilgan)": { wash: 2500, pack: 700 },
+    Parda: { wash: 900, pack: 300 },
+    Yostiq: { wash: 3000, pack: 1000 },
+    Adyol: { wash: 1200, pack: null },
+  }
   catalog.forEach(([name, calcType, category, prices], i) => {
     store.set(`products/p${i + 1}`, {
       name,
@@ -211,6 +219,7 @@ export function seedDemoStore(store: Map<string, Data>) {
       category,
       tariffs: Object.keys(prices),
       pricesByTariff: Object.fromEntries(Object.entries(prices).map(([t, p]) => [t, { unitPrice: p }])),
+      workRates: workRates[name],
     })
   })
   store.set('products/p6', {

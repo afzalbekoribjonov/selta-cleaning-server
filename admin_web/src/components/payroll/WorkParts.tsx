@@ -1,6 +1,7 @@
 import { UNIT_LABELS, formatMoney, formatQty } from '@/lib/units'
 import { cn } from '@/lib/utils'
-import { sortByTariff, tariffMeta, unitRateFor, unitsText, type SalaryConfig, type Stage, type WorkLine } from '@/lib/work-period'
+import { Link } from 'react-router-dom'
+import { pieceRate, sortByTariff, tariffMeta, unitsText, type SalaryConfig, type Stage, type WorkLine } from '@/lib/work-period'
 
 /** Maosh va statistika sahifasining kichik qismlari — bir xil ko'rinish. */
 
@@ -35,8 +36,8 @@ export function WorkLinesTable({
   tone?: 'default' | 'danger'
   showPrice?: boolean
 }) {
-  const rateOf = (l: WorkLine) => (stage ? unitRateFor(salary ?? null, stage, l.unit) : null)
-  const withPay = lines.some((l) => rateOf(l) !== null)
+  const rateOf = (l: WorkLine) => (stage ? pieceRate(salary ?? null, stage, l) : undefined)
+  const withPay = lines.some((l) => rateOf(l) !== undefined)
   const rows = sortByTariff(lines)
   const totalPay = withPay ? rows.reduce((s, l) => s + Math.round(l.amount * (rateOf(l) ?? 0)), 0) : 0
 
@@ -71,7 +72,13 @@ export function WorkLinesTable({
                 </td>
                 {withPay && (
                   <td className="hidden whitespace-nowrap px-2 py-2 text-right text-gray-dark md:table-cell">
-                    {rate ? `× ${formatMoney(rate)}` : <span className="text-warning">narx yo'q</span>}
+                    {rate ? (
+                      `× ${formatMoney(rate)}`
+                    ) : (
+                      <Link to="/products#ishbay" className="font-semibold text-warning hover:underline">
+                        narx yo'q
+                      </Link>
+                    )}
                   </td>
                 )}
                 {withPay && (

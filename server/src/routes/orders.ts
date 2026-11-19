@@ -686,6 +686,7 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         itemId,
         itemNumber: (item.itemNumber as number | undefined) ?? null,
         itemName,
+        productId: (item.productId as string | undefined) ?? null,
         calcType: (item.calcType as string | undefined) ?? null,
         tariff: (item.tariff as string | undefined) ?? null,
         qty: (item.qty as number | undefined) ?? null,
@@ -739,10 +740,19 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
             "Mahsulot narxi 0 so'm — avval o'lchab, narxini kiriting",
           );
         }
-        itemUpdate.washedBy = employeeId;
-        itemUpdate.washedAt = FieldValue.serverTimestamp();
         orderUpdate.washedByEmployees = FieldValue.arrayUnion(employeeId);
-        logDailyActivity(tx, now, { ...activityBase(), type: "washed" });
+        if (item.rewashPending === true) {
+          // Qaytgan mahsulotni QAYTA yuvish: haq to'lanmaydi va "yuvildi"ga
+          // qo'shilmaydi. Asl yuvgan xodim (washedBy) o'zgarmaydi.
+          itemUpdate.rewashPending = false;
+          itemUpdate.rewashedBy = employeeId;
+          itemUpdate.rewashedAt = FieldValue.serverTimestamp();
+          logDailyActivity(tx, now, { ...activityBase(), type: "rewashed" });
+        } else {
+          itemUpdate.washedBy = employeeId;
+          itemUpdate.washedAt = FieldValue.serverTimestamp();
+          logDailyActivity(tx, now, { ...activityBase(), type: "washed" });
+        }
       }
       if (toStatus === "ready") {
         itemUpdate.qcStatus = "passed";
@@ -764,7 +774,11 @@ ordersRouter.post("/changeItemStatus", withAuth, async (req: AuthedRequest, res)
         itemUpdate.qcNote = qcNote ?? null;
         // Qayta yuvish — mahsulotni YUVGAN xodim hisobiga yoziladi (maosh va
         // statistika sahifasidagi "qayta yuvishga qaytganlar" ko'rsatkichi).
-        returnedWasher = (item.washedBy as string | undefined) ?? (item.washingBy as string | undefined) ?? null;
+        // Qayta yuvilgandan keyin yana qaytsa — qayta yuvgan xodim javobgar.
+        returnedWasher =
+          (item.rewashedBy as string | undefined) ?? (item.washedBy as string | undefined) ?? (item.washingBy as string | undefined) ?? null;
+        itemUpdate.rewashPending = true;
+        itemUpdate.returnCount = (Number(item.returnCount) || 0) + 1;
         if (returnedWasher) {
           logDailyActivity(tx, now, {
             ...activityBase(),

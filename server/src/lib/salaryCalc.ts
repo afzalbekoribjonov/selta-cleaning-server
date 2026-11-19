@@ -1,19 +1,22 @@
+import { EMPTY_RATES, rateFor, type ProductRates, type RateStage } from "./productRates";
 import { countOf, unitTotals, type EmployeeWork, type Lines, type Unit } from "./workSummary";
 
 /**
  * Maosh hisobi — TOZA funksiya (Firestore'siz, sinovdan o'tadi).
  *
  * Har bir usul ikki qismdan iborat:
- *  - ISHBAY (o'zgaruvchan) — tanlangan oraliqdagi ishdan: yuvilgan hajm ×
- *    birlik narxi, ochilgan buyurtmalar summasidan foiz va h.k. Istalgan
- *    kun yoki oraliq uchun aniq hisoblanadi;
- *  - OYLIK BAZA (qattiq qism) — oyiga bir marta. Faqat kalendar oyi
- *    tanlanganda jamiga qo'shiladi, aks holda alohida ko'rsatiladi
- *    (bir kun uchun oylikni bo'lib qo'yish noto'g'ri tasavvur berardi).
+ *  - ISHBAY (o'zgaruvchan) — tanlangan oraliqdagi ishdan: yuvilgan va
+ *    qadoqlangan hajm × MAHSULOT narxi, ochilgan buyurtmalar summasidan
+ *    foiz va h.k. Istalgan kun yoki oraliq uchun aniq hisoblanadi;
+ *  - OYLIK FIKSA (qattiq qism) — oyiga bir marta. Faqat kalendar oyi
+ *    tanlanganda jamiga qo'shiladi, aks holda alohida ko'rsatiladi.
  *
- * Birlik narxlari: avval faqat 1 m² narxi bor edi — metr, kg va donalik
- * mahsulotlar uchun ishbay 0 chiqardi. Endi har bir birlik o'z narxiga
- * ega (berilmagani 0).
+ * Ishbay narxlari mahsulotda (Mahsulotlar bo'limi, lib/productRates.ts):
+ * har bir mahsulotning 1 birligi (m², metr, kg, dona) uchun yuvish va
+ * qadoqlash narxi. Xodim profilida faqat usul va fiksa summasi qoladi.
+ *
+ * Qayta yuvish (sifat nazoratidan qaytgan mahsulotni yana yuvish) uchun
+ * haq TO'LANMAYDI — u `rewashed` qatorlarida alohida sanaladi.
  */
 
 export interface SalaryConfig {
@@ -23,7 +26,7 @@ export interface SalaryConfig {
 
 export interface PayLine {
   label: string;
-  /** "213,66 m² × 1 500" kabi izoh (so'mda emas). */
+  /** "33 ta · 162,6 m² · 28 metr" kabi izoh (so'mda emas). */
   detail: string;
   amount: number;
 }
@@ -32,9 +35,9 @@ export interface PayResult {
   method: string;
   /** Oraliqdagi ishbay qismi. */
   variable: number;
-  /** Oylik qattiq qism (baza / fiksa). */
+  /** Oylik qattiq qism (fiksa). */
   base: number;
-  /** Baza jamiga qo'shilganmi (faqat oy tanlanganda). */
+  /** Fiksa jamiga qo'shilganmi (faqat oy tanlanganda). */
   baseIncluded: boolean;
   /** Shu oy uchun berilgan avanslar (faqat oy tanlanganda ayiriladi). */
   advances: number;
@@ -42,12 +45,8 @@ export interface PayResult {
   lines: PayLine[];
 }
 
-export const UNIT_RATE_KEYS: Record<Unit, string> = {
-  sqm: "pricePerSqm",
-  meter: "pricePerMeter",
-  kg: "pricePerKg",
-  dona: "pricePerPiece",
-};
+/** Mahsulot narxlari bo'yicha ishbay hisoblanadigan usullar. */
+export const PIECEWORK_METHODS = new Set(["washing", "finishing"]);
 
 const UNIT_LABELS: Record<Unit, string> = { sqm: "m²", meter: "metr", kg: "kg", dona: "dona" };
 
@@ -62,31 +61,49 @@ function moneyText(n: number): string {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
-/** Hajm × birlik narxi — har bir birlik alohida qator. */
-function unitRateLines(label: string, lines: Lines, params: Record<string, number>): PayLine[] {
+function unitsText(lines: Lines): string {
   const totals = unitTotals(lines);
-  const out: PayLine[] = [];
-  for (const unit of Object.keys(UNIT_RATE_KEYS) as Unit[]) {
-    const amount = totals[unit];
-    if (!(amount > 0)) continue;
-    const rate = params[UNIT_RATE_KEYS[unit]] ?? 0;
+  return (Object.keys(UNIT_LABELS) as Unit[])
+    .filter((u) => totals[u] > 0)
+    .map((u) => `${qtyText(totals[u])} ${UNIT_LABELS[u]}`)
+    .join(" · ");
+}
+
+/**
+ * Bosqich ishbayi: har bir qator hajmi × shu mahsulotning narxi. Narxi
+ * kiritilmagan mahsulotlar 0 so'm, lekin alohida qatorda nomi bilan
+ * ko'rsatiladi — admin darhol qaysi narx yetishmayotganini ko'radi.
+ */
+function pieceLines(label: string, lines: Lines, rates: ProductRates, stage: RateStage): PayLine[] {
+  const list = Object.values(lines);
+  if (list.length === 0) return [];
+  let amount = 0;
+  const missing = new Set<string>();
+  for (const line of list) {
+    const rate = rateFor(rates, line, stage);
+    if (rate === null) missing.add(line.name);
+    else amount += line.amount * rate;
+  }
+  const out: PayLine[] = [{ label, detail: `${countOf(lines)} ta · ${unitsText(lines)}`, amount: round(amount) }];
+  if (missing.size > 0) {
+    const names = [...missing];
     out.push({
-      label: `${label} (${UNIT_LABELS[unit]})`,
-      detail: rate > 0 ? `${qtyText(amount)} ${UNIT_LABELS[unit]} × ${moneyText(rate)}` : `${qtyText(amount)} ${UNIT_LABELS[unit]} — narx belgilanmagan`,
-      amount: round(amount * rate),
+      label: `${label}: narxi kiritilmagan`,
+      detail: `${names.slice(0, 3).join(", ")}${names.length > 3 ? ` va yana ${names.length - 3} ta` : ""} — Mahsulotlar bo'limida kiriting`,
+      amount: 0,
     });
   }
-  if (out.length === 0) out.push({ label, detail: "Shu davrda ish yo'q", amount: 0 });
   return out;
 }
 
 export function computePay(
   salary: SalaryConfig | null,
   work: EmployeeWork,
-  opts: { month: boolean; advances: number },
+  opts: { month: boolean; advances: number; rates?: ProductRates },
 ): PayResult | null {
   if (!salary?.method) return null;
   const p = salary.params ?? {};
+  const rates = opts.rates ?? EMPTY_RATES;
   const lines: PayLine[] = [];
   let base = 0;
 
@@ -123,13 +140,12 @@ export function computePay(
       break;
     }
     case "washing":
-      base = p.baseAmount ?? 0;
-      lines.push(...unitRateLines("Yuvish", work.washed, p));
-      break;
     case "finishing":
-      // Pardozlash — mahsulotni yakunlab qadoqlash bosqichi (qadoqlagan
-      // xodim). Avval xato ravishda yuvilgan mahsulotlardan hisoblanardi.
-      lines.push(...unitRateLines("Pardozlash", work.packed, p));
+      // Ishbay: o'zi yuvgan VA qadoqlagan mahsulotlar — mahsulot narxlari
+      // bo'yicha. "washing" — fiksa + ishbay, "finishing" — faqat ishbay.
+      base = salary.method === "washing" ? (p.baseAmount ?? 0) : 0;
+      lines.push(...pieceLines("Yuvish", work.washed, rates, "wash"), ...pieceLines("Qadoqlash", work.packed, rates, "pack"));
+      if (lines.length === 0) lines.push({ label: "Ishbay", detail: "Shu davrda ish yo'q", amount: 0 });
       break;
     case "furniture_onsite_percent": {
       const percent = p.percent ?? 0;
@@ -153,7 +169,7 @@ export function computePay(
 /** Xodim shu davrda umuman ish qilganmi (ro'yxatda ko'rsatish uchun). */
 export function hasWork(w: EmployeeWork): boolean {
   return (
-    countOf(w.washed) + countOf(w.packed) + countOf(w.delivered) + countOf(w.returned) > 0 ||
+    countOf(w.washed) + countOf(w.packed) + countOf(w.delivered) + countOf(w.returned) + countOf(w.rewashed) > 0 ||
     w.created.orders + w.pickedUp.orders + w.onsite.orders + w.onsiteTeam.orders + w.deliveredMoney.orders > 0
   );
 }

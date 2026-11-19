@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { businessDateString, businessDayRangeUtc } from "../lib/businessTime";
+import { loadProductRates, rateFor, type ProductRates, type RateStage } from "../lib/productRates";
 import { computePay, hasWork, type PayResult, type SalaryConfig } from "../lib/salaryCalc";
 import {
   addLine,
@@ -50,12 +51,17 @@ export function monthOfRange(from: string, to: string, today: string): string | 
 const sortLines = (lines: Lines): WorkLine[] =>
   Object.values(lines).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
 
-function serializeWork(w: EmployeeWork) {
+/** Yuvish/qadoqlash qatorlariga mahsulotning 1 birlik narxi (null — kiritilmagan). */
+const withRates = (lines: Lines, rates: ProductRates, stage: RateStage) =>
+  sortLines(lines).map((l) => ({ ...l, rate: rateFor(rates, l, stage) }));
+
+function serializeWork(w: EmployeeWork, rates: ProductRates) {
   return {
-    washed: sortLines(w.washed),
-    packed: sortLines(w.packed),
+    washed: withRates(w.washed, rates, "wash"),
+    packed: withRates(w.packed, rates, "pack"),
     delivered: sortLines(w.delivered),
     returned: sortLines(w.returned),
+    rewashed: sortLines(w.rewashed),
     deliveredMoney: w.deliveredMoney,
     onsite: w.onsite,
     onsiteTeam: w.onsiteTeam,
@@ -78,11 +84,12 @@ workRouter.post("/adminWorkPeriod", withAuth, requireAdmin, async (req: AuthedRe
     const month = monthOfRange(from, to, today);
     const force = req.body?.force === true;
 
-    const [employeesSnap, period, advancesByEmployee, existingRuns] = await Promise.all([
+    const [employeesSnap, period, advancesByEmployee, existingRuns, rates] = await Promise.all([
       db.collection("employees").get(),
       loadPeriodWork(from, to, { force }),
       month ? loadAdvances(month) : Promise.resolve(new Map<string, number>()),
       month ? db.collectionGroup("payrollRuns").where("yearMonth", "==", month).get() : Promise.resolve(null),
+      loadProductRates(),
     ]);
 
     const rangeStart = businessDayRangeUtc(from)!.start;
@@ -105,7 +112,7 @@ workRouter.post("/adminWorkPeriod", withAuth, requireAdmin, async (req: AuthedRe
       const salary = e.salary && typeof e.salary === "object" && typeof (e.salary as SalaryConfig).method === "string"
         ? { method: (e.salary as SalaryConfig).method, params: ((e.salary as SalaryConfig).params ?? {}) as Record<string, number> }
         : null;
-      const pay: PayResult | null = computePay(salary, work, { month: !!month, advances: advancesByEmployee.get(doc.id) ?? 0 });
+      const pay: PayResult | null = computePay(salary, work, { month: !!month, advances: advancesByEmployee.get(doc.id) ?? 0, rates });
 
       employees.push({
         id: doc.id,
@@ -116,7 +123,7 @@ workRouter.post("/adminWorkPeriod", withAuth, requireAdmin, async (req: AuthedRe
         specializations: Array.isArray(e.specializations) ? e.specializations : [],
         canPack: e.canPack === true,
         salary,
-        work: serializeWork(work),
+        work: serializeWork(work, rates),
         pay,
       });
 
@@ -153,16 +160,26 @@ workRouter.post("/adminWorkPeriod", withAuth, requireAdmin, async (req: AuthedRe
       await batch.commit().catch((err) => console.error("payrollRuns yozib bo'lmadi:", err));
     }
 
-    // Statistika: mahsulot × tarif × birlik bo'yicha — yuvildi / qadoqlandi / topshirildi / qayta yuvish.
-    const products = new Map<string, { name: string; tariff: string; unit: string; washed: WorkLine | null; packed: WorkLine | null; delivered: WorkLine | null; returned: WorkLine | null }>();
-    const stages = ["washed", "packed", "delivered", "returned"] as const;
-    const stageTotals: Record<(typeof stages)[number], Lines> = { washed: {}, packed: {}, delivered: {}, returned: {} };
+    // Statistika: mahsulot × tarif × birlik — yuvildi / qadoqlandi / topshirildi / qaytdi / qayta yuvildi.
+    type Stage = "washed" | "packed" | "delivered" | "returned" | "rewashed";
+    const products = new Map<string, { name: string; tariff: string; unit: string } & Record<Stage, WorkLine | null>>();
+    const stages: Stage[] = ["washed", "packed", "delivered", "returned", "rewashed"];
+    const stageTotals: Record<Stage, Lines> = { washed: {}, packed: {}, delivered: {}, returned: {}, rewashed: {} };
     for (const w of period.values()) {
       for (const stage of stages) for (const line of Object.values(w[stage])) addLine(stageTotals[stage], line);
     }
     for (const stage of stages) {
       for (const [key, line] of Object.entries(stageTotals[stage])) {
-        const row = products.get(key) ?? { name: line.name, tariff: line.tariff, unit: line.unit, washed: null, packed: null, delivered: null, returned: null };
+        const row = products.get(key) ?? {
+          name: line.name,
+          tariff: line.tariff,
+          unit: line.unit,
+          washed: null,
+          packed: null,
+          delivered: null,
+          returned: null,
+          rewashed: null,
+        };
         row[stage] = line;
         products.set(key, row);
       }

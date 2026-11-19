@@ -9,7 +9,8 @@ const STAGES: { value: Stage; label: string; empty: string }[] = [
   { value: 'washed', label: 'Yuvildi', empty: 'Bu davrda yuvilgan mahsulot yo\'q' },
   { value: 'packed', label: 'Qadoqlandi', empty: 'Bu davrda qadoqlangan mahsulot yo\'q' },
   { value: 'delivered', label: 'Topshirildi', empty: 'Bu davrda topshirilgan mahsulot yo\'q' },
-  { value: 'returned', label: 'Qayta yuvish', empty: 'Bu davrda qayta yuvishga qaytgan mahsulot yo\'q' },
+  { value: 'returned', label: 'Qaytarildi', empty: 'Bu davrda qayta yuvishga qaytgan mahsulot yo\'q' },
+  { value: 'rewashed', label: 'Qayta yuvildi', empty: 'Bu davrda qayta yuvilgan mahsulot yo\'q' },
 ]
 
 /**
@@ -45,6 +46,7 @@ export function ProductStatsPanel({ products }: { products: ProductStat[] }) {
     STAGES.map((s) => [s.value, products.reduce((sum, p) => sum + (p[s.value]?.count ?? 0), 0)]),
   ) as Record<Stage, number>
   const current = STAGES.find((s) => s.value === stage)!
+  const unpaidNote = stage === 'rewashed' && lines.length > 0
 
   return (
     <Panel
@@ -58,7 +60,7 @@ export function ProductStatsPanel({ products }: { products: ProductStat[] }) {
           options={STAGES.map((s) => ({
             value: s.value,
             label: (
-              <span className={s.value === 'returned' && counts.returned > 0 ? 'text-danger' : undefined}>
+              <span className={(s.value === 'returned' || s.value === 'rewashed') && counts[s.value] > 0 ? 'text-danger' : undefined}>
                 {s.label} <span className="opacity-60">{counts[s.value]}</span>
               </span>
             ),
@@ -70,6 +72,11 @@ export function ProductStatsPanel({ products }: { products: ProductStat[] }) {
         <p className="rounded-xl bg-bg py-10 text-center text-sm text-gray-dark">{current.empty}</p>
       ) : (
         <div className="space-y-4">
+          {unpaidNote && (
+            <p className="rounded-xl bg-warning-bg px-3 py-2 text-xs font-semibold text-warning">
+              Qayta yuvish uchun haq to'lanmaydi va u "Yuvildi" jamiga qo'shilmaydi.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             {byTariff.map(({ tariff, lines: tl }) => {
               const m = tariffMeta(tariff)

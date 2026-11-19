@@ -418,6 +418,13 @@ const HANDLERS: Record<string, Handler> = {
   }),
   '/adminDailyReport': dailyReport,
   '/adminWorkPeriod': workPeriod,
+  '/adminSetProductWorkRates': (body) => {
+    for (const [id, r] of Object.entries((body.rates ?? {}) as Record<string, Data>)) {
+      const p = demoStore.get(`products/${id}`)
+      if (p) demoStore.set(`products/${id}`, { ...p, workRates: { wash: r.wash ?? null, pack: r.pack ?? null } })
+    }
+    return { ok: true }
+  },
   '/adminTelegramBot': () => ({
     configured: true,
     botUsername: 'selta_hisobot_bot',

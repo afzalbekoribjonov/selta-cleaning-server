@@ -10,6 +10,12 @@ export interface TariffPrice {
   largePrice: number | null
 }
 
+/** Ishbay: 1 birlik (m², metr, kg yoki dona) yuvish va qadoqlash narxi, so'm. */
+export interface WorkRates {
+  wash: number | null
+  pack: number | null
+}
+
 export interface Product {
   id: string
   name: string
@@ -17,7 +23,11 @@ export interface Product {
   category: ProductCategory
   tariffs: string[]
   pricesByTariff: Record<string, TariffPrice>
+  workRates: WorkRates
 }
+
+/** Ishbay birligi — server lib/orderSummary.ts UNIT_BY_CALC_TYPE bilan bir xil. */
+export const WORK_UNIT_LABEL: Record<CalcType, string> = { sqm: 'm²', meter: 'metr', kg: 'kg', count: 'dona', size: 'dona' }
 
 export const CALC_TYPE_CONFIG: Record<CalcType, { label: string; unitLabel: string }> = {
   sqm: { label: 'Kvadrat metr', unitLabel: "so'm / m²" },
@@ -52,6 +62,10 @@ function toProduct(doc: QueryDocumentSnapshot<DocumentData>): Product {
     category: (data.category ?? 'boshqa') as ProductCategory,
     tariffs: data.tariffs ?? [],
     pricesByTariff,
+    workRates: {
+      wash: typeof data.workRates?.wash === 'number' && data.workRates.wash > 0 ? data.workRates.wash : null,
+      pack: typeof data.workRates?.pack === 'number' && data.workRates.pack > 0 ? data.workRates.pack : null,
+    },
   }
 }
 

@@ -4,9 +4,11 @@ const { install, call, docs, under, reset, DIST, Timestamp } = require('./fakedb
 
 install();
 const { buildDayWork, emptyWork, unitTotals } = require(DIST + 'lib/workSummary.js');
-const { computePay } = require(DIST + 'lib/salaryCalc.js');
+const { computePay, hasWork } = require(DIST + 'lib/salaryCalc.js');
+const { ratesFromDocs, invalidateProductRates } = require(DIST + 'lib/productRates.js');
 const { workRouter, monthOfRange } = require(DIST + 'routes/work.js');
 const { ordersRouter } = require(DIST + 'routes/orders.js');
+const { productsRouter } = require(DIST + 'routes/products.js');
 const { isItemInWarehouse, warehouseItemCount } = require(DIST + 'lib/warehouse.js');
 const { businessDateString, businessDayRangeUtc } = require(DIST + 'lib/businessTime.js');
 
@@ -16,7 +18,12 @@ const dayStart = (key) => businessDayRangeUtc(key).start.getTime();
 const ts = (key, h = 10) => Timestamp.fromDate(new Date(dayStart(key) + h * 3600_000));
 const addDays = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
-beforeEach(() => reset());
+beforeEach(() => {
+  reset();
+  invalidateProductRates();
+});
+
+const rates = (list) => ratesFromDocs(list.map(([id, name, wash, pack]) => ({ id, data: { name, workRates: { wash, pack } } })));
 
 function ev(type, employeeId, extra = {}) {
   return {
@@ -81,32 +88,64 @@ test("kun ishi: mahsulot × tarif × birlik, tarif hodisadan yoki nusxadan, nom 
   assert.deepEqual(unitTotals(disp.items), { sqm: 12.5, meter: 0, kg: 0, dona: 3 });
 });
 
-test("maosh: yuvish — har bir birlik o'z narxida; baza faqat oyda; avans ayiriladi", () => {
+test("maosh: ishbay — har bir MAHSULOT o'z narxida (m², metr, kg, dona); fiksa faqat oyda; avans ayiriladi", () => {
   const work = emptyWork();
   work.washed = {
     a: { name: 'Gilam', tariff: 'express', unit: 'sqm', count: 3, amount: 40.5, price: 0 },
     b: { name: 'Parda', tariff: 'comfort', unit: 'meter', count: 2, amount: 8, price: 0 },
     c: { name: 'Yostiq', tariff: 'standart', unit: 'dona', count: 4, amount: 4, price: 0 },
+    d: { name: 'Adyol', tariff: 'standart', unit: 'kg', count: 1, amount: 6.5, price: 0 },
   };
-  const salary = { method: 'washing', params: { baseAmount: 1000000, pricePerSqm: 1500, pricePerMeter: 2000, pricePerPiece: 5000 } };
+  work.packed = { a: { name: 'Gilam', tariff: 'express', unit: 'sqm', count: 1, amount: 10, price: 0 } };
+  const r = rates([
+    ['p1', 'Gilam', 1500, 500],
+    ['p2', 'Parda', 2000, null],
+    ['p3', 'Yostiq', 5000, 1000],
+    ['p4', ' adyol ', 800, null],
+  ]);
+  // Xodimda faqat usul va fiksa — eski birlik narxlari e'tiborsiz.
+  const salary = { method: 'washing', params: { baseAmount: 1000000, pricePerSqm: 99999 } };
 
-  const day = computePay(salary, work, { month: false, advances: 300000 });
-  assert.equal(day.variable, 40.5 * 1500 + 8 * 2000 + 4 * 5000);
+  const day = computePay(salary, work, { month: false, advances: 300000, rates: r });
+  assert.equal(day.variable, 40.5 * 1500 + 8 * 2000 + 4 * 5000 + 6.5 * 800 + 10 * 500);
   assert.equal(day.baseIncluded, false);
   assert.equal(day.advances, 0);
   assert.equal(day.total, day.variable);
-  assert.deepEqual(day.lines.map((l) => l.label), ['Yuvish (m²)', 'Yuvish (metr)', 'Yuvish (dona)']);
-  assert.match(day.lines[0].detail, /40,5 m² × 1 500/);
+  assert.deepEqual(day.lines.map((l) => l.label), ['Yuvish', 'Qadoqlash']);
+  assert.match(day.lines[0].detail, /^10 ta · 40,5 m² · 8 metr · 6,5 kg · 4 dona$/);
 
-  const month = computePay(salary, work, { month: true, advances: 300000 });
+  const month = computePay(salary, work, { month: true, advances: 300000, rates: r });
   assert.equal(month.total, month.variable + 1000000 - 300000);
 
-  // Narxi belgilanmagan birlik — 0, lekin ko'rinadi.
-  const noKg = computePay({ method: 'washing', params: { pricePerSqm: 1000 } }, { ...emptyWork(), washed: { k: { name: 'X', tariff: 'none', unit: 'kg', count: 1, amount: 3, price: 0 } } }, { month: false, advances: 0 });
-  assert.equal(noKg.variable, 0);
-  assert.match(noKg.lines[0].detail, /narx belgilanmagan/);
+  // Narxi kiritilmagan mahsulot — 0 so'm, nomi bilan alohida qatorda.
+  const quilt = { k: { name: "Ko'rpa", tariff: 'none', unit: 'dona', count: 1, amount: 1, price: 0 } };
+  const noRate = computePay({ method: 'finishing', params: {} }, { ...emptyWork(), washed: quilt }, { month: true, advances: 0, rates: r });
+  assert.equal(noRate.variable, 0);
+  assert.equal(noRate.base, 0, "ishbay usulida fiksa yo'q");
+  assert.equal(noRate.lines[1].label, 'Yuvish: narxi kiritilmagan');
+  assert.match(noRate.lines[1].detail, /Ko'rpa — Mahsulotlar bo'limida kiriting/);
+
+  // productId bo'yicha topiladi (nomi boshqacha yozilgan bo'lsa ham).
+  const big = { x: { name: 'Gilam katta', tariff: 'none', unit: 'sqm', count: 1, amount: 2, price: 0, productId: 'p1' } };
+  assert.equal(computePay(salary, { ...emptyWork(), washed: big }, { month: false, advances: 0, rates: r }).variable, 3000);
 
   assert.equal(computePay(null, work, { month: true, advances: 0 }), null);
+});
+
+test("qayta yuvish: haq to'lanmaydi, yuvilganlarga qo'shilmaydi, alohida sanaladi", () => {
+  const day = buildDayWork('2026-11-10', [
+    ev('washed', 'w1', { tariff: 'express' }),
+    ev('returned', 'w1', { tariff: 'express', recordedBy: 'w2' }),
+    ev('rewashed', 'w3', { tariff: 'express' }),
+  ], new Map());
+  assert.equal(Object.values(day.employees.w3.washed).length, 0, "qayta yuvgan xodimning yuvganiga qo'shilmadi");
+  assert.equal(Object.values(day.employees.w3.rewashed)[0].amount, 10);
+  assert.ok(hasWork(day.employees.w3));
+  const r = rates([['p1', 'Gilam', 1500, 500]]);
+  const pay = computePay({ method: 'washing', params: { baseAmount: 0 } }, day.employees.w3, { month: false, advances: 0, rates: r });
+  assert.equal(pay.variable, 0);
+  // Asl yuvgan xodim haqi saqlanadi.
+  assert.equal(computePay({ method: 'washing', params: {} }, day.employees.w1, { month: false, advances: 0, rates: r }).variable, 15000);
 });
 
 test("maosh: pardozlash qadoqlanganlardan, sotuv menejeri foizi, dastavka, joyida yuvish", () => {
@@ -118,7 +157,8 @@ test("maosh: pardozlash qadoqlanganlardan, sotuv menejeri foizi, dastavka, joyid
   work.onsite = { orders: 1, revenue: 500000, collected: 400000 };
   work.onsiteTeam = { orders: 2, revenue: 800000 };
 
-  assert.equal(computePay({ method: 'finishing', params: { pricePerSqm: 1000 } }, work, { month: false, advances: 0 }).variable, 20000);
+  const r = rates([['p1', 'Gilam', null, 1000]]);
+  assert.equal(computePay({ method: 'finishing', params: {} }, work, { month: false, advances: 0, rates: r }).variable, 20000);
   assert.equal(computePay({ method: 'fixed_percent', params: { baseAmount: 1000000, percent: 3 } }, work, { month: false, advances: 0 }).variable, 60000);
   const delivery = computePay({ method: 'delivery', params: { baseAmount: 0, percentOfOrderValue: 2, percentOfCashCollected: 1 } }, work, { month: false, advances: 0 });
   assert.equal(delivery.variable, Math.round(1500000 * 0.02) + Math.round(1300000 * 0.01));
@@ -137,7 +177,8 @@ test("oy aniqlash: to'liq oy, joriy oy bugungacha; boshqa oraliq — oy emas", (
 
 test("/adminWorkPeriod: xodimlar, ishbay, mahsulotlar statistikasi; oy — maosh yozuvi", async () => {
   const d1 = addDays(today, -1);
-  docs.set('employees/w1', { fullName: 'Bobur Aliyev', phone: '+998901112233', department: 'worker', status: 'active', specializations: ['gilam'], salary: { method: 'washing', params: { baseAmount: 1000000, pricePerSqm: 2000 } } });
+  docs.set('employees/w1', { fullName: 'Bobur Aliyev', phone: '+998901112233', department: 'worker', status: 'active', specializations: ['gilam'], salary: { method: 'washing', params: { baseAmount: 1000000 } } });
+  docs.set('products/p1', { name: 'Gilam', calcType: 'sqm', workRates: { wash: 2000, pack: 700 } });
   docs.set('employees/disp', { fullName: 'Madina', department: 'dispatcher', status: 'active' });
   docs.set('employees/old', { fullName: 'Eski', department: 'worker', status: 'terminated' });
   docs.set(`dailyActivity/${today}/events/washed__i1__${today}`, ev('washed', 'w1', { tariff: 'express' }));
@@ -151,6 +192,7 @@ test("/adminWorkPeriod: xodimlar, ishbay, mahsulotlar statistikasi; oy — maosh
   assert.equal(w1.phone, '+998901112233');
   assert.equal(w1.work.washed.length, 2);
   assert.equal(w1.pay.variable, 15 * 2000);
+  assert.ok(w1.work.washed.every((l) => l.rate === 2000), 'qatorda mahsulot narxi');
   assert.equal(r.body.employees[1].salary, null, 'maosh usuli belgilanmagan');
   const gilamExpress = r.body.products.find((p) => p.tariff === 'express');
   assert.equal(gilamExpress.washed.amount, 10);
@@ -194,6 +236,30 @@ test("qayta yuvish: jurnalda yuvgan xodim hisobiga yoziladi va unga ogohlantiris
   const warning = under('warnings/')[0];
   assert.equal(warning.kind, 'rewash');
   assert.equal(warning.employeeId, 'w1');
+
+  // Qaytgan mahsulot belgilandi.
+  const returnedItem = docs.get('orders/o1/items/i1');
+  assert.equal(returnedItem.rewashPending, true);
+  assert.equal(returnedItem.returnCount, 1);
+
+  // Boshqa ishchi qayta yuvadi: `rewashed` yoziladi, `washed` emas; asl yuvgan o'zgarmaydi.
+  docs.set('employees/w3', { fullName: 'Sardor', department: 'worker', status: 'active', specializations: ['gilam'], canPack: false });
+  const W3 = { uid: 'u3', employeeId: 'w3', role: 'worker' };
+  let s = await call(ordersRouter, '/changeItemStatus', { orderId: 'o1', itemId: 'i1', toStatus: 'washing' }, W3);
+  assert.equal(s.statusCode, 200, JSON.stringify(s.body));
+  s = await call(ordersRouter, '/changeItemStatus', { orderId: 'o1', itemId: 'i1', toStatus: 'packing' }, W3);
+  assert.equal(s.statusCode, 200, JSON.stringify(s.body));
+  const events = under(`dailyActivity/${today}/events/`);
+  assert.equal(events.filter((e) => e.type === 'washed').length, 0, "qayta yuvish 'yuvildi' emas");
+  const rewash = events.find((e) => e.type === 'rewashed');
+  assert.equal(rewash.employeeId, 'w3');
+  const after = docs.get('orders/o1/items/i1');
+  assert.equal(after.washedBy, 'w1');
+  assert.equal(after.rewashedBy, 'w3');
+  assert.equal(after.rewashPending, false);
+  const mirror = docs.get('orders/o1').itemsMirror.find((m) => m.id === 'i1');
+  assert.equal(mirror.rewashedBy, 'w3');
+  assert.equal(mirror.returnCount, 1);
 });
 
 test("omborxona qoidasi serverda ilova bilan bir xil (kalendar kunlari)", () => {
@@ -206,4 +272,20 @@ test("omborxona qoidasi serverda ilova bilan bir xil (kalendar kunlari)", () => 
   const order = { serviceType: 'pickup', itemsMirror: [readyAgo(7), readyAgo(1), { status: 'washing' }] };
   assert.equal(warehouseItemCount(order, 5, now), 1);
   assert.equal(warehouseItemCount({ ...order, serviceType: 'onsite' }, 5, now), 0);
+});
+
+test("ishbay narxlari: mahsulotga saqlanadi (0 — olib tashlanadi), noto'g'ri qiymat rad etiladi", async () => {
+  docs.set('products/p1', { name: 'Gilam', calcType: 'sqm' });
+  docs.set('products/p2', { name: 'Adyol', calcType: 'kg', workRates: { wash: 900, pack: 300 } });
+  const r = await call(productsRouter, '/adminSetProductWorkRates', { rates: { p1: { wash: 1500, pack: 450.5 }, p2: { wash: 0, pack: null } } }, ADMIN);
+  assert.equal(r.statusCode, 200, JSON.stringify(r.body));
+  assert.deepEqual(docs.get('products/p1').workRates, { wash: 1500, pack: 450.5 });
+  assert.deepEqual(docs.get('products/p2').workRates, { wash: null, pack: null });
+
+  const bad = await call(productsRouter, '/adminSetProductWorkRates', { rates: { p1: { wash: -5 } } }, ADMIN);
+  assert.equal(bad.statusCode, 400);
+  const missing = await call(productsRouter, '/adminSetProductWorkRates', { rates: { nope: { wash: 100 } } }, ADMIN);
+  assert.equal(missing.statusCode, 404);
+  const empty = await call(productsRouter, '/adminSetProductWorkRates', { rates: {} }, ADMIN);
+  assert.equal(empty.statusCode, 400);
 });

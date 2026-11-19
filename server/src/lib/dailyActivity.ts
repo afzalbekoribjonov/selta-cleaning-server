@@ -28,7 +28,12 @@ import { businessDateString } from "./businessTime";
  * kunlik hisobda bir marta sanaladi — bu ataylab, chunki savol "bugun
  * nechta mahsulot yuvildi", "nechta yuvish amali bo'ldi" emas.
  */
-export type DailyActivityType = "washed" | "packed" | "delivered" | "onsite_done" | "settled" | "prepaid" | "returned";
+/**
+ * `rewashed` — sifat nazoratidan qaytgan mahsulotni qayta yuvish: alohida
+ * hisoblanadi, "yuvildi"ga qo'shilmaydi va haq to'lanmaydi (avval u
+ * `washed` yozilardi va o'sha kuni asl yuvgan xodim yozuvini bosib ketardi).
+ */
+export type DailyActivityType = "washed" | "packed" | "delivered" | "onsite_done" | "settled" | "prepaid" | "returned" | "rewashed";
 
 export interface DailyActivityInput {
   type: DailyActivityType;
@@ -42,6 +47,8 @@ export interface DailyActivityInput {
   itemId?: string | null;
   itemNumber?: number | null;
   itemName?: string | null;
+  /** Katalogdagi mahsulot — ishbay narxi shu bo'yicha topiladi. */
+  productId?: string | null;
   /** O'lchov turi ("sqm" / "kg" / ...) — hajmni birlik bo'yicha yig'ish uchun. */
   calcType?: string | null;
   /**
@@ -103,6 +110,7 @@ export function buildDailyActivityDoc(at: Date, event: DailyActivityInput) {
     itemId: event.itemId ?? null,
     itemNumber: event.itemNumber ?? null,
     itemName: event.itemName ?? null,
+    productId: event.productId ?? null,
     calcType: event.calcType ?? null,
     tariff: event.tariff ?? null,
     recordedBy: event.recordedBy ?? null,

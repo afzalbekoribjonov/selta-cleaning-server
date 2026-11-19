@@ -4,6 +4,7 @@ import { db } from "../lib/admin";
 import { ApiError, sendError, withAuth, requireAdmin, type AuthedRequest } from "../lib/authz";
 import { businessDateString } from "../lib/businessTime";
 import { computePay } from "../lib/salaryCalc";
+import { loadProductRates } from "../lib/productRates";
 import { emptyWork, loadPeriodWork } from "../lib/workSummary";
 
 export const payrollRouter = Router();
@@ -75,8 +76,8 @@ payrollRouter.post("/adminDeleteAdvance", withAuth, requireAdmin, async (req, re
  *   fixed:                    { fixedAmount }
  *   fixed_percent:            { baseAmount, percent }
  *   delivery:                 { baseAmount, percentOfOrderValue, percentOfCashCollected }
- *   finishing (pardozlash):   { pricePerSqm, pricePerMeter, pricePerKg, pricePerPiece }
- *   washing:                  { baseAmount, pricePerSqm, pricePerMeter, pricePerKg, pricePerPiece }
+ *   finishing (ishbay):       {}  — narxlar mahsulotda (Mahsulotlar bo'limi)
+ *   washing (fiksa + ishbay): { baseAmount } — ishbay narxlari mahsulotda
  *   furniture_onsite_percent: { percent }
  */
 const SALARY_METHOD_KEYS = ["fixed", "fixed_percent", "delivery", "finishing", "washing", "furniture_onsite_percent"];
@@ -147,7 +148,7 @@ payrollRouter.post("/adminBackfillDoneAt", withAuth, requireAdmin, async (_req, 
 payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req, res) => {
   try {
     const { yearMonth } = req.body ?? {};
-    if (!/^d{4}-d{2}$/.test(yearMonth ?? "")) {
+    if (!/^\d{4}-\d{2}$/.test(yearMonth ?? "")) {
       throw new ApiError(400, "invalid-argument", "yearMonth 'YYYY-MM' formatida bo'lishi kerak");
     }
     const [y, m] = yearMonth.split("-").map(Number);
@@ -157,7 +158,7 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
     if (from > today) throw new ApiError(400, "invalid-argument", "Kelajakdagi oyni hisoblab bo'lmaydi");
     const to = lastDay < today ? lastDay : today;
 
-    const [employeesSnap, period] = await Promise.all([db.collection("employees").get(), loadPeriodWork(from, to)]);
+    const [employeesSnap, period, rates] = await Promise.all([db.collection("employees").get(), loadPeriodWork(from, to), loadProductRates()]);
     const results: Record<string, { fullName: string; department: string; method: string; amount: number; breakdown: Record<string, unknown> }> = {};
     for (const doc of employeesSnap.docs) {
       const e = doc.data();
@@ -165,7 +166,7 @@ payrollRouter.post("/computeMonthlyPayroll", withAuth, requireAdmin, async (req,
       if (!salary?.method || e.status !== "active") continue;
       const advancesSnap = await doc.ref.collection("advances").where("yearMonth", "==", yearMonth).get();
       const advances = advancesSnap.docs.reduce((sum, d) => sum + ((d.data().amount as number) || 0), 0);
-      const pay = computePay({ method: salary.method, params: salary.params ?? {} }, period.get(doc.id) ?? emptyWork(), { month: true, advances });
+      const pay = computePay({ method: salary.method, params: salary.params ?? {} }, period.get(doc.id) ?? emptyWork(), { month: true, advances, rates });
       if (!pay) continue;
       const breakdown = { grossAmount: pay.variable + pay.base, variable: pay.variable, baseAmount: pay.base, advancesTotal: pay.advances };
       await doc.ref.collection("payrollRuns").doc(yearMonth).set({

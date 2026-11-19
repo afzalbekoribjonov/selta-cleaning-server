@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, Package, X } from 'lucide-react'
 import { apiPost, ApiError } from '@/lib/api'
 import { SALARY_METHODS, recommendedSalaryMethods } from '@/lib/salary-methods'
 import { useEscapeClose } from '@/hooks/useEscapeClose'
@@ -17,7 +18,9 @@ interface Props {
 export function SalaryConfigDialog({ employeeId, employeeName, department, currentMethod, currentParams, onClose }: Props) {
   useEscapeClose(onClose)
   const queryClient = useQueryClient()
-  const [method, setMethod] = useState(currentMethod ?? 'fixed')
+  const recommended = recommendedSalaryMethods(department)
+  // Noma'lum (eski) usul bo'lsa — kasbiga mos birinchi usul taklif qilinadi.
+  const [method, setMethod] = useState(currentMethod && SALARY_METHODS[currentMethod] ? currentMethod : recommended[0])
   const [params, setParams] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {}
     if (currentParams) {
@@ -26,7 +29,6 @@ export function SalaryConfigDialog({ employeeId, employeeName, department, curre
     return init
   })
   const [error, setError] = useState<string | null>(null)
-  const recommended = recommendedSalaryMethods(department)
   const [showAll, setShowAll] = useState(recommended.length === Object.keys(SALARY_METHODS).length || !recommended.includes(method))
 
   const methodInfo = SALARY_METHODS[method]
@@ -92,9 +94,7 @@ export function SalaryConfigDialog({ employeeId, employeeName, department, curre
             </div>
           </div>
 
-          {methodInfo.fields
-            .filter((field) => !field.rate)
-            .map((field) => (
+          {methodInfo.fields.map((field) => (
               <div key={field.key}>
                 <label className="mb-1.5 block text-sm font-semibold text-ink">{field.label}</label>
                 <input
@@ -109,32 +109,26 @@ export function SalaryConfigDialog({ employeeId, employeeName, department, curre
               </div>
             ))}
 
-          {methodInfo.fields.some((field) => field.rate) && (
-            <fieldset className="rounded-2xl border border-border bg-bg/60 p-3.5">
-              <legend className="px-1 text-sm font-semibold text-ink">Birlik narxi (so'm)</legend>
-              <div className="grid grid-cols-2 gap-2.5">
-                {methodInfo.fields
-                  .filter((field) => field.rate)
-                  .map((field) => (
-                    <label key={field.key} className="flex min-w-0 items-center rounded-xl border border-border bg-surface focus-within:border-brand-primary">
-                      <span className="shrink-0 border-r border-border px-2.5 text-xs font-bold text-gray-dark">{field.label}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        inputMode="decimal"
-                        value={params[field.key] ?? ''}
-                        onChange={(e) => setParams((p) => ({ ...p, [field.key]: e.target.value }))}
-                        placeholder={field.hint ?? '0'}
-                        aria-label={`${field.label} narxi`}
-                        className="w-full min-w-0 bg-transparent px-2.5 py-2.5 text-sm outline-none"
-                      />
-                    </label>
-                  ))}
+          {methodInfo.piecework && (
+            <div className="flex items-start gap-3 rounded-2xl border border-brand-primary/15 bg-brand-primary/5 p-3.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                <Package size={17} />
               </div>
-              <p className="mt-2 text-[11px] leading-snug text-gray-dark">
-                Har bir birlik alohida hisoblanadi. Bo'sh qolsa — shu birlikdagi ish uchun to'lanmaydi.
-              </p>
-            </fieldset>
+              <div className="min-w-0 text-xs leading-relaxed text-gray-dark">
+                <p className="font-bold text-ink">Ishbay narxlari mahsulotlar bo'yicha</p>
+                <p>
+                  Har bir mahsulotning 1 m², metr, kg yoki donasi uchun yuvish va qadoqlash narxi bir marta kiritiladi — hamma xodimga
+                  bir xil qo'llanadi. Qayta yuvish uchun haq to'lanmaydi.
+                </p>
+                <Link
+                  to="/products#ishbay"
+                  onClick={onClose}
+                  className="mt-1 inline-flex items-center gap-1 font-bold text-brand-primary hover:underline"
+                >
+                  Narxlarni ko'rish <ArrowRight size={12} />
+                </Link>
+              </div>
+            </div>
           )}
 
           {error && <p className="text-sm font-semibold text-danger">{error}</p>}
