@@ -3,7 +3,21 @@ export interface SalaryField {
   key: string
   label: string
   hint?: string
+  /** Birlik narxlari bitta guruhda (ixcham 2 ustun) ko'rsatiladi. */
+  rate?: boolean
 }
+
+/**
+ * Ishbay birlik narxlari — m², metr, kg va dona bir-biriga qo'shilmaydi,
+ * shuning uchun har biri alohida narx (server: lib/salaryCalc.ts UNIT_RATE_KEYS).
+ * Avval faqat m² bor edi — metr/kg/dona mahsulotlar uchun maosh 0 chiqardi.
+ */
+const unitRates = (sqmHint: string): SalaryField[] => [
+  { key: 'pricePerSqm', label: '1 m²', hint: sqmHint, rate: true },
+  { key: 'pricePerMeter', label: '1 metr', rate: true },
+  { key: 'pricePerKg', label: '1 kg', rate: true },
+  { key: 'pricePerPiece', label: '1 dona', rate: true },
+]
 
 export interface SalaryMethodInfo {
   label: string
@@ -36,16 +50,13 @@ export const SALARY_METHODS: Record<string, SalaryMethodInfo> = {
   },
   finishing: {
     label: 'Pardozlash',
-    description: '1 m² narxi',
-    fields: [{ key: 'pricePerSqm', label: "1 m² narxi (so'm)", hint: '500 – 1500' }],
+    description: 'Qadoqlagan hajmi × birlik narxi (m², metr, kg, dona)',
+    fields: unitRates('500 – 1500'),
   },
   washing: {
     label: 'Yuvish',
-    description: 'Baza + 1 m² narxi',
-    fields: [
-      { key: 'baseAmount', label: "Baza summa (so'm)" },
-      { key: 'pricePerSqm', label: "1 m² narxi (so'm)", hint: '1000 – 2000' },
-    ],
+    description: 'Baza + yuvgan hajmi × birlik narxi (m², metr, kg, dona)',
+    fields: [{ key: 'baseAmount', label: "Baza summa (so'm)" }, ...unitRates('1000 – 2000')],
   },
   furniture_onsite_percent: {
     label: 'Mebel / joyida yuvish',

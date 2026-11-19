@@ -4,10 +4,11 @@ import { ArrowRight, Wallet } from 'lucide-react'
 import { businessDateKey } from '@/lib/business-time'
 import { useDailyTrend } from '@/lib/daily-trend'
 import { UZ_MONTHS_FULL } from '@/lib/date-utils'
-import { computeMonthlyExpenses } from '@/lib/expenses'
+import { expenseKindKey } from '@/lib/expenses'
 import { formatMoney } from '@/lib/units'
 import { cn } from '@/lib/utils'
-import { useExpenses } from '@/hooks/useExpenses'
+import { monthRange } from '@/lib/uz-dates'
+import { useExpensesInRange } from '@/hooks/useExpenses'
 import { Panel } from '@/components/ui/Panel'
 
 /**
@@ -23,7 +24,9 @@ export function MonthSummaryCard({ className }: { className?: string }) {
   const monthKey = todayKey.slice(0, 7)
   const monthName = UZ_MONTHS_FULL[Number(monthKey.slice(5, 7)) - 1] ?? ''
   const trend = useDailyTrend(todayKey, 31)
-  const { expenses, loading: expensesLoading } = useExpenses()
+  // Faqat shu oy chiqimlari + doimiylar (avval "oxirgi 500 ta" o'qilardi va
+  // eski doimiy to'lovlar, masalan ijara, hisobdan tushib qolishi mumkin edi).
+  const { entries, loading: expensesLoading } = useExpensesInRange(monthRange(monthKey, todayKey))
 
   const income = useMemo(() => {
     const days = (trend.data ?? []).filter((d) => d.date.startsWith(monthKey))
@@ -35,16 +38,20 @@ export function MonthSummaryCard({ className }: { className?: string }) {
   }, [trend.data, monthKey])
 
   const spend = useMemo(() => {
-    if (!expenses) return { total: 0, top: [] as { name: string; amount: number }[] }
-    const [y, m] = monthKey.split('-').map(Number)
-    const { items, total } = computeMonthlyExpenses(expenses, y, m - 1)
-    const tally = new Map<string, number>()
-    for (const e of items) tally.set(e.name, (tally.get(e.name) ?? 0) + e.amount)
-    const top = [...tally.entries()].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount)
+    if (!entries) return { total: 0, top: [] as { name: string; amount: number }[] }
+    const total = entries.reduce((s, x) => s + x.expense.amount, 0)
+    const tally = new Map<string, { name: string; amount: number }>()
+    for (const { expense: e } of entries) {
+      const key = expenseKindKey(e.name)
+      const t = tally.get(key) ?? { name: e.name.trim(), amount: 0 }
+      t.amount += e.amount
+      tally.set(key, t)
+    }
+    const top = [...tally.values()].sort((a, b) => b.amount - a.amount)
     const head = top.slice(0, 4)
     const rest = top.slice(4).reduce((s, e) => s + e.amount, 0)
     return { total, top: rest > 0 ? [...head, { name: 'Boshqa', amount: rest }] : head }
-  }, [expenses, monthKey])
+  }, [entries])
 
   const loading = trend.isLoading || expensesLoading
   const net = income.amount - spend.total

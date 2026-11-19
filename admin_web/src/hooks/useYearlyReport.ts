@@ -3,7 +3,7 @@ import { collection, collectionGroup, getAggregateFromServer, getDocs, query, su
 import { db } from '@/lib/firebase'
 import { businessMonthRange } from '@/lib/business-time'
 import { UZ_MONTHS_FULL } from '@/lib/date-utils'
-import { computeMonthlyExpenses, type Expense } from '@/lib/expenses'
+import { fetchMonthTotals, type Expense } from '@/lib/expenses'
 
 export interface MonthReport {
   year: number
@@ -21,15 +21,16 @@ export interface MonthReport {
  * Bir yilning barcha oylari uchun: tushum+buyurtma soni (Firestore
  * aggregatsiya — hujjatlar yuklanmaydi), oylik maosh (barcha xodimlarning
  * payrollRuns'i — collection-group so'rov, bitta chaqiruvda), va chiqimlar
- * (allaqachon yuklangan cheklangan ro'yxatdan hisoblanadi).
+ * (har oy — yig'ma so'rov + takrorlanuvchilar; avval "oxirgi 500 ta"
+ * ro'yxatdan hisoblanardi va eski doimiy to'lovlar tushib qolardi).
  */
-export function useYearlyReport(year: number, expenses: Expense[] | null) {
+export function useYearlyReport(year: number, recurring: Expense[] | null) {
   const [months, setMonths] = useState<MonthReport[] | null>(null)
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
-    if (expenses === null) return
-    const expenseList = expenses
+    if (recurring === null) return
+    const recurringList = recurring
     let cancelled = false
 
     async function load() {
@@ -46,6 +47,11 @@ export function useYearlyReport(year: number, expenses: Expense[] | null) {
             const snap = await getAggregateFromServer(q, { revenue: sum('totalPrice'), count: count() })
             return { revenue: snap.data().revenue ?? 0, orderCount: snap.data().count ?? 0 }
           }),
+        )
+
+        const expenseByMonth = await fetchMonthTotals(
+          Array.from({ length: 12 }, (_, month) => `${year}-${String(month + 1).padStart(2, '0')}`),
+          recurringList,
         )
 
         const payrollByMonth: Record<string, number> = {}
@@ -67,7 +73,7 @@ export function useYearlyReport(year: number, expenses: Expense[] | null) {
 
         const result: MonthReport[] = Array.from({ length: 12 }, (_, month) => {
           const ym = `${year}-${String(month + 1).padStart(2, '0')}`
-          const { total: expenseTotal } = computeMonthlyExpenses(expenseList, year, month)
+          const expenseTotal = expenseByMonth[ym] ?? 0
           const payroll = payrollByMonth[ym] ?? 0
           const revenue = revenueByMonth[month].revenue
           return {
@@ -95,7 +101,7 @@ export function useYearlyReport(year: number, expenses: Expense[] | null) {
     return () => {
       cancelled = true
     }
-  }, [year, expenses])
+  }, [year, recurring])
 
   return { months, loading: months === null && !error, error }
 }

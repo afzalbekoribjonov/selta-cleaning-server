@@ -42,6 +42,7 @@ export function SalaryConfigDialog({ employeeId, employeeName, department, curre
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
+      queryClient.invalidateQueries({ queryKey: ['workPeriod'] })
       onClose()
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : 'Xatolik yuz berdi'),
@@ -91,18 +92,50 @@ export function SalaryConfigDialog({ employeeId, employeeName, department, curre
             </div>
           </div>
 
-          {methodInfo.fields.map((field) => (
-            <div key={field.key}>
-              <label className="mb-1.5 block text-sm font-semibold text-ink">{field.label}</label>
-              <input
-                type="number"
-                value={params[field.key] ?? ''}
-                onChange={(e) => setParams((p) => ({ ...p, [field.key]: e.target.value }))}
-                placeholder={field.hint}
-                className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
-              />
-            </div>
-          ))}
+          {methodInfo.fields
+            .filter((field) => !field.rate)
+            .map((field) => (
+              <div key={field.key}>
+                <label className="mb-1.5 block text-sm font-semibold text-ink">{field.label}</label>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="decimal"
+                  value={params[field.key] ?? ''}
+                  onChange={(e) => setParams((p) => ({ ...p, [field.key]: e.target.value }))}
+                  placeholder={field.hint}
+                  className="w-full rounded-xl border border-border bg-bg px-4 py-2.5 text-sm outline-none focus:border-brand-primary"
+                />
+              </div>
+            ))}
+
+          {methodInfo.fields.some((field) => field.rate) && (
+            <fieldset className="rounded-2xl border border-border bg-bg/60 p-3.5">
+              <legend className="px-1 text-sm font-semibold text-ink">Birlik narxi (so'm)</legend>
+              <div className="grid grid-cols-2 gap-2.5">
+                {methodInfo.fields
+                  .filter((field) => field.rate)
+                  .map((field) => (
+                    <label key={field.key} className="flex min-w-0 items-center rounded-xl border border-border bg-surface focus-within:border-brand-primary">
+                      <span className="shrink-0 border-r border-border px-2.5 text-xs font-bold text-gray-dark">{field.label}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="decimal"
+                        value={params[field.key] ?? ''}
+                        onChange={(e) => setParams((p) => ({ ...p, [field.key]: e.target.value }))}
+                        placeholder={field.hint ?? '0'}
+                        aria-label={`${field.label} narxi`}
+                        className="w-full min-w-0 bg-transparent px-2.5 py-2.5 text-sm outline-none"
+                      />
+                    </label>
+                  ))}
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-gray-dark">
+                Har bir birlik alohida hisoblanadi. Bo'sh qolsa — shu birlikdagi ish uchun to'lanmaydi.
+              </p>
+            </fieldset>
+          )}
 
           {error && <p className="text-sm font-semibold text-danger">{error}</p>}
           <button

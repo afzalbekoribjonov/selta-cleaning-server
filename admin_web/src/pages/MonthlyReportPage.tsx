@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, ClipboardList, TrendingUp, TrendingDown, Wallet, Sparkles, CalendarRange } from 'lucide-react'
-import { useExpenses } from '@/hooks/useExpenses'
+import { useRecurringExpenses } from '@/hooks/useExpenses'
 import { useYearlyReport, type MonthReport } from '@/hooks/useYearlyReport'
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber'
 import { Spinner } from '@/components/ui/Spinner'
@@ -17,8 +17,8 @@ function formatCompact(value: number): string {
 
 export default function MonthlyReportPage() {
   const [year, setYear] = useState(new Date().getFullYear())
-  const { expenses } = useExpenses()
-  const { months, loading, error } = useYearlyReport(year, expenses)
+  const { recurring } = useRecurringExpenses()
+  const { months, loading, error } = useYearlyReport(year, recurring)
 
   const now = new Date()
   const isCurrentYear = year === now.getFullYear()

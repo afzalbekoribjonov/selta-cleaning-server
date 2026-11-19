@@ -75,10 +75,12 @@ payrollRouter.post("/adminDeleteAdvance", withAuth, requireAdmin, async (req, re
  *   fixed:                    { fixedAmount }
  *   fixed_percent:            { baseAmount, percent }
  *   delivery:                 { baseAmount, percentOfOrderValue, percentOfCashCollected }
- *   finishing (pardozlash):   { pricePerSqm }
- *   washing:                  { baseAmount, pricePerSqm }
+ *   finishing (pardozlash):   { pricePerSqm, pricePerMeter, pricePerKg, pricePerPiece }
+ *   washing:                  { baseAmount, pricePerSqm, pricePerMeter, pricePerKg, pricePerPiece }
  *   furniture_onsite_percent: { percent }
  */
+const SALARY_METHOD_KEYS = ["fixed", "fixed_percent", "delivery", "finishing", "washing", "furniture_onsite_percent"];
+
 payrollRouter.post("/adminSetEmployeeSalary", withAuth, requireAdmin, async (req, res) => {
   try {
     const { employeeId, method, params } = req.body ?? {};
@@ -86,11 +88,20 @@ payrollRouter.post("/adminSetEmployeeSalary", withAuth, requireAdmin, async (req
       throw new ApiError(400, "invalid-argument", "employeeId va method talab qilinadi");
     }
 
+    if (!SALARY_METHOD_KEYS.includes(method)) throw new ApiError(400, "invalid-argument", "Maosh usuli noto'g'ri");
+    const clean: Record<string, number> = {};
+    for (const [key, value] of Object.entries((params ?? {}) as Record<string, unknown>)) {
+      if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+        throw new ApiError(400, "invalid-argument", `"${key}" qiymati manfiy bo'lmagan son bo'lishi kerak`);
+      }
+      clean[key] = value;
+    }
+
     const ref = db.collection("employees").doc(employeeId);
     const snap = await ref.get();
     if (!snap.exists) throw new ApiError(404, "not-found", "Xodim topilmadi");
 
-    await ref.update({ salary: { method, params: params ?? {} } });
+    await ref.update({ salary: { method, params: clean } });
     res.json({ ok: true });
   } catch (err) {
     sendError(res, err);

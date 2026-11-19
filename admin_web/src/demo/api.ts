@@ -7,6 +7,7 @@
 import { businessDateKey, businessDayStart } from '@/lib/business-time'
 import { DEMO_EMPLOYEES, DEMO_ONSITE_DONE, DEMO_STAMPS, employeeName } from './fixtures'
 import { demoStore, Timestamp } from './firestore'
+import { workPeriod } from './workPeriod'
 
 export class ApiError extends Error {
   status: number
@@ -416,6 +417,7 @@ const HANDLERS: Record<string, Handler> = {
     })),
   }),
   '/adminDailyReport': dailyReport,
+  '/adminWorkPeriod': workPeriod,
   '/adminTelegramBot': () => ({
     configured: true,
     botUsername: 'selta_hisobot_bot',
