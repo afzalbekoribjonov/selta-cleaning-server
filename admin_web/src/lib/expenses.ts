@@ -1,6 +1,7 @@
 import {
   collection,
   getAggregateFromServer,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -105,13 +106,19 @@ export async function fetchMonthTotals(months: string[], recurring: Expense[]): 
   const entries = await Promise.all(
     months.map(async (ym) => {
       const { start, end } = businessMonthRange(ym)
-      const snap = await getAggregateFromServer(
-        query(collection(db, 'expenses'), where('date', '>=', Timestamp.fromDate(start)), where('date', '<', Timestamp.fromDate(end))),
-        { total: sum('amount') },
-      )
+      const inMonth = query(collection(db, 'expenses'), where('date', '>=', Timestamp.fromDate(start)), where('date', '<', Timestamp.fromDate(end)))
+      let total: number
+      try {
+        // (date, amount) indeksi bilan — hujjatlar o'qilmaydi.
+        total = (await getAggregateFromServer(inMonth, { total: sum('amount') })).data().total ?? 0
+      } catch (err) {
+        // Indeks hali qurilayotgan/yo'q bo'lsa — oddiy so'rov bilan (sahifa yiqilmasin).
+        console.warn('Chiqimlar yig\'indisi: zaxira so\'rov', err)
+        total = (await getDocs(inMonth)).docs.reduce((s, d) => s + (Number(d.data().amount) || 0), 0)
+      }
       const startedHere = recurring.filter((e) => e.date >= start && e.date < end).reduce((s, e) => s + e.amount, 0)
       const active = recurring.filter((e) => e.date < end).reduce((s, e) => s + e.amount, 0)
-      return [ym, (snap.data().total ?? 0) - startedHere + active] as const
+      return [ym, total - startedHere + active] as const
     }),
   )
   return Object.fromEntries(entries)

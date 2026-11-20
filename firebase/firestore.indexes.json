@@ -81,6 +81,14 @@
         { "fieldPath": "employeeId", "order": "ASCENDING" },
         { "fieldPath": "dateKey", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "date", "order": "ASCENDING" },
+        { "fieldPath": "amount", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
