@@ -28,20 +28,21 @@ export async function show(ctx: HrContext, user: HrUser, text: string, keyboard:
   await showAtBottom(ctx, user, text, keyboard);
 }
 
-/** Ekranni chat oxiriga qo'yadi (eskisi o'chiriladi). */
+/**
+ * Ekranni chat oxiriga qo'yadi. Avval YANGISI yuboriladi, keyin eskisi
+ * o'chiriladi — chat hech qachon bir lahza ham bo'sh qolmaydi (bo'sh chatni
+ * Telegram ro'yxatdan olib tashlaydi).
+ */
 export async function showAtBottom(ctx: HrContext, user: HrUser, text: string, keyboard: InlineKeyboard = []): Promise<void> {
   const old = user.screenId;
-  user.screenId = null;
-  await ctx.api.deleteMessage(user.id, old);
   const m = await ctx.api.sendMessage(user.id, text, keyboard.length ? keyboard : undefined);
   user.screenId = m.message_id;
+  if (old && old !== m.message_id) await ctx.api.deleteMessage(user.id, old);
 }
 
 /** Pastki (reply) klaviatura bilan ekran — faqat telefon raqami so'ralganda. */
 export async function showWithReplyKeyboard(ctx: HrContext, user: HrUser, text: string, rows: { text: string; request_contact?: boolean }[][]): Promise<void> {
   const old = user.screenId;
-  user.screenId = null;
-  await ctx.api.deleteMessage(user.id, old);
   const m = await ctx.api.call<{ message_id: number }>("sendMessage", {
     chat_id: user.id,
     text,
@@ -49,6 +50,7 @@ export async function showWithReplyKeyboard(ctx: HrContext, user: HrUser, text: 
     reply_markup: { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: "+998 90 123 45 67" },
   });
   user.screenId = m.message_id;
+  if (old && old !== m.message_id) await ctx.api.deleteMessage(user.id, old);
 }
 
 /** Pastki klaviaturani yopadi (yordamchi xabar darhol o'chiriladi). */

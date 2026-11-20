@@ -430,7 +430,6 @@ async function handleIdleMessage(ctx: HrContext, user: HrUser, msg: TgMessage): 
     await notifyAdminsCandidateMessage(ctx, latest, text, media);
     return;
   }
-  await ctx.api.deleteMessage(user.id, msg.message_id);
   await showHome(ctx, user, { bottom: true });
 }
 
@@ -438,8 +437,8 @@ async function handleIdleMessage(ctx: HrContext, user: HrUser, msg: TgMessage): 
 
 export async function handleCandidateMessage(ctx: HrContext, user: HrUser, msg: TgMessage): Promise<void> {
   const text = (msg.text ?? "").trim();
+  // /start xabari O'CHIRILMAYDI: chat bo'shab qolsa Telegram uni ro'yxatdan olib tashlaydi.
   if (/^\/start\b/.test(text)) {
-    await ctx.api.deleteMessage(user.id, msg.message_id);
     await showHome(ctx, user, { bottom: true });
     return;
   }

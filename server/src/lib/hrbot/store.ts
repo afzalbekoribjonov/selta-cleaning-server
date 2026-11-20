@@ -204,7 +204,13 @@ export async function createVacancy(title: string, adminId: number): Promise<str
   return ref.id;
 }
 
-export async function updateVacancy(id: string, patch: Partial<Pick<Vacancy, "title" | "description" | "active">> & { deleted?: boolean }): Promise<void> {
+/** Ish o'rnini butunlay o'chiradi (arizalar alohida — [deleteApplicationsOfVacancy]). */
+export async function deleteVacancy(id: string): Promise<void> {
+  if (!id || id.includes("/")) return;
+  await vacancies().doc(id).delete();
+}
+
+export async function updateVacancy(id: string, patch: Partial<Pick<Vacancy, "title" | "description" | "active">>): Promise<void> {
   await vacancies().doc(id).update({ ...patch, updatedAt: FieldValue.serverTimestamp() });
 }
 
@@ -317,4 +323,27 @@ export async function getThreadEntry(appId: string, entryId: string): Promise<Th
   if (!entryId || entryId.includes("/")) return null;
   const snap = await applications().doc(appId).collection("thread").doc(entryId).get();
   return snap.exists ? toEntry(snap.id, snap.data() ?? {}) : null;
+}
+
+// ------------------------------------------------------------ O'CHIRISH
+
+/** Ariza va uning barcha yozishmalari butunlay o'chiriladi. */
+export async function deleteApplication(id: string): Promise<void> {
+  if (!id || id.includes("/")) return;
+  const ref = applications().doc(id);
+  const thread = await ref.collection("thread").get();
+  // Batch chegarasi 500 — bo'lib yoziladi.
+  for (let i = 0; i < thread.docs.length; i += 450) {
+    const batch = db.batch();
+    for (const d of thread.docs.slice(i, i + 450)) batch.delete(d.ref);
+    await batch.commit();
+  }
+  await ref.delete();
+}
+
+/** Lavozimning barcha arizalari; o'chirilganlar soni. */
+export async function deleteApplicationsOfVacancy(vacancyId: string): Promise<number> {
+  const snap = await applications().where("vacancyId", "==", vacancyId).get();
+  for (const d of snap.docs) await deleteApplication(d.id);
+  return snap.docs.length;
 }

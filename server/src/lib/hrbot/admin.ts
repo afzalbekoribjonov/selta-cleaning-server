@@ -5,6 +5,9 @@ import { btn, deliverMedia, isUnreachable, show, showAtBottom, type HrContext } 
 import {
   addThreadEntry,
   createVacancy,
+  deleteApplication,
+  deleteApplicationsOfVacancy,
+  deleteVacancy,
   getApplication,
   getThreadEntry,
   getVacancy,
@@ -138,6 +141,7 @@ function cardKeyboard(user: HrUser, app: Application): InlineKeyboard {
   } else {
     kb.push([btn("↩️ Qayta ko'rib chiqish", `a:st:${id}:rev`)]);
   }
+  kb.push([btn("🗑 Butunlay o'chirish", `a:del:${id}`)]);
   kb.push([btn("◀️ Ro'yxat", backToList(user))]);
   return kb;
 }
@@ -311,6 +315,52 @@ async function showThreadMedia(ctx: HrContext, user: HrUser, appId: string, entr
   await showThread(ctx, user, appId, true);
 }
 
+// --------------------------------------------------------- BUTUNLAY O'CHIRISH
+
+/** Oxirgi ochilgan ro'yxat (filtr, sahifa) — o'chirgandan keyin shu yerga qaytiladi. */
+function listPosition(user: HrUser): [Filter, number] {
+  const [f, p] = (user.lastList ?? "all:0").split(":");
+  return [(["n", "r", "a", "x", "all"].includes(f) ? f : "all") as Filter, Number(p) || 0];
+}
+
+async function confirmApplicationDelete(ctx: HrContext, user: HrUser, appId: string): Promise<void> {
+  const app = await getApplication(appId);
+  if (!app) return showList(ctx, user, ...listPosition(user), "Nomzod topilmadi.");
+  await show(
+    ctx,
+    user,
+    [
+      `🗑 <b>${esc(app.fullName)}</b> ma'lumotlari butunlay o'chirilsinmi?`,
+      `💼 ${esc(app.vacancyTitle)}`,
+      "",
+      "Ariza, video, rasm, ovozli xabar va barcha yozishmalar o'chadi. Bu amalni qaytarib bo'lmaydi.",
+    ].join("\n"),
+    [[btn("🗑 Ha, butunlay o'chirish", `a:delc:${appId}`)], [btn("◀️ Bekor qilish", `a:c:${appId}`)]],
+  );
+}
+
+async function confirmVacancyDelete(ctx: HrContext, user: HrUser, vacId: string): Promise<void> {
+  const [vacancy, apps] = await Promise.all([getVacancy(vacId), listApplications()]);
+  if (!vacancy) return showVacancies(ctx, user, "Ish o'rni topilmadi.");
+  const n = apps.filter((a) => a.vacancyId === vacId).length;
+  const kb: InlineKeyboard =
+    n > 0
+      ? [
+          [btn("🗑 Faqat ish o'rnini", `a:vdc:${vacId}`)],
+          [btn(`🗑 Ish o'rni va ${n} ta arizani`, `a:vda:${vacId}`)],
+          [btn("◀️ Bekor qilish", `a:v:${vacId}`)],
+        ]
+      : [[btn("🗑 Ha, butunlay o'chirish", `a:vdc:${vacId}`)], [btn("◀️ Bekor qilish", `a:v:${vacId}`)]];
+  const text = [
+    `🗑 <b>«${esc(vacancy.title)}»</b> butunlay o'chirilsinmi?`,
+    "",
+    n > 0
+      ? `Bu lavozimga ${n} ta ariza bor. Arizalarni saqlab qolish yoki ular bilan birga o'chirish mumkin. Bu amalni qaytarib bo'lmaydi.`
+      : "Bu amalni qaytarib bo'lmaydi.",
+  ].join("\n");
+  await show(ctx, user, text, kb);
+}
+
 // ------------------------------------------------------------- ISH O'RINLARI
 
 async function showVacancies(ctx: HrContext, user: HrUser, banner?: string): Promise<void> {
@@ -467,13 +517,11 @@ export async function handleAdminMessage(ctx: HrContext, user: HrUser, msg: TgMe
   const text = (msg.text ?? "").trim();
   if (/^\/start\b/.test(text)) {
     user.await = null;
-    await ctx.api.deleteMessage(user.id, msg.message_id);
     await cleanupMedia(ctx, user);
     await showHome(ctx, user, { bottom: true });
     return;
   }
   if (await handleAwaitedText(ctx, user, msg)) return;
-  await ctx.api.deleteMessage(user.id, msg.message_id);
   await showHome(ctx, user, { bottom: true });
 }
 
@@ -485,7 +533,7 @@ export async function handleAdminCallback(ctx: HrContext, user: HrUser, data: st
   if (!["skip", "noop"].includes(action)) {
     const wait = user.await;
     if (wait && wait.kind === "vacDesc" && wait.isNew && action === "x") {
-      await updateVacancy(wait.vacId, { deleted: true, active: false });
+      await deleteVacancy(wait.vacId);
       user.await = null;
       return showVacancies(ctx, user, "✖️ Bekor qilindi.");
     }
@@ -550,17 +598,25 @@ export async function handleAdminCallback(ctx: HrContext, user: HrUser, data: st
       }
       return showVacancy(ctx, user, id, banner);
     }
-    case "vd": {
-      const vacancy = await getVacancy(id);
-      if (!vacancy) return showVacancies(ctx, user, "Ish o'rni topilmadi.");
-      return show(ctx, user, `🗑 <b>«${esc(vacancy.title)}»</b> o'chirilsinmi?\n\nArizalar saqlanib qoladi.`, [
-        [btn("🗑 Ha, o'chirish", `a:vdc:${id}`)],
-        [btn("◀️ Bekor qilish", `a:v:${id}`)],
-      ]);
+    case "vd":
+      return confirmVacancyDelete(ctx, user, id);
+    case "vdc": {
+      await deleteVacancy(id);
+      return showVacancies(ctx, user, "🗑 Ish o'rni butunlay o'chirildi.");
     }
-    case "vdc":
-      await updateVacancy(id, { deleted: true, active: false });
-      return showVacancies(ctx, user, "🗑 Ish o'rni o'chirildi.");
+    case "vda": {
+      const removed = await deleteApplicationsOfVacancy(id);
+      await deleteVacancy(id);
+      return showVacancies(ctx, user, `🗑 Ish o'rni va ${removed} ta ariza butunlay o'chirildi.`);
+    }
+    case "del":
+      return confirmApplicationDelete(ctx, user, id);
+    case "delc": {
+      await cleanupMedia(ctx, user);
+      const app = await getApplication(id);
+      if (app) await deleteApplication(id);
+      return showList(ctx, user, ...listPosition(user), app ? `🗑 ${esc(app.fullName)} ma'lumotlari butunlay o'chirildi.` : "Nomzod topilmadi.");
+    }
     case "x":
       return showVacancies(ctx, user, "✖️ Bekor qilindi.");
     default:

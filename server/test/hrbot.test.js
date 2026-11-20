@@ -300,7 +300,7 @@ test("ish o'rinlari: nomini o'zgartirish, to'xtatish, o'chirish — nomzodga ko'
 
   await press(ADMIN, `a:vd:${vacId}`);
   await press(ADMIN, `a:vdc:${vacId}`);
-  assert.equal(docs.get(`hrVacancies/${vacId}`).deleted, true);
+  assert.equal(docs.get(`hrVacancies/${vacId}`), undefined, "butunlay o'chirildi");
   await send(CAND, { text: '/start' });
   assert.match(screenText(CAND), /bo'sh ish o'rinlari yo'q/);
 
@@ -308,5 +308,50 @@ test("ish o'rinlari: nomini o'zgartirish, to'xtatish, o'chirish — nomzodga ko'
   await press(ADMIN, 'a:vn');
   await send(ADMIN, { text: 'Vaqtinchalik' });
   await press(ADMIN, 'a:x');
-  assert.equal(under('hrVacancies/').find((v) => v.title === 'Vaqtinchalik').deleted, true);
+  assert.equal(under('hrVacancies/').find((v) => v.title === 'Vaqtinchalik'), undefined);
+});
+
+test("/start xabari o'chirilmaydi (chat bo'shab qolmasin)", async () => {
+  const startId = nextId + 1;
+  await send(CAND, { text: '/start' });
+  const adminStart = nextId + 1;
+  await send(ADMIN, { text: '/start' });
+  const deleted = calls.filter((c) => c.method === 'deleteMessage').map((c) => c.params.message_id);
+  assert.ok(!deleted.includes(startId));
+  assert.ok(!deleted.includes(adminStart));
+  // Yangi ekran avval yuboriladi, eskisi keyin o'chadi.
+  calls.length = 0;
+  await send(CAND, { text: '/start' });
+  const order = calls.filter((c) => c.method === 'sendMessage' || c.method === 'deleteMessage').map((c) => c.method);
+  assert.deepEqual(order.slice(0, 2), ['sendMessage', 'deleteMessage']);
+});
+
+test("nomzod ma'lumotlarini butunlay o'chirish: ariza va yozishmalar; lavozim arizalari bilan", async () => {
+  const vacId = await adminCreatesVacancy('Haydovchi');
+  await candidateApplies(vacId);
+  await press(CAND, 'c:send');
+  const appId = under('hrApplications/').find((a) => a.fullName).id;
+  await press(ADMIN, `a:q:${appId}`);
+  await send(ADMIN, { text: 'Savol?' });
+  assert.equal(under(`hrApplications/${appId}/thread/`).length, 1);
+
+  await press(ADMIN, `a:c:${appId}`);
+  assert.ok(callbackOf(ADMIN, "Butunlay o'chirish"));
+  await press(ADMIN, `a:del:${appId}`);
+  assert.match(screenText(ADMIN), /butunlay o'chirilsinmi[\s\S]*qaytarib bo'lmaydi/);
+  await press(ADMIN, `a:delc:${appId}`);
+  assert.equal(docs.get(`hrApplications/${appId}`), undefined);
+  assert.equal(under(`hrApplications/${appId}/`).length, 0, 'yozishmalar ham');
+  assert.match(screenText(ADMIN), /ma'lumotlari butunlay o'chirildi/);
+
+  // Lavozim + uning arizalari.
+  await candidateApplies(vacId);
+  await press(CAND, 'c:send');
+  assert.equal(under('hrApplications/').filter((a) => a.fullName).length, 1);
+  await press(ADMIN, `a:vd:${vacId}`);
+  assert.ok(callbackOf(ADMIN, '1 ta arizani'));
+  await press(ADMIN, `a:vda:${vacId}`);
+  assert.equal(docs.get(`hrVacancies/${vacId}`), undefined);
+  assert.equal(under('hrApplications/').length, 0);
+  assert.match(screenText(ADMIN), /1 ta ariza butunlay o'chirildi/);
 });
