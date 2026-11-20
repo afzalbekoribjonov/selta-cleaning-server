@@ -24,6 +24,11 @@ services:
       # Kunlik hisobot Telegram boti (BotFather tokeni). Berilmasa bot o'chiq.
       - key: TELEGRAM_BOT_TOKEN
         sync: false
+      # HR (ishga qabul) boti: token va admin Telegram ID'lari (vergul bilan).
+      - key: HR_BOT_TOKEN
+        sync: false
+      - key: HR_BOT_ADMIN_IDS
+        sync: false
 
   # Admin panel — statik SPA sifatida (Vite build). admin.seltacleaning.uz
   # custom domeni Render dashboard'da shu servisga qo'shiladi (DNS CNAME

@@ -37,11 +37,43 @@ export interface TgChat {
   type: string;
 }
 
+export interface TgFile {
+  file_id: string;
+  file_unique_id?: string;
+  file_size?: number;
+}
+
+export interface TgPhotoSize extends TgFile {
+  width: number;
+  height: number;
+}
+
+export interface TgMediaFile extends TgFile {
+  duration?: number;
+  mime_type?: string;
+}
+
+export interface TgContact {
+  phone_number: string;
+  first_name?: string;
+  user_id?: number;
+}
+
 export interface TgMessage {
   message_id: number;
   from?: TgUser;
   chat: TgChat;
+  date?: number;
   text?: string;
+  caption?: string;
+  photo?: TgPhotoSize[];
+  video?: TgMediaFile;
+  video_note?: TgMediaFile;
+  voice?: TgMediaFile;
+  audio?: TgMediaFile;
+  document?: TgMediaFile & { file_name?: string };
+  contact?: TgContact;
+  reply_to_message?: TgMessage;
 }
 
 export interface TgCallbackQuery {
@@ -197,6 +229,29 @@ export class TelegramApi {
     } catch {
       // Eskirgan tugma (48 soatdan oshgan) — e'tiborsiz.
     }
+  }
+
+  /** Xabarni o'chiradi (48 soatdan eski yoki allaqachon o'chgan — jim). */
+  async deleteMessage(chatId: number, messageId: number | null | undefined): Promise<boolean> {
+    if (!messageId) return false;
+    try {
+      await this.call("deleteMessage", { chat_id: chatId, message_id: messageId });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Xabar nusxasi (forward belgisisiz). Yangi xabar ID'sini qaytaradi. */
+  async copyMessage(toChatId: number, fromChatId: number, messageId: number, caption?: string, keyboard?: InlineKeyboard): Promise<number> {
+    const r = await this.call<{ message_id: number }>("copyMessage", {
+      chat_id: toChatId,
+      from_chat_id: fromChatId,
+      message_id: messageId,
+      ...(caption !== undefined ? { caption, parse_mode: "HTML" } : {}),
+      ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+    });
+    return r.message_id;
   }
 
   /** "yozmoqda..." belgisi. Xatosi muhim emas. */
